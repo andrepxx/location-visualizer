@@ -402,7 +402,7 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom) {
+	this.updateMap = function(xres, yres, xpos, ypos, zoom, usebg) {
 		var rq = new Request();
 		rq.append('cgi', 'render');
 		var xresString = xres.toString();
@@ -415,6 +415,8 @@ function UI() {
 		rq.append('ypos', yposString);
 		var zoomString = zoom.toString();
 		rq.append('zoom', zoomString);
+		var usebgString = usebg.toString();
+		rq.append('usebg', usebgString);
 		var cgi = globals.cgi;
 		var data = rq.getData();
 		var cvs = document.getElementById('map_canvas');
@@ -475,7 +477,8 @@ function Handler() {
 		var posX = storage.get(cvs, 'posX');
 		var posY = storage.get(cvs, 'posY');
 		var zoom = storage.get(cvs, 'zoomLevel');
-		ui.updateMap(width, height, posX, posY, zoom);
+		var usebg = storage.get(cvs, 'useBG');
+		ui.updateMap(width, height, posX, posY, zoom, usebg);
 	};
 	
 	/*
@@ -894,6 +897,7 @@ function Handler() {
 		storage.put(cvs, 'posX', 0.0);
 		storage.put(cvs, 'posY', 0.0);
 		storage.put(cvs, 'zoomLevel', 0);
+		storage.put(cvs, 'useBG', true);
 		storage.put(cvs, 'imageRequestId', 0);
 		storage.put(cvs, 'imageResponseId', 0);
 		storage.put(cvs, 'imageZoom', 0);

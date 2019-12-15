@@ -54,6 +54,7 @@ type controllerStruct struct {
  */
 type Controller interface {
 	Operate()
+	Prefetch(zoomLevel uint8)
 }
 
 /*
@@ -72,6 +73,8 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	ypos, _ := strconv.ParseFloat(yposIn, 64)
 	zoomIn := request.Params["zoom"]
 	zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
+	useBGIn := request.Params["usebg"]
+	useBG, _ := strconv.ParseBool(useBGIn)
 	zoomFloat := float64(zoom)
 	zoomExp := -0.2 * zoomFloat
 	zoomFac := math.Pow(2, zoomExp)
@@ -105,19 +108,26 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 	uniform := image.NewUniform(c)
 	draw.Draw(target, dim, uniform, image.ZP, draw.Over)
-	tileSource := this.tileSource
 
 	/*
-	 * Check if tile source was set.
+	 * Check if we should render a map background.
 	 */
-	if tileSource != nil {
-		imgMap, err := tileSource.Get(xres, yres, minX, maxX, minY, maxY)
+	if useBG {
+		tileSource := this.tileSource
 
 		/*
-		 * Draw map tile if it was successfully retrieved.
+		 * Check if tile source was set.
 		 */
-		if err == nil {
-			draw.Draw(target, dim, imgMap, image.ZP, draw.Over)
+		if tileSource != nil {
+			imgMap, err := tileSource.Get(xres, yres, minX, maxX, minY, maxY)
+
+			/*
+			 * Draw map tile if it was successfully retrieved.
+			 */
+			if err == nil {
+				draw.Draw(target, dim, imgMap, image.ZP, draw.Over)
+			}
+
 		}
 
 	}
@@ -361,6 +371,26 @@ func (this *controllerStruct) Operate() {
 
 		}
 
+	}
+
+}
+
+/*
+ * Pre-fetch tile data from OSM.
+ */
+func (this *controllerStruct) Prefetch(zoomLevel uint8) {
+	err := this.initialize()
+
+	/*
+	 * Check if initialization was successful.
+	 */
+	if err != nil {
+		msg := err.Error()
+		msgNew := "Initialization failed: " + msg
+		fmt.Printf("%s\n", msgNew)
+	} else {
+		tileSource := this.tileSource
+		tileSource.Prefetch(zoomLevel)
 	}
 
 }

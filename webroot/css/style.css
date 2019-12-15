@@ -1,3 +1,13 @@
+.attributiondiv
+{
+	background-color: #000000;
+	bottom: 0px;
+	color: #ffffff;
+	font-size: 14px;
+	position: fixed;
+	right: 0px;
+}
+
 .body
 {
 	background-color: #000000;
@@ -48,6 +58,17 @@
 	position: fixed;
 	right: 0px;
 	top: 0px;
+}
+
+.link
+{
+	color: #aaaaff;
+	text-decoration: none;
+}
+
+.link:hover
+{
+	color: #ffffff;
 }
 
 .mapcanvas

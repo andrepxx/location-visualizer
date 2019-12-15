@@ -3,6 +3,7 @@ package tile
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"io"
 	"math"
@@ -27,6 +28,7 @@ const (
  */
 type Source interface {
 	Get(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error)
+	Prefetch(level uint8)
 }
 
 /*
@@ -138,15 +140,9 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 				}
 
 				readFromFile = true
-			} else {
-				msg := err.Error()
-				fmt.Printf("[DEBUG] Tile source: Error decoding PNG file '%s': %s\n", pathFile, msg)
 			}
 
 			fd.Close()
-		} else {
-			msg := err.Error()
-			fmt.Printf("[DEBUG] Tile source: Error reading from file '%s': %s\n", pathFile, msg)
 		}
 
 		/*
@@ -161,7 +157,7 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 			 */
 			if templateUri != "" {
 				pathUri := this.tilePath(templateUri, zoom, x, y)
-				fmt.Printf("[DEBUG] Tile source: Fetching from URI: %s\n", pathUri)
+				fmt.Printf("Fetching from URI: %s\n", pathUri)
 				client := &http.Client{}
 				req, err := http.NewRequest("GET", pathUri, nil)
 
@@ -242,6 +238,128 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 }
 
 /*
+ * Perform color transformation on OSM data.
+ */
+func (this *osmSourceStruct) transformColor(in color.NRGBA) color.NRGBA {
+	r := in.R
+	g := in.G
+	b := in.B
+	rFloat := float64(r) / 255.0
+	gFloat := float64(g) / 255.0
+	bFloat := float64(b) / 255.0
+	rInvFloat := 1.0 - rFloat
+	gInvFloat := 1.0 - gFloat
+	bInvFloat := 1.0 - bFloat
+	lumaFloat := (0.22 * rInvFloat) + (0.72 * gInvFloat) + (0.06 * bInvFloat)
+	lumaFloatHalved := 0.5 * lumaFloat
+	lumaFloatByte := math.Round(lumaFloatHalved * 255.0)
+	lumaByte := uint8(lumaFloatByte)
+
+	/*
+	 * Create resulting color value.
+	 */
+	c := color.NRGBA{
+		R: lumaByte,
+		G: lumaByte,
+		B: lumaByte,
+		A: 255,
+	}
+
+	return c
+}
+
+/*
+ * Fetch a color from a set of OSM tiles, given X / Y coordinates.
+ */
+func (this *osmSourceStruct) interpolateTiles(tiles []*osmTileStruct, zoom uint8, posX float64, posY float64) color.NRGBA {
+	tileSizeFloat := float64(TILE_SIZE)
+	zoomFloat := float64(zoom)
+	dxPerTile := math.Pow(2.0, -zoomFloat)
+	idxXFloat := (posX + 0.5) / dxPerTile
+	idxX := uint32(idxXFloat)
+
+	/*
+	 * Lower limit of index is zero.
+	 */
+	if idxXFloat < 0.0 {
+		idxX = 0
+	}
+
+	idxYFloat := (0.5 - posY) / dxPerTile
+	idxY := uint32(idxYFloat)
+
+	/*
+	 * Lower limit of index is zero.
+	 */
+	if idxYFloat < 0.0 {
+		idxY = 0
+	}
+
+	/*
+	 * ID of OSM tile we're looking for.
+	 */
+	requiredTileId := osmTileIdStruct{
+		zoom: zoom,
+		x:    idxX,
+		y:    idxY,
+	}
+
+	/*
+	 * Initialize color to black.
+	 */
+	c := color.NRGBA{
+		R: 0,
+		G: 0,
+		B: 0,
+		A: 255,
+	}
+
+	/*
+	 * Iterate over all tiles.
+	 */
+	for _, tile := range tiles {
+
+		/*
+		 * Make sure the tile is not nil.
+		 */
+		if tile != nil {
+			tileId := tile.tileId
+
+			/*
+			 * Make sure we have the correct tile.
+			 */
+			if tileId == requiredTileId {
+				tileIdX := tileId.x
+				tileIdXFloat := float64(tileIdX)
+				tileIdY := tileId.y
+				tileIdYFloat := float64(tileIdY)
+				tileMinX := (tileIdXFloat * dxPerTile) - 0.5
+				tileMaxY := 0.5 - (tileIdYFloat * dxPerTile)
+				img := tile.imageData
+
+				/*
+				 * Make sure the image is not nil.
+				 */
+				if img != nil {
+					coordsToPixels := tileSizeFloat / dxPerTile
+					relX := coordsToPixels * (posX - tileMinX)
+					relY := coordsToPixels * (tileMaxY - posY)
+					imgX := int(relX)
+					imgY := int(relY)
+					ci := img.NRGBAAt(imgX, imgY)
+					c = this.transformColor(ci)
+				}
+
+			}
+
+		}
+
+	}
+
+	return c
+}
+
+/*
  * Fetches map data from OpenStreetMaps and renders it into an image.
  */
 func (this *osmSourceStruct) Get(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error) {
@@ -281,16 +399,16 @@ func (this *osmSourceStruct) Get(xres uint32, yres uint32, minX float64, maxX fl
 	tiles := []*osmTileStruct{}
 
 	/*
-	 * Iterate over the X axis.
+	 * Iterate over the Y axis.
 	 */
-	for idxX := idxMinX; idxX <= idxMaxX; idxX++ {
+	for idxY := idxMinY; idxY <= idxMaxY; idxY++ {
+		idxYY := uint32(idxY)
 
 		/*
-		 * Iterate over the Y axis.
+		 * Iterate over the X axis.
 		 */
-		for idxY := idxMinY; idxY <= idxMaxY; idxY++ {
+		for idxX := idxMinX; idxX <= idxMaxX; idxX++ {
 			idxXX := uint32(idxX)
-			idxYY := uint32(idxY)
 
 			/*
 			 * Create OSM tile ID.
@@ -307,9 +425,83 @@ func (this *osmSourceStruct) Get(xres uint32, yres uint32, minX float64, maxX fl
 
 	}
 
-	// TODO: Interpolate tiles and put them into an image.
+	xresInt := int(xres)
+	yresInt := int(yres)
+	rect := image.Rect(0, 0, xresInt, yresInt)
+	img := image.NewNRGBA(rect)
+	yresFloat := float64(yres)
+	dy := math.Abs(maxY - minY)
+	ddx := dx / xresFloat
+	ddy := dy / yresFloat
 
-	return nil, fmt.Errorf("%s", "Not yet implemented.")
+	/*
+	 * Render image line by line.
+	 */
+	for idxY32 := uint32(0); idxY32 < yres; idxY32++ {
+		idxYFloat := float64(idxY32)
+		idxY := int(idxY32)
+
+		/*
+		 * Render line pixel by pixel.
+		 */
+		for idxX32 := uint32(0); idxX32 < xres; idxX32++ {
+			idxXFloat := float64(idxX32)
+			idxX := int(idxX32)
+			posX := minX + (idxXFloat * ddx)
+			posY := maxY - (idxYFloat * ddy)
+			c := this.interpolateTiles(tiles, zoom, posX, posY)
+			img.SetNRGBA(idxX, idxY, c)
+		}
+
+	}
+
+	return img, nil
+}
+
+/*
+ * Pre-fetch data from OSM to fill the caches.
+ */
+func (this *osmSourceStruct) Prefetch(zoomLevel uint8) {
+
+	/*
+	 * Limit zoom level to allowed maximum.
+	 */
+	if zoomLevel > MAX_ZOOM_LEVEL {
+		zoomLevel = MAX_ZOOM_LEVEL
+	}
+
+	/*
+	 * Fetch tiles for every zoom level.
+	 */
+	for zoom := uint8(0); zoom <= zoomLevel; zoom++ {
+		tilesPerAxis := uint32(1) << zoom
+
+		/*
+		 * Fetch every row of tiles.
+		 */
+		for y := uint32(0); y < tilesPerAxis; y++ {
+
+			/*
+			 * Fetch every tile in the row.
+			 */
+			for x := uint32(0); x < tilesPerAxis; x++ {
+
+				/*
+				 * Create OSM tile id.
+				 */
+				id := osmTileIdStruct{
+					zoom: zoom,
+					x:    x,
+					y:    y,
+				}
+
+				this.getTile(id)
+			}
+
+		}
+
+	}
+
 }
 
 /*
