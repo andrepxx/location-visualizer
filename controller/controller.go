@@ -58,6 +58,112 @@ type Controller interface {
 }
 
 /*
+ * Renders a map tile.
+ */
+func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	xIn := request.Params["x"]
+	x64, _ := strconv.ParseUint(xIn, 10, 32)
+	x := uint32(x64)
+	yIn := request.Params["y"]
+	y64, _ := strconv.ParseUint(yIn, 10, 32)
+	y := uint32(y64)
+	zIn := request.Params["z"]
+	z64, _ := strconv.ParseUint(zIn, 10, 8)
+	z := uint8(z64)
+	tileSource := this.tileSource
+	tile, err := tileSource.Get(z, x, y)
+
+	/*
+	 * Check if tile could be fetched.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to fetch map tile: %s\n", msg)
+		contentType := this.config.WebServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   bytes.NewBufferString(customMsg).Bytes(),
+		}
+
+		return response
+	} else {
+		img := tile.Image()
+		id := tile.Id()
+		idX := id.X()
+		idY := id.Y()
+		idZ := id.Zoom()
+
+		/*
+		 * Ensure that the tile IDs match.
+		 */
+		if (x != idX) || (y != idY) || (z != idZ) {
+			msg := "Something is wrong here: (%d, %d, %d) != (%d, %d, %d)"
+			customMsg := fmt.Sprintf(msg, idX, idY, idZ, x, y, z)
+			contentType := this.config.WebServer.ErrorMime
+
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+				Header: map[string]string{"Content-type": contentType},
+				Body:   bytes.NewBufferString(customMsg).Bytes(),
+			}
+
+			return response
+		} else {
+
+			/*
+			 * Create a PNG encoder.
+			 */
+			encoder := png.Encoder{
+				CompressionLevel: png.BestCompression,
+			}
+
+			buf := &bytes.Buffer{}
+			err := encoder.Encode(buf, img)
+
+			/*
+			 * Check if image could be encoded.
+			 */
+			if err != nil {
+				msg := err.Error()
+				customMsg := fmt.Sprintf("Failed to encode image: %s\n", msg)
+				contentType := this.config.WebServer.ErrorMime
+
+				/*
+				 * Create HTTP response.
+				 */
+				response := webserver.HttpResponse{
+					Header: map[string]string{"Content-type": contentType},
+					Body:   bytes.NewBufferString(customMsg).Bytes(),
+				}
+
+				return response
+			} else {
+				bufBytes := buf.Bytes()
+
+				/*
+				 * Create HTTP response.
+				 */
+				response := webserver.HttpResponse{
+					Header: map[string]string{"Content-type": "image/png"},
+					Body:   bufBytes,
+				}
+
+				return response
+			}
+
+		}
+
+	}
+
+}
+
+/*
  * Renders location data into an image.
  */
 func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webserver.HttpResponse {
@@ -77,7 +183,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	useBG, _ := strconv.ParseBool(useBGIn)
 	zoomFloat := float64(zoom)
 	zoomExp := -0.2 * zoomFloat
-	zoomFac := math.Pow(2, zoomExp)
+	zoomFac := math.Pow(2.0, zoomExp)
 	halfWidth := 0.5 * zoomFac
 	xresFloat := float64(xres)
 	yresFloat := float64(yres)
@@ -97,32 +203,32 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	target := image.NewNRGBA(dim)
 
 	/*
-	 * The background color.
-	 */
-	c := imagecolor.NRGBA{
-		R: 0,
-		G: 0,
-		B: 0,
-		A: 255,
-	}
-
-	uniform := image.NewUniform(c)
-	draw.Draw(target, dim, uniform, image.ZP, draw.Over)
-
-	/*
 	 * Check if we should render a map background.
 	 */
 	if useBG {
+
+		/*
+		 * The background color.
+		 */
+		c := imagecolor.NRGBA{
+			R: 0,
+			G: 0,
+			B: 0,
+			A: 255,
+		}
+
+		uniform := image.NewUniform(c)
+		draw.Draw(target, dim, uniform, image.ZP, draw.Over)
 		tileSource := this.tileSource
 
 		/*
 		 * Check if tile source was set.
 		 */
 		if tileSource != nil {
-			imgMap, err := tileSource.Get(xres, yres, minX, maxX, minY, maxY)
+			imgMap, err := tileSource.Render(xres, yres, minX, maxX, minY, maxY)
 
 			/*
-			 * Draw map tile if it was successfully retrieved.
+			 * Draw map tile if it was successfully rendered.
 			 */
 			if err == nil {
 				draw.Draw(target, dim, imgMap, image.ZP, draw.Over)
@@ -232,6 +338,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 	 * Find the right CGI to handle the request.
 	 */
 	switch cgi {
+	case "get-tile":
+		response = this.getTileHandler(request)
 	case "render":
 		response = this.renderHandler(request)
 	default:

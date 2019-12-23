@@ -24,11 +24,29 @@ const (
 )
 
 /*
+ * A tile ID.
+ */
+type TileId interface {
+	X() uint32
+	Y() uint32
+	Zoom() uint8
+}
+
+/*
+ * A map tile.
+ */
+type Tile interface {
+	Id() TileId
+	Image() *image.NRGBA
+}
+
+/*
  * A source for map tiles.
  */
 type Source interface {
-	Get(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error)
+	Get(zoom uint8, x uint32, y uint32) (Tile, error)
 	Prefetch(level uint8)
+	Render(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error)
 }
 
 /*
@@ -54,6 +72,46 @@ type osmTileIdStruct struct {
 type osmTileStruct struct {
 	imageData *image.NRGBA
 	tileId    osmTileIdStruct
+}
+
+/*
+ * Returns the X coordinate of this map tile.
+ */
+func (this *osmTileIdStruct) X() uint32 {
+	x := this.x
+	return x
+}
+
+/*
+ * Returns the Y coordinate of this map tile.
+ */
+func (this *osmTileIdStruct) Y() uint32 {
+	y := this.y
+	return y
+}
+
+/*
+ * Returns the zoom level of this map tile.
+ */
+func (this *osmTileIdStruct) Zoom() uint8 {
+	zoom := this.zoom
+	return zoom
+}
+
+/*
+ * Returns the ID of this map tile.
+ */
+func (this *osmTileStruct) Id() TileId {
+	id := this.tileId
+	return &id
+}
+
+/*
+ * Returns the image data from this map tile.
+ */
+func (this *osmTileStruct) Image() *image.NRGBA {
+	img := this.imageData
+	return img
 }
 
 /*
@@ -360,9 +418,130 @@ func (this *osmSourceStruct) interpolateTiles(tiles []*osmTileStruct, zoom uint8
 }
 
 /*
+ * Fetches a map tile from OSM or from the cache.
+ */
+func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32) (Tile, error) {
+
+	/*
+	 * Check if zoom level is in range.
+	 */
+	if zoom > MAX_ZOOM_LEVEL {
+		err := fmt.Errorf("Zoom level %d not allowed. (Maximum: %d)", zoom, MAX_ZOOM_LEVEL)
+		return nil, err
+	} else {
+		tilesPerAxis := uint32(1) << zoom
+		maxTileId := tilesPerAxis - 1
+
+		/*
+		 * Check if tile IDs are in range.
+		 */
+		if (x > maxTileId) || (y > maxTileId) {
+			msg := "Cannot fetch tile (%d, %d). Maximum tile ID is (%d, %d) at zoom level %d."
+			err := fmt.Errorf(msg, x, y, maxTileId, maxTileId, zoom)
+			return nil, err
+		} else {
+
+			/*
+			 * Create OSM tile id.
+			 */
+			tileId := osmTileIdStruct{
+				zoom: zoom,
+				x:    x,
+				y:    y,
+			}
+
+			tileSource := this.getTile(tileId)
+			imgSource := tileSource.imageData
+			rect := imgSource.Bounds()
+			imgTarget := image.NewNRGBA(rect)
+			rectMin := rect.Min
+			minX := rectMin.X
+			minY := rectMin.Y
+			rectMax := rect.Max
+			maxX := rectMax.X
+			maxY := rectMax.Y
+
+			/*
+			 * Read image line by line.
+			 */
+			for y := minY; y < maxY; y++ {
+
+				/*
+				 * Read line pixel by pixel.
+				 */
+				for x := minX; x < maxX; x++ {
+					sourceColor := imgSource.NRGBAAt(x, y)
+					targetColor := this.transformColor(sourceColor)
+					imgTarget.Set(x, y, targetColor)
+				}
+
+			}
+
+			/*
+			 * Create OSM tile.
+			 */
+			tileTarget := osmTileStruct{
+				imageData: imgTarget,
+				tileId:    tileId,
+			}
+
+			return &tileTarget, nil
+		}
+
+	}
+
+}
+
+/*
+ * Pre-fetch data from OSM to fill the caches.
+ */
+func (this *osmSourceStruct) Prefetch(zoomLevel uint8) {
+
+	/*
+	 * Limit zoom level to allowed maximum.
+	 */
+	if zoomLevel > MAX_ZOOM_LEVEL {
+		zoomLevel = MAX_ZOOM_LEVEL
+	}
+
+	/*
+	 * Fetch tiles for every zoom level.
+	 */
+	for zoom := uint8(0); zoom <= zoomLevel; zoom++ {
+		tilesPerAxis := uint32(1) << zoom
+
+		/*
+		 * Fetch every row of tiles.
+		 */
+		for y := uint32(0); y < tilesPerAxis; y++ {
+
+			/*
+			 * Fetch every tile in the row.
+			 */
+			for x := uint32(0); x < tilesPerAxis; x++ {
+
+				/*
+				 * Create OSM tile id.
+				 */
+				id := osmTileIdStruct{
+					zoom: zoom,
+					x:    x,
+					y:    y,
+				}
+
+				this.getTile(id)
+			}
+
+		}
+
+	}
+
+}
+
+/*
  * Fetches map data from OpenStreetMaps and renders it into an image.
  */
-func (this *osmSourceStruct) Get(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error) {
+func (this *osmSourceStruct) Render(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error) {
 	tileSizeFloat := float64(TILE_SIZE)
 	xresFloat := float64(xres)
 	numTilesX := xresFloat / tileSizeFloat
@@ -456,52 +635,6 @@ func (this *osmSourceStruct) Get(xres uint32, yres uint32, minX float64, maxX fl
 	}
 
 	return img, nil
-}
-
-/*
- * Pre-fetch data from OSM to fill the caches.
- */
-func (this *osmSourceStruct) Prefetch(zoomLevel uint8) {
-
-	/*
-	 * Limit zoom level to allowed maximum.
-	 */
-	if zoomLevel > MAX_ZOOM_LEVEL {
-		zoomLevel = MAX_ZOOM_LEVEL
-	}
-
-	/*
-	 * Fetch tiles for every zoom level.
-	 */
-	for zoom := uint8(0); zoom <= zoomLevel; zoom++ {
-		tilesPerAxis := uint32(1) << zoom
-
-		/*
-		 * Fetch every row of tiles.
-		 */
-		for y := uint32(0); y < tilesPerAxis; y++ {
-
-			/*
-			 * Fetch every tile in the row.
-			 */
-			for x := uint32(0); x < tilesPerAxis; x++ {
-
-				/*
-				 * Create OSM tile id.
-				 */
-				id := osmTileIdStruct{
-					zoom: zoom,
-					x:    x,
-					y:    y,
-				}
-
-				this.getTile(id)
-			}
-
-		}
-
-	}
-
 }
 
 /*

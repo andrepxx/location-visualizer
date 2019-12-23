@@ -6,6 +6,7 @@
 function Globals() {
 	this.cgi = '/cgi-bin/locviz';
 	this.mimeDefault = 'application/x-www-form-urlencoded';
+	this.tileSize = 256.0;
 }
 
 /*
@@ -117,16 +118,18 @@ function Helper() {
 		/*
 		 * If we should block the site, display blocker, otherwise hide it.
 		 */
-		if (blocked)
+		if (blocked) {
 			displayStyle = 'block';
-		else
+		} else {
 			displayStyle = 'none';
+		}
 		
 		/*
 		 * Apply style if the site has a blocker.
 		 */
-		if (blocker !== null)
+		if (blocker !== null) {
 			blocker.style.display = displayStyle;
+		}
 		
 	};
 	
@@ -207,8 +210,9 @@ function Ajax() {
 				 * If we blocked the site on the request,
 				 * unblock it on the response.
 				 */
-				if (block)
+				if (block) {
 					helper.blockSite(false);
+				}
 				
 				/*
 				 * Check if callback is registered.
@@ -227,8 +231,9 @@ function Ajax() {
 		/*
 		 * Set MIME type if requested.
 		 */
-		if (mimeType !== null)
+		if (mimeType !== null) {
 			xhr.setRequestHeader('Content-type', mimeType);
+		}
 		
 		xhr.send(data);
 	};
@@ -251,16 +256,17 @@ function Ajax() {
 		var img = new Image();
 		
 		/*
-		 * Event handler for Load event.
+		 * Event handler for load event.
 		 */
-		img.onload = function() {
+		var eventSuccess = function() {
 			
 			/*
 			 * If we blocked the site on the request,
 			 * unblock it on the response.
 			 */
-			if (block)
+			if (block) {
 				helper.blockSite(false);
+			}
 			
 			/*
 			 * Check if callback is registered.
@@ -271,6 +277,30 @@ function Ajax() {
 			
 		};
 		
+		/*
+		 * Event handler for error event.
+		 */
+		var eventError = function() {
+			
+			/*
+			 * If we blocked the site on the request,
+			 * unblock it on the response.
+			 */
+			if (block) {
+				helper.blockSite(false);
+			}
+			
+			/*
+			 * Check if callback is registered.
+			 */
+			if (callback !== null) {
+				callback(null, id);
+			}
+			
+		};
+		
+		img.onload = eventSuccess;
+		img.onerror = eventError;
 		var uri = url + '?' + data;
 		img.src = uri;
 	};
@@ -339,8 +369,9 @@ function Request() {
 			/*
 			 * If this is not the first key-value pair, we need a separator.
 			 */
-			if (i > 0)
+			if (i > 0) {
 				s += '&';
+			}
 			
 			s += keyEncoded + '=' + valueEncoded;
 		}
@@ -354,6 +385,263 @@ function Request() {
  * This class implements helper functions to build a user interface.
  */
 function UI() {
+	var self = this;
+	
+	/*
+	 * Calculate the IDs and positions of the tiles required to
+	 * display a certain portion of the map and their positions
+	 * inside the coordinate system.
+	 */
+	this.calculateTiles = function(xres, yres, zoom, xpos, ypos) {
+		var zoomExp = 0.2 * zoom;
+		var zoomFac = Math.pow(2.0, zoomExp);
+		var zoomFacInv = 1.0 / zoomFac;
+		var halfWidth = 0.5 * zoomFacInv;
+		var aspectRatio = yres / xres;
+		var halfHeight = aspectRatio * halfWidth;
+		var minX = xpos - halfWidth;
+		var maxX = xpos + halfWidth;
+		var minY = ypos - halfHeight;
+		var maxY = ypos + halfHeight;
+		var tileSize = globals.tileSize;
+		var osmZoomFloat = Math.log2(zoomFac * (xres / tileSize))
+		var osmZoom = Math.floor(osmZoomFloat);
+		
+		/*
+		 * Limit OSM zoom.
+		 */
+		if (osmZoom < 0.0) {
+			osmZoom = 0.0;
+		} else if (osmZoom > 19.0) {
+			osmZoom = 19.0;
+		}
+		
+		var maxTileId = (1 << osmZoom) - 1;
+		var dxPerTile = Math.pow(2.0, -osmZoom);
+		var idxMinX = Math.floor((minX + 0.5) / dxPerTile);
+		var idxMaxX = Math.floor((maxX + 0.5) / dxPerTile);
+		var idxMinY = Math.floor((0.5 - maxY) / dxPerTile);
+		var idxMaxY = Math.floor((0.5 - minY) / dxPerTile);
+		var tileDescriptors = [];
+		
+		/*
+		 * Iterate over the Y axis.
+		 */
+		for (var idxY = idxMinY; idxY <= idxMaxY; idxY++) {
+			
+			/*
+			 * Iterate over the X axis.
+			 */
+			for (var idxX = idxMinX; idxX <= idxMaxX; idxX++) {
+				
+				/*
+				 * Check if tile ID is valid.
+				 */
+				if ((idxX >= 0) & (idxX <= maxTileId) & (idxY >= 0) & (idxY <= maxTileId)) {
+					var tileMinX = (idxX * dxPerTile) - 0.5;
+					var tileMaxX = tileMinX + dxPerTile;
+					var tileMaxY = 0.5 - (idxY * dxPerTile);
+					var tileMinY = tileMaxY - dxPerTile;
+					
+					/*
+					 * Calculate tile IDs and limits.
+					 *
+					 * OSM coordinates have X axis to the right and
+					 * Y axis downwards.
+					 *
+					 * Our coordinates have X axis to the right and
+					 * Y axis upwards and interval [-0.5, 0.5].
+					 */
+					var tileDescriptor = {
+						osmX: idxX,
+						osmY: idxY,
+						osmZoom: osmZoom,
+						dx: dxPerTile,
+						minX: tileMinX,
+						maxX: tileMaxX,
+						minY: tileMinY,
+						maxY: tileMaxY,
+						imgData: null,
+						fetched: false
+					};
+					
+					tileDescriptors.push(tileDescriptor);
+				}
+				
+			}
+			
+		}
+		
+		return tileDescriptors;
+	};
+	
+	/*
+	 * Fetches a of tiles from the server and notifies listener
+	 * about update.
+	 */
+	this.fetchTile = function(tileDescriptor, listener) {
+		var x = tileDescriptor.osmX;
+		var y = tileDescriptor.osmY;
+		var z = tileDescriptor.osmZoom;
+		var rq = new Request();
+		rq.append('cgi', 'get-tile');
+		var xString = x.toString();
+		rq.append('x', xString);
+		var yString = y.toString();
+		rq.append('y', yString);
+		var zString = z.toString();
+		rq.append('z', zString);
+		var cgi = globals.cgi;
+		var data = rq.getData();
+		
+		/*
+		 * This is called when the server sends data.
+		 */
+		var callback = function(img, idResponse) {
+			listener(tileDescriptor, img);
+		};
+		
+		ajax.requestImage(cgi, data, callback, false, null);
+	};
+	
+	/*
+	 * Draws a tile on the map canvas.
+	 */
+	this.drawTile = function(tileDescriptor) {
+		var img = tileDescriptor.imgData;
+		
+		/*
+		 * Check if current tile has image data attached.
+		 */
+		if (img !== null) {
+			var cvs = document.getElementById('map_canvas');
+			var xres = cvs.scrollWidth;
+			var yres = cvs.scrollHeight;
+			var posX = storage.get(cvs, 'posX');
+			var posY = storage.get(cvs, 'posY');
+			var zoom = storage.get(cvs, 'zoomLevel');
+			var zoomExp = 0.2 * zoom;
+			var zoomFac = Math.pow(2.0, zoomExp);
+			var zoomFacInv = 1.0 / zoomFac;
+			var halfWidth = 0.5 * zoomFacInv;
+			var aspectRatio = yres / xres;
+			var halfHeight = aspectRatio * halfWidth;
+			var minX = posX - halfWidth;
+			var maxX = posX + halfWidth;
+			var minY = posY - halfHeight;
+			var maxY = posY + halfHeight;
+			var tileMinX = tileDescriptor.minX;
+			var tileMinY = tileDescriptor.minY;
+			var tileMaxX = tileDescriptor.maxX;
+			var tileMaxY = tileDescriptor.maxY;
+			var destX = xres * ((tileMinX - minX) * zoomFac);
+			var destY = xres * ((maxY - tileMaxY) * zoomFac);
+			var destWidth = xres * ((tileMaxX - tileMinX) * zoomFac);
+			var destHeight = xres * ((tileMaxY - tileMinY) * zoomFac);
+			var ctx = cvs.getContext('2d');
+			ctx.drawImage(img, destX, destY, destWidth, destHeight);
+		}
+		
+	};
+	
+	/*
+	 * This is called when a new map tile has been fetched.
+	 */
+	this.updateTiles = function(tileDescriptors) {
+		var cvs = document.getElementById('map_canvas');
+		var width = cvs.scrollWidth;
+		var height = cvs.scrollHeight;
+		var ctx = cvs.getContext('2d');
+		ctx.clearRect(0, 0, width, height);
+		var tiles = storage.get(cvs, 'osmTiles');
+		
+		/*
+		 * Check if map tiles have to be drawn.
+		 */
+		if (tiles !== null) {
+			var numTiles = tiles.length;
+			
+			/*
+			 * Draw every single map tile.
+			 */
+			for (var i = 0; i < numTiles; i++) {
+				var currentTile = tiles[i];
+				
+				/*
+				 * Draw tile if map tile is available.
+				 */
+				if (currentTile !== null) {
+					this.drawTile(currentTile);
+				}
+				
+			}
+			
+		}
+		
+		var img = storage.get(cvs, 'lastImage');
+		
+		/*
+		 * Check if image overlay has to be drawn.
+		 */
+		if (img !== null) {
+			ctx.drawImage(img, 0, 0);
+		}
+		
+	};
+	
+	/*
+	 * Fetch a list of map tiles and invoke callback on each change.
+	 *
+	 * - Find first tile ID without image data attached.
+	 * - Invoke fetchTile(...) to fetch that tile.
+	 *
+	 * - When tile was fetched:
+	 *   - Associate image data with tile ID.
+	 *   - Notify callback that new tile was fetched.
+	 *   - Invoke yourself to fetch next missing tile.
+	 *
+	 * - Process terminates, when all tiles have image data
+	 *   attached.
+	 */
+	this.fetchTiles = function(tileIds, callback) {
+		var firstTileToFetch = null;
+		
+		/*
+		 * Iterate over all tiles and find the first that is not yet
+		 * fetched.
+		 */
+		for (var i = 0; i < tileIds.length; i++) {
+			var currentTile = tileIds[i];
+			var fetched = currentTile.fetched;
+			
+			/*
+			 * Check if this is the first tile to fetch.
+			 */
+			if ((firstTileToFetch === null) & (fetched === false)) {
+				firstTileToFetch = currentTile;
+			}
+			
+		}
+		
+		/*
+		 * Check if we have to fetch a tile.
+		 */
+		if (firstTileToFetch !== null) {
+			
+			/*
+			 * Internal callback invoked by fetchTile(...).
+			 */
+			var internalCallback = function(tileDescriptor, img) {
+				tileDescriptor.imgData = img;
+				tileDescriptor.fetched = true;
+				callback(tileIds);
+				self.fetchTiles(tileIds, callback);
+			};
+			
+			this.fetchTile(firstTileToFetch, internalCallback);
+		}
+		
+	};
 	
 	/*
 	 * Redraw the map with the same image, but a different offset.
@@ -365,18 +653,20 @@ function UI() {
 		/*
 		 * Load or store x-offset.
 		 */
-		if (xoffs !== null)
+		if (xoffs !== null) {
 			storage.put(cvs, 'offsetX', xoffs);
-		else
+		} else {
 			xoffs = storage.get(cvs, 'offsetX');
+		}
 		
 		/*
 		 * Load or store y-offset.
 		 */
-		if (yoffs !== null)
+		if (yoffs !== null) {
 			storage.put(cvs, 'offsetY', yoffs);
-		else
+		} else {
 			yoffs = storage.get(cvs, 'offsetY');
+		}
 		
 		/*
 		 * Check if there is a stored image.
@@ -397,12 +687,12 @@ function UI() {
 			ctx.drawImage(img, 0, 0, width, height, dx, dy, scaledWidth, scaledHeight);
 		}
 		
-	}
+	};
 	
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom, usebg) {
+	this.updateMap = function(xres, yres, xpos, ypos, zoom, useOSMTiles) {
 		var rq = new Request();
 		rq.append('cgi', 'render');
 		var xresString = xres.toString();
@@ -415,14 +705,14 @@ function UI() {
 		rq.append('ypos', yposString);
 		var zoomString = zoom.toString();
 		rq.append('zoom', zoomString);
-		var usebgString = usebg.toString();
-		rq.append('usebg', usebgString);
+		rq.append('usebg', 'false');
 		var cgi = globals.cgi;
 		var data = rq.getData();
 		var cvs = document.getElementById('map_canvas');
 		var idRequest = storage.get(cvs, 'imageRequestId');
 		var currentRequestId = idRequest + 1;
 		storage.put(cvs, 'imageRequestId', currentRequestId);
+		storage.put(cvs, 'osmTiles', []);
 		
 		/*
 		 * This is called when the server sends data.
@@ -448,6 +738,25 @@ function UI() {
 				var ctx = cvs.getContext('2d');
 				ctx.clearRect(0, 0, width, height);
 				ctx.drawImage(img, 0, 0);
+				
+				/*
+				 * Check if we should use OSM tiles.
+				 */
+				if (useOSMTiles) {
+					var tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos);
+					storage.put(cvs, 'osmTiles', tileIds);
+					
+					/*
+					 * Internal callback necessary to have
+					 * "this" reference.
+					 */
+					var internalCallback = function() {
+						self.updateTiles();
+					};
+					
+					self.fetchTiles(tileIds, internalCallback);
+				}
+				
 			}
 			
 		};
@@ -477,8 +786,8 @@ function Handler() {
 		var posX = storage.get(cvs, 'posX');
 		var posY = storage.get(cvs, 'posY');
 		var zoom = storage.get(cvs, 'zoomLevel');
-		var usebg = storage.get(cvs, 'useBG');
-		ui.updateMap(width, height, posX, posY, zoom, usebg);
+		var useOSMTiles = storage.get(cvs, 'useOSMTiles');
+		ui.updateMap(width, height, posX, posY, zoom, useOSMTiles);
 	};
 	
 	/*
@@ -496,8 +805,9 @@ function Handler() {
 		/*
 		 * If there are touches, extract the first one.
 		 */
-		if (numTouches > 0)
+		if (numTouches > 0) {
 			touch = touches.item(0);
+		}
 		
 		var x = 0.0;
 		var y = 0.0;
@@ -653,14 +963,16 @@ function Handler() {
 				/*
 				 * Zoom level shall not go below zero.
 				 */
-				if (zoom < 0)
+				if (zoom < 0) {
 					zoom = 0;
+				}
 				
 				/*
 				 * Zoom level shall not go above 120.
 				 */
-				if (zoom > 120)
+				if (zoom > 120) {
 					zoom = 120;
+				}
 				
 				storage.put(cvs, 'zoomLevel', zoom);
 				ui.moveMap(null, null);
@@ -777,9 +1089,9 @@ function Handler() {
 			/*
 			 * Load a new position if drag was not interrupted.
 			 */
-			if (interrupted === true)
+			if (interrupted === true) {
 				ui.moveMap(0, 0);
-			else {
+			} else {
 				var startX = storage.get(cvs, 'mouseStartX');
 				var startY = storage.get(cvs, 'mouseStartY');
 				var relX = x - startX;
@@ -840,14 +1152,16 @@ function Handler() {
 		/*
 		 * Zoom level shall not go below zero.
 		 */
-		if (zoom < 0)
+		if (zoom < 0) {
 			zoom = 0;
+		}
 		
 		/*
 		 * Zoom level shall not go above 120.
 		 */
-		if (zoom > 120)
+		if (zoom > 120) {
 			zoom = 120;
+		}
 		
 		storage.put(cvs, 'zoomLevel', zoom);
 		
@@ -897,7 +1211,7 @@ function Handler() {
 		storage.put(cvs, 'posX', 0.0);
 		storage.put(cvs, 'posY', 0.0);
 		storage.put(cvs, 'zoomLevel', 0);
-		storage.put(cvs, 'useBG', true);
+		storage.put(cvs, 'useOSMTiles', true);
 		storage.put(cvs, 'imageRequestId', 0);
 		storage.put(cvs, 'imageResponseId', 0);
 		storage.put(cvs, 'imageZoom', 0);
