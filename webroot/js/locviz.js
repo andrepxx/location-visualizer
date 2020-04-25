@@ -127,11 +127,40 @@ function Helper() {
 		/*
 		 * Apply style if the site has a blocker.
 		 */
-		if (blocker !== null) {
+		if (blocker != null) {
 			blocker.style.display = displayStyle;
 		}
 		
 	};
+	
+	/*
+	 * Clean a (string) value obtained from a date input element.
+	 *
+	 * Remove whitespace and replace the empty string by null value.
+	 */
+	this.cleanValue = function(v) {
+		
+		/*
+		 * Null values are not handled.
+		 */
+		if (v == null) {
+			return null;
+		} else {
+			v = v.toString();
+			v = v.trim();
+			
+			/*
+			 * Replace empty string by null.
+			 */
+			if (v == "") {
+				return null;
+			} else {
+				return v;
+			}
+			
+		}
+		
+	}
 	
 	/*
 	 * Removes all child nodes from an element.
@@ -163,6 +192,71 @@ function Helper() {
 			return null;
 		}
 		
+	};
+	
+	/*
+	 * Convert fractional degrees to degrees, minutes, seconds.
+	 */
+	this.convertToDMS = function(dd, suffixPos, suffixNeg) {
+		var deg = dd | 0;
+		var degString = deg.toFixed(0);
+		var degAbs = Math.abs(deg);
+		var degAbsString = degAbs.toFixed(0);
+		var frac = Math.abs(dd - deg);
+		var m = (frac * 60) | 0;
+		var mString = m.toFixed(0);
+		var sec = (frac * 3600) - (m * 60);
+		var secString = sec.toFixed(2);
+		var result = '';
+		
+		/*
+		 * Check whether to use sign or suffix.
+		 */
+		if ((suffixPos != null) & (suffixNeg != null)) {
+			var suffix = '';
+			
+			/*
+			 * Choose suffix.
+			 */
+			if (deg >= 0) {
+				suffix = ' ' + suffixPos;
+			} else {
+				suffix = ' ' + suffixNeg;
+			}
+			
+			result = degAbsString + '° ' + mString + '\' ' + secString + '"' + suffix;
+		} else {
+			result = degString + '° ' + mString + '\' ' + secString + '"';
+		}
+		
+		return result;
+	}
+	
+	/*
+	 * Transform Mercator coordinates into geographic coordinates.
+	 */
+	this.transformCoordinates = function(xpos, ypos) {
+		var twoPi = 2.0 * Math.PI;
+		var halfPi = 0.5 * Math.PI;
+		var longitude = 360.0 * xpos;
+		var longitudeDMS = this.convertToDMS(longitude, 'E', 'W');
+		var ya = twoPi * ypos;
+		var yb = Math.exp(ya);
+		var yc = Math.atan(yb);
+		var yd = 2.0 * yc;
+		var ye = yd - halfPi;
+		var latitude = (360.0 / twoPi) * ye;
+		var latitudeDMS = this.convertToDMS(latitude, 'N', 'S');
+		
+		/*
+		 * This is the result.
+		 */
+		var result = {
+			longitude: longitudeDMS,
+			latitude: latitudeDMS
+		};
+		
+		return result;
 	};
 	
 }
@@ -386,6 +480,20 @@ function Request() {
  */
 function UI() {
 	var self = this;
+	
+	/*
+	 * Creates a generic UI element container with a label.
+	 */
+	this.createElement = function(labelCaption) {
+		var labelDiv = document.createElement('div');
+		labelDiv.className = 'label';
+		var labelNode = document.createTextNode(labelCaption);
+		labelDiv.appendChild(labelNode)
+		var uiElement = document.createElement('div');
+		uiElement.className = 'uielement';
+		uiElement.appendChild(labelDiv);
+		return uiElement;
+	};
 	
 	/*
 	 * Calculate the IDs and positions of the tiles required to
@@ -692,7 +800,9 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom, useOSMTiles) {
+	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles) {
+		/* Earth circumference at the equator. */
+		var circ = 40074;
 		var rq = new Request();
 		rq.append('cgi', 'render');
 		var xresString = xres.toString();
@@ -705,6 +815,42 @@ function UI() {
 		rq.append('ypos', yposString);
 		var zoomString = zoom.toString();
 		rq.append('zoom', zoomString);
+		var northingField = document.getElementById('northing_field');
+		northingField.value = ypos.toFixed(10);
+		var eastingField = document.getElementById('easting_field');
+		eastingField.value = xpos.toFixed(10);
+		var zoomField = document.getElementById('zoom_field');
+		zoomField.value = zoomString;
+		var xposKM = xpos * circ;
+		var yposKM = ypos * circ;
+		var eastingFieldKM = document.getElementById('easting_field_km');
+		eastingFieldKM.value = xposKM.toFixed(3);
+		var northingFieldKM = document.getElementById('northing_field_km');
+		northingFieldKM.value = yposKM.toFixed(3);
+		var longLat = helper.transformCoordinates(xpos, ypos);
+		var longitude = longLat.longitude;
+		var latitude = longLat.latitude;
+		var longitudeField = document.getElementById('longitude_field');
+		longitudeField.value = longitude;
+		var latitudeField = document.getElementById('latitude_field');
+		latitudeField.value = latitude;
+		
+		/*
+		 * Use min-time.
+		 */
+		if (mintime !== null) {
+			var mintimeString = mintime.toString();
+			rq.append('mintime', mintimeString);
+		}
+		
+		/*
+		 * Use max-time.
+		 */
+		if (maxtime !== null) {
+			var maxtimeString = maxtime.toString();
+			rq.append('maxtime', maxtimeString);
+		}
+		
 		rq.append('usebg', 'false');
 		var cgi = globals.cgi;
 		var data = rq.getData();
@@ -786,8 +932,10 @@ function Handler() {
 		var posX = storage.get(cvs, 'posX');
 		var posY = storage.get(cvs, 'posY');
 		var zoom = storage.get(cvs, 'zoomLevel');
+		var timeMin = storage.get(cvs, 'minTime');
+		var timeMax = storage.get(cvs, 'maxTime');
 		var useOSMTiles = storage.get(cvs, 'useOSMTiles');
-		ui.updateMap(width, height, posX, posY, zoom, useOSMTiles);
+		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles);
 	};
 	
 	/*
@@ -1177,7 +1325,7 @@ function Handler() {
 		timeout = window.setTimeout(refresh, 250);
 		handler._timeoutScroll = timeout;
 		ui.moveMap(null, null);
-	}
+	};
 	
 	/*
 	 * This is called when the window is resized.
@@ -1195,7 +1343,131 @@ function Handler() {
 		
 		timeout = window.setTimeout(resize, 100);
 		handler._timeoutResize = timeout;
-	}
+	};
+	
+	/*
+	 * Initializes the (right) side bar of the user interface.
+	 */
+	this.initializeSidebar = function() {
+		var sidebar = document.getElementById('right_sidebar');
+		var opener = document.getElementById('right_sidebar_opener');
+		var dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		var elemFrom = ui.createElement('From');
+		var fieldFrom = document.createElement('input');
+		fieldFrom.className = 'textfield';
+		fieldFrom.setAttribute('type', 'text');
+		fieldFrom.setAttribute('placeholder', dateFormat);
+		elemFrom.appendChild(fieldFrom);
+		sidebar.appendChild(elemFrom);
+		var elemTo = ui.createElement('To');
+		var fieldTo = document.createElement('input');
+		fieldTo.className = 'textfield';
+		fieldTo.setAttribute('type', 'text');
+		fieldTo.setAttribute('placeholder', dateFormat);
+		elemTo.appendChild(fieldTo);
+		sidebar.appendChild(elemTo);
+		var elemButtons = ui.createElement('');
+		var buttonApply = document.createElement('button');
+		buttonApply.className = 'button';
+		var buttonApplyCaption = document.createTextNode('Apply');
+		buttonApply.appendChild(buttonApplyCaption);
+		
+		/*
+		 * This is called when the user clicks on the 'Apply' button.
+		 */
+		buttonApply.onclick = function(e) {
+			var valueFrom = helper.cleanValue(fieldFrom.value);
+			var valueTo = helper.cleanValue(fieldTo.value);
+			var cvs = document.getElementById('map_canvas');
+			storage.put(cvs, 'minTime', valueFrom);
+			storage.put(cvs, 'maxTime', valueTo);
+			handler.refresh();
+		};
+		
+		elemButtons.appendChild(buttonApply);
+		var buttonHide = document.createElement('button');
+		buttonHide.className = 'button next';
+		var buttonHideCaption = document.createTextNode('Hide');
+		buttonHide.appendChild(buttonHideCaption);
+		
+		/*
+		 * This is called when the user clicks on the 'Hide' button.
+		 */
+		buttonHide.onclick = function(e) {
+			sidebar.style.display = 'none';
+			opener.style.display = 'block';
+		};
+		
+		elemButtons.appendChild(buttonHide);
+		sidebar.appendChild(elemButtons);
+		var elemSpacerA = document.createElement('div');
+		elemSpacerA.className = 'vspace';
+		sidebar.appendChild(elemSpacerA);
+		var elemNorthing = ui.createElement('Northing');
+		var fieldNorthing = document.createElement('input');
+		fieldNorthing.className = 'textfield';
+		fieldNorthing.setAttribute('id', 'northing_field');
+		fieldNorthing.setAttribute('readonly', 'readonly');
+		elemNorthing.appendChild(fieldNorthing);
+		sidebar.appendChild(elemNorthing);
+		var elemEasting = ui.createElement('Easting');
+		var fieldEasting = document.createElement('input');
+		fieldEasting.className = 'textfield';
+		fieldEasting.setAttribute('id', 'easting_field');
+		fieldEasting.setAttribute('readonly', 'readonly');
+		elemEasting.appendChild(fieldEasting);
+		sidebar.appendChild(elemEasting);
+		var elemZoom = ui.createElement('Zoom');
+		var fieldZoom = document.createElement('input');
+		fieldZoom.className = 'textfield';
+		fieldZoom.setAttribute('id', 'zoom_field');
+		fieldZoom.setAttribute('readonly', 'readonly');
+		elemZoom.appendChild(fieldZoom);
+		sidebar.appendChild(elemZoom);
+		var elemSpacerB = document.createElement('div');
+		elemSpacerB.className = 'vspace';
+		sidebar.appendChild(elemSpacerB);
+		var elemNorthingKM = ui.createElement('N [km]');
+		var fieldNorthingKM = document.createElement('input');
+		fieldNorthingKM.className = 'textfield';
+		fieldNorthingKM.setAttribute('id', 'northing_field_km');
+		fieldNorthingKM.setAttribute('readonly', 'readonly');
+		elemNorthingKM.appendChild(fieldNorthingKM);
+		sidebar.appendChild(elemNorthingKM);
+		var elemEastingKM = ui.createElement('E [km]');
+		var fieldEastingKM = document.createElement('input');
+		fieldEastingKM.className = 'textfield';
+		fieldEastingKM.setAttribute('id', 'easting_field_km');
+		fieldEastingKM.setAttribute('readonly', 'readonly');
+		elemEastingKM.appendChild(fieldEastingKM);
+		sidebar.appendChild(elemEastingKM);
+		var elemSpacerC = document.createElement('div');
+		elemSpacerC.className = 'vspace';
+		sidebar.appendChild(elemSpacerC);
+		var elemLongitude = ui.createElement('Longitude');
+		var fieldLongitude = document.createElement('input');
+		fieldLongitude.className = 'textfield';
+		fieldLongitude.setAttribute('id', 'longitude_field');
+		fieldLongitude.setAttribute('readonly', 'readonly');
+		elemLongitude.appendChild(fieldLongitude);
+		sidebar.appendChild(elemLongitude);
+		var elemLatitude = ui.createElement('Latitude');
+		var fieldLatitude = document.createElement('input');
+		fieldLatitude.className = 'textfield';
+		fieldLatitude.setAttribute('id', 'latitude_field');
+		fieldLatitude.setAttribute('readonly', 'readonly');
+		elemLatitude.appendChild(fieldLatitude);
+		sidebar.appendChild(elemLatitude);
+		
+		/*
+		 * This is called when the user clicks on the sidebar opener.
+		 */
+		opener.onclick = function(e) {
+			opener.style.display = 'none';
+			sidebar.style.display = 'block';
+		};
+		
+	};
 	
 	/*
 	 * This is called when the user interface initializes.
@@ -1211,6 +1483,8 @@ function Handler() {
 		storage.put(cvs, 'posX', 0.0);
 		storage.put(cvs, 'posY', 0.0);
 		storage.put(cvs, 'zoomLevel', 0);
+		storage.put(cvs, 'minTime', null);
+		storage.put(cvs, 'maxTime', null);
 		storage.put(cvs, 'useOSMTiles', true);
 		storage.put(cvs, 'imageRequestId', 0);
 		storage.put(cvs, 'imageResponseId', 0);
@@ -1235,6 +1509,7 @@ function Handler() {
 		cvs.addEventListener('touchcancel', handler.touchCancel);
 		window.addEventListener('resize', handler.resize);
 		div.appendChild(cvs);
+		handler.initializeSidebar();
 		helper.blockSite(false);
 		handler.refresh();
 	};

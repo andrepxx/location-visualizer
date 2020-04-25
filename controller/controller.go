@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
 	"github.com/andrepxx/location-visualizer/tile"
 	"github.com/andrepxx/location-visualizer/webserver"
 	"github.com/andrepxx/sydney/color"
 	"github.com/andrepxx/sydney/coordinates"
-	"github.com/andrepxx/sydney/projection"
 	"github.com/andrepxx/sydney/scene"
 	"image"
 	imagecolor "image/color"
@@ -42,11 +42,10 @@ type configStruct struct {
  * The controller for the DSP.
  */
 type controllerStruct struct {
-	colorMapping  color.Mapping
-	config        configStruct
-	projectedData []coordinates.Cartesian
-	projection    projection.Projection
-	tileSource    tile.Source
+	colorMapping color.Mapping
+	config       configStruct
+	data         []geo.Location
+	tileSource   tile.Source
 }
 
 /*
@@ -181,6 +180,10 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
 	useBGIn := request.Params["usebg"]
 	useBG, _ := strconv.ParseBool(useBGIn)
+	minTimeIn := request.Params["mintime"]
+	minTime, _ := filter.ParseTime(minTimeIn)
+	maxTimeIn := request.Params["maxtime"]
+	maxTime, _ := filter.ParseTime(maxTimeIn)
 	zoomFloat := float64(zoom)
 	zoomExp := -0.2 * zoomFloat
 	zoomFac := math.Pow(2.0, zoomExp)
@@ -194,8 +197,29 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	minY := ypos - halfHeight
 	maxY := ypos + halfHeight
 	scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
-	projData := this.projectedData
-	scn.Aggregate(projData)
+	filteredData := this.data
+	minTimeIsZero := minTime.IsZero()
+	maxTimeIsZero := maxTime.IsZero()
+
+	/*
+	 * Apply filter if at least one of the limits is set.
+	 */
+	if !minTimeIsZero || !maxTimeIsZero {
+		flt := filter.Time(minTime, maxTime)
+		filteredData = filter.Apply(flt, filteredData)
+	}
+
+	numDataPoints := len(filteredData)
+	projectedData := make([]coordinates.Cartesian, numDataPoints)
+
+	/*
+	 * Obtain projected data points.
+	 */
+	for i, elem := range filteredData {
+		projectedData[i] = elem.Projected()
+	}
+
+	scn.Aggregate(projectedData)
 	mapping := this.colorMapping
 	xresInt := int(xres)
 	yresInt := int(yres)
@@ -380,7 +404,7 @@ func (this *controllerStruct) initialize() error {
 			if err != nil {
 				return fmt.Errorf("Could not read geo data file '%s'.", geoDataPath)
 			} else {
-				data, err := geo.FromBytes(contentGeo)
+				dataSet, err := geo.FromBytes(contentGeo)
 
 				/*
 				 * Check if geo data could be decoded.
@@ -389,29 +413,25 @@ func (this *controllerStruct) initialize() error {
 					msg := err.Error()
 					return fmt.Errorf("Could not decode geo data file '%s': %s", geoDataPath, msg)
 				} else {
-					merc := projection.Mercator()
-					this.projection = merc
-					numLocs := data.LocationCount()
-					proj := make([]coordinates.Cartesian, numLocs)
+					numLocs := dataSet.LocationCount()
+					data := make([]geo.Location, numLocs)
 
 					/*
 					 * Iterate over the locations and project them.
 					 */
 					for i := 0; i < numLocs; i++ {
-						loc, err := data.LocationAt(i)
+						loc, err := dataSet.LocationAt(i)
 
 						/*
 						 * Verify that location could be obtained.
 						 */
 						if err == nil {
-							opt := loc.Optimize()
-							coords := opt.Coordinates()
-							proj[i] = merc.Forward(coords)
+							data[i] = loc.Optimize()
 						}
 
 					}
 
-					this.projectedData = proj
+					this.data = data
 					this.colorMapping = color.DefaultMapping()
 					cachePath := config.MapCache
 					uri := config.MapServer

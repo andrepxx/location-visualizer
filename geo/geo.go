@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/andrepxx/sydney/coordinates"
+	"github.com/andrepxx/sydney/projection"
 	"math"
 	"strconv"
 )
@@ -21,6 +22,7 @@ const (
 type Location interface {
 	Coordinates() coordinates.Geographic
 	Optimize() Location
+	Projected() coordinates.Cartesian
 	Timestamp() uint64
 }
 
@@ -41,6 +43,8 @@ type optimizedLocationStruct struct {
 	latitude    float64
 	longitude   float64
 	timestampMs uint64
+	x           float64
+	y           float64
 }
 
 /*
@@ -75,10 +79,13 @@ func (this *locationStruct) Coordinates() coordinates.Geographic {
  * Returns a location optimized for faster access.
  */
 func (this *locationStruct) Optimize() Location {
-	coords := this.Coordinates()
-	lng := coords.Longitude()
-	lat := coords.Latitude()
+	geo := this.Coordinates()
+	lng := geo.Longitude()
+	lat := geo.Latitude()
 	ts := this.Timestamp()
+	cart := this.Projected()
+	x := cart.X()
+	y := cart.Y()
 
 	/*
 	 * The optimized location structure.
@@ -87,9 +94,21 @@ func (this *locationStruct) Optimize() Location {
 		latitude:    lat,
 		longitude:   lng,
 		timestampMs: ts,
+		x:           x,
+		y:           y,
 	}
 
 	return &loc
+}
+
+/*
+ * Returns the Mercator projected coordinates of this location.
+ */
+func (this *locationStruct) Projected() coordinates.Cartesian {
+	proj := projection.Mercator()
+	geo := this.Coordinates()
+	cart := proj.Forward(geo)
+	return cart
 }
 
 /*
@@ -118,6 +137,16 @@ func (this *optimizedLocationStruct) Coordinates() coordinates.Geographic {
  */
 func (this *optimizedLocationStruct) Optimize() Location {
 	return this
+}
+
+/*
+ * Returns the Mercator projected coordinates of this location.
+ */
+func (this *optimizedLocationStruct) Projected() coordinates.Cartesian {
+	x := this.x
+	y := this.y
+	coords := coordinates.CreateCartesian(x, y)
+	return coords
 }
 
 /*

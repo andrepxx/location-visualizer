@@ -51,6 +51,34 @@
 	vertical-align: middle;
 }
 
+.button
+{
+	-moz-appearance: none;
+	-webkit-appearance: none;
+	background-color: #333333;
+	border-color: #777777;
+	border-radius: 0px;
+	border-style: solid;
+	border-width: 1px;
+	color: #ffffff;
+	cursor: pointer;
+	left: 0px;
+	margin: 0px;
+	padding-bottom: 5px;
+	padding-left: 5px;
+	padding-right: 5px;
+	padding-top: 5px;
+	position: relative;
+	right: 0px;
+	text-align: left;
+}
+
+.button:hover
+{
+	background-color: #555555;
+	border-color: #999999;
+}
+
 .globaldiv
 {
 	bottom: 0px;
@@ -58,6 +86,13 @@
 	position: fixed;
 	right: 0px;
 	top: 0px;
+}
+
+.label
+{
+	display: inline-block;
+	margin-right: 5px;
+	width: 80px;
 }
 
 .link
@@ -84,5 +119,86 @@
 	right: 0px;
 	top: 0px;
 	width: 100%;
+}
+
+.next
+{
+	margin-left: 5px;
+}
+
+.opener
+{
+	background-color: #000000;
+	border-bottom: 1px solid #444444;
+	border-top: 1px solid #444444;
+	cursor: pointer;
+	height: 150px;
+	position: fixed;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 5px;
+}
+
+.opener:hover
+{
+	border-color: #ffffff;
+	width: 20px;
+}
+
+.rightopener
+{
+	border-left: 1px solid #444444;
+	right: 0px;
+}
+
+.rightsidebar
+{
+	border-left: 1px solid #444444;
+}
+
+.sidebardiv
+{
+	background-color: #000000;
+	bottom: 0px;
+	display: none;
+	overflow-y: auto;
+	padding: 5px;
+	position: fixed;
+	right: 0px;
+	top: 0px;
+	width: 400px;
+}
+
+.textfield
+{
+	-moz-appearance: none;
+	-webkit-appearance: none;
+	background-color: #000000;
+	border-color: #666666;
+	border-radius: 0px;
+	border-style: solid;
+	border-width: 1px;
+	color: #ffffff;
+	font-family: monospace;
+	margin: 0px;
+	position: relative;
+	height: 30px;
+	width: 240px;
+}
+
+.textfield::placeholder
+{
+	color: #666666;
+	opacity: 1;
+}
+
+.uielement
+{
+	margin: 5px;
+}
+
+.vspace
+{
+	height: 10px;
 }
 
