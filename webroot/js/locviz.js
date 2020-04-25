@@ -19,13 +19,13 @@ var globals = new Globals();
  */
 function Storage() {
 	var g_map = new WeakMap();
-	
+
 	/*
 	 * Store a value under a key inside an element.
 	 */
 	this.put = function(elem, key, value) {
 		var map = g_map.get(elem);
-		
+
 		/*
 		 * Check if element is still unknown.
 		 */
@@ -33,16 +33,16 @@ function Storage() {
 			map = new Map();
 			g_map.set(elem, map);
 		}
-		
+
 		map.set(key, value);
 	};
-	
+
 	/*
 	 * Fetch a value from a key inside an element.
 	 */
 	this.get = function(elem, key, value) {
 		var map = g_map.get(elem);
-		
+
 		/*
 		 * Check if element is unknown.
 		 */
@@ -52,15 +52,15 @@ function Storage() {
 			var value = map.get(key);
 			return value;
 		}
-		
+
 	};
-	
+
 	/*
 	 * Check if a certain key exists inside an element.
 	 */
 	this.has = function(elem, key) {
 		var map = g_map.get(elem);
-		
+
 		/*
 		 * Check if element is unknown.
 		 */
@@ -70,32 +70,32 @@ function Storage() {
 			var value = map.has(key);
 			return value;
 		}
-		
+
 	};
-	
+
 	/*
 	 * Remove a certain key from an element.
 	 */
 	this.remove = function(elem, key) {
 		var map = g_map.get(elem);
-		
+
 		/*
 		 * Check if element is known.
 		 */
 		if (map != null) {
 			map.delete(key);
-			
+
 			/*
 			 * If inner map is now empty, remove it from outer map.
 			 */
 			if (map.size === 0) {
 				g_map.delete(elem);
 			}
-			
+
 		}
-		
+
 	};
-	
+
 }
 
 /*
@@ -107,14 +107,14 @@ var storage = new Storage();
  * A class supposed to make life a little easier.
  */
 function Helper() {
-	
+
 	/*
 	 * Blocks or unblocks the site for user interactions.
 	 */
 	this.blockSite = function(blocked) {
 		var blocker = document.getElementById('blocker');
 		var displayStyle = '';
-		
+
 		/*
 		 * If we should block the site, display blocker, otherwise hide it.
 		 */
@@ -123,23 +123,23 @@ function Helper() {
 		} else {
 			displayStyle = 'none';
 		}
-		
+
 		/*
 		 * Apply style if the site has a blocker.
 		 */
 		if (blocker != null) {
 			blocker.style.display = displayStyle;
 		}
-		
+
 	};
-	
+
 	/*
 	 * Clean a (string) value obtained from a date input element.
 	 *
 	 * Remove whitespace and replace the empty string by null value.
 	 */
 	this.cleanValue = function(v) {
-		
+
 		/*
 		 * Null values are not handled.
 		 */
@@ -148,7 +148,7 @@ function Helper() {
 		} else {
 			v = v.toString();
 			v = v.trim();
-			
+
 			/*
 			 * Replace empty string by null.
 			 */
@@ -157,16 +157,16 @@ function Helper() {
 			} else {
 				return v;
 			}
-			
+
 		}
-		
+
 	}
-	
+
 	/*
 	 * Removes all child nodes from an element.
 	 */
 	this.clearElement = function(elem) {
-		
+
 		/*
 		 * As long as the element has child nodes, remove one.
 		 */
@@ -174,14 +174,14 @@ function Helper() {
 			var child = elem.firstChild;
 			elem.removeChild(child);
 		}
-		
+
 	};
-	
+
 	/*
 	 * Parse JSON string into an object without raising exceptions.
 	 */
 	this.parseJSON = function(jsonString) {
-		
+
 		/*
 		 * Try to parse JSON structure.
 		 */
@@ -191,9 +191,9 @@ function Helper() {
 		} catch (ex) {
 			return null;
 		}
-		
+
 	};
-	
+
 	/*
 	 * Convert fractional degrees to degrees, minutes, seconds.
 	 */
@@ -208,13 +208,13 @@ function Helper() {
 		var sec = (frac * 3600) - (m * 60);
 		var secString = sec.toFixed(2);
 		var result = '';
-		
+
 		/*
 		 * Check whether to use sign or suffix.
 		 */
 		if ((suffixPos != null) & (suffixNeg != null)) {
 			var suffix = '';
-			
+
 			/*
 			 * Choose suffix.
 			 */
@@ -223,15 +223,15 @@ function Helper() {
 			} else {
 				suffix = ' ' + suffixNeg;
 			}
-			
+
 			result = degAbsString + '° ' + mString + '\' ' + secString + '"' + suffix;
 		} else {
 			result = degString + '° ' + mString + '\' ' + secString + '"';
 		}
-		
+
 		return result;
 	}
-	
+
 	/*
 	 * Transform Mercator coordinates into geographic coordinates.
 	 */
@@ -247,7 +247,7 @@ function Helper() {
 		var ye = yd - halfPi;
 		var latitude = (360.0 / twoPi) * ye;
 		var latitudeDMS = this.convertToDMS(latitude, 'N', 'S');
-		
+
 		/*
 		 * This is the result.
 		 */
@@ -255,10 +255,10 @@ function Helper() {
 			longitude: longitudeDMS,
 			latitude: latitudeDMS
 		};
-		
+
 		return result;
 	};
-	
+
 }
 
 /*
@@ -270,7 +270,7 @@ var helper = new Helper();
  * A class implementing an Ajax engine.
  */
 function Ajax() {
-	
+
 	/*
 	 * Sends an Ajax request to the server.
 	 *
@@ -287,19 +287,19 @@ function Ajax() {
 	 */
 	this.request = function(method, url, data, mimeType, callback, block) {
 		var xhr = new XMLHttpRequest();
-		
+
 		/*
 		 * Event handler for ReadyStateChange event.
 		 */
 		xhr.onreadystatechange = function() {
 			helper.blockSite(block);
-			
+
 			/*
 			 * If we got a response, pass the response text to
 			 * the callback function.
 			 */
 			if (this.readyState === 4) {
-				
+
 				/*
 				 * If we blocked the site on the request,
 				 * unblock it on the response.
@@ -307,7 +307,7 @@ function Ajax() {
 				if (block) {
 					helper.blockSite(false);
 				}
-				
+
 				/*
 				 * Check if callback is registered.
 				 */
@@ -315,23 +315,23 @@ function Ajax() {
 					var content = xhr.responseText;
 					callback(content);
 				}
-				
+
 			}
-			
+
 		};
-		
+
 		xhr.open(method, url, true);
-		
+
 		/*
 		 * Set MIME type if requested.
 		 */
 		if (mimeType !== null) {
 			xhr.setRequestHeader('Content-type', mimeType);
 		}
-		
+
 		xhr.send(data);
 	};
-	
+
 	/*
 	 * Requests an image from the server.
 	 *
@@ -348,12 +348,12 @@ function Ajax() {
 	this.requestImage = function(url, data, callback, block, id) {
 		helper.blockSite(block);
 		var img = new Image();
-		
+
 		/*
 		 * Event handler for load event.
 		 */
 		var eventSuccess = function() {
-			
+
 			/*
 			 * If we blocked the site on the request,
 			 * unblock it on the response.
@@ -361,21 +361,21 @@ function Ajax() {
 			if (block) {
 				helper.blockSite(false);
 			}
-			
+
 			/*
 			 * Check if callback is registered.
 			 */
 			if (callback !== null) {
 				callback(img, id);
 			}
-			
+
 		};
-		
+
 		/*
 		 * Event handler for error event.
 		 */
 		var eventError = function() {
-			
+
 			/*
 			 * If we blocked the site on the request,
 			 * unblock it on the response.
@@ -383,22 +383,22 @@ function Ajax() {
 			if (block) {
 				helper.blockSite(false);
 			}
-			
+
 			/*
 			 * Check if callback is registered.
 			 */
 			if (callback !== null) {
 				callback(null, id);
 			}
-			
+
 		};
-		
+
 		img.onload = eventSuccess;
 		img.onerror = eventError;
 		var uri = url + '?' + data;
 		img.src = uri;
 	};
-	
+
 }
 
 /*
@@ -412,21 +412,21 @@ var ajax = new Ajax();
 function KeyValuePair(key, value) {
 	var g_key = key;
 	var g_value = value;
-	
+
 	/*
 	 * Returns the key stored in this key-value pair.
 	 */
 	this.getKey = function() {
 		return g_key;
 	};
-	
+
 	/*
 	 * Returns the value stored in this key-value pair.
 	 */
 	this.getValue = function() {
 		return g_value;
 	};
-	
+
 }
 
 /*
@@ -434,7 +434,7 @@ function KeyValuePair(key, value) {
  */
 function Request() {
 	var g_keyValues = Array();
-	
+
 	/*
 	 * Append a key-value-pair to a request.
 	 */
@@ -442,14 +442,14 @@ function Request() {
 		var kv = new KeyValuePair(key, value);
 		g_keyValues.push(kv);
 	};
-	
+
 	/*
 	 * Returns the URL encoded data for this request.
 	 */
 	this.getData = function() {
 		var numPairs = g_keyValues.length;
 		var s = '';
-		
+
 		/*
 		 * Iterate over the key-value pairs.
 		 */
@@ -459,20 +459,20 @@ function Request() {
 			var keyEncoded = encodeURIComponent(key);
 			var value = keyValue.getValue();
 			var valueEncoded = encodeURIComponent(value);
-			
+
 			/*
 			 * If this is not the first key-value pair, we need a separator.
 			 */
 			if (i > 0) {
 				s += '&';
 			}
-			
+
 			s += keyEncoded + '=' + valueEncoded;
 		}
-		
+
 		return s;
 	};
-	
+
 }
 
 /*
@@ -480,7 +480,7 @@ function Request() {
  */
 function UI() {
 	var self = this;
-	
+
 	/*
 	 * Creates a generic UI element container with a label.
 	 */
@@ -494,7 +494,7 @@ function UI() {
 		uiElement.appendChild(labelDiv);
 		return uiElement;
 	};
-	
+
 	/*
 	 * Calculate the IDs and positions of the tiles required to
 	 * display a certain portion of the map and their positions
@@ -514,7 +514,7 @@ function UI() {
 		var tileSize = globals.tileSize;
 		var osmZoomFloat = Math.log2(zoomFac * (xres / tileSize))
 		var osmZoom = Math.floor(osmZoomFloat);
-		
+
 		/*
 		 * Limit OSM zoom.
 		 */
@@ -523,7 +523,7 @@ function UI() {
 		} else if (osmZoom > 19.0) {
 			osmZoom = 19.0;
 		}
-		
+
 		var maxTileId = (1 << osmZoom) - 1;
 		var dxPerTile = Math.pow(2.0, -osmZoom);
 		var idxMinX = Math.floor((minX + 0.5) / dxPerTile);
@@ -531,17 +531,17 @@ function UI() {
 		var idxMinY = Math.floor((0.5 - maxY) / dxPerTile);
 		var idxMaxY = Math.floor((0.5 - minY) / dxPerTile);
 		var tileDescriptors = [];
-		
+
 		/*
 		 * Iterate over the Y axis.
 		 */
 		for (var idxY = idxMinY; idxY <= idxMaxY; idxY++) {
-			
+
 			/*
 			 * Iterate over the X axis.
 			 */
 			for (var idxX = idxMinX; idxX <= idxMaxX; idxX++) {
-				
+
 				/*
 				 * Check if tile ID is valid.
 				 */
@@ -550,7 +550,7 @@ function UI() {
 					var tileMaxX = tileMinX + dxPerTile;
 					var tileMaxY = 0.5 - (idxY * dxPerTile);
 					var tileMinY = tileMaxY - dxPerTile;
-					
+
 					/*
 					 * Calculate tile IDs and limits.
 					 *
@@ -572,17 +572,17 @@ function UI() {
 						imgData: null,
 						fetched: false
 					};
-					
+
 					tileDescriptors.push(tileDescriptor);
 				}
-				
+
 			}
-			
+
 		}
-		
+
 		return tileDescriptors;
 	};
-	
+
 	/*
 	 * Fetches a of tiles from the server and notifies listener
 	 * about update.
@@ -601,23 +601,23 @@ function UI() {
 		rq.append('z', zString);
 		var cgi = globals.cgi;
 		var data = rq.getData();
-		
+
 		/*
 		 * This is called when the server sends data.
 		 */
 		var callback = function(img, idResponse) {
 			listener(tileDescriptor, img);
 		};
-		
+
 		ajax.requestImage(cgi, data, callback, false, null);
 	};
-	
+
 	/*
 	 * Draws a tile on the map canvas.
 	 */
 	this.drawTile = function(tileDescriptor) {
 		var img = tileDescriptor.imgData;
-		
+
 		/*
 		 * Check if current tile has image data attached.
 		 */
@@ -649,9 +649,9 @@ function UI() {
 			var ctx = cvs.getContext('2d');
 			ctx.drawImage(img, destX, destY, destWidth, destHeight);
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when a new map tile has been fetched.
 	 */
@@ -662,41 +662,41 @@ function UI() {
 		var ctx = cvs.getContext('2d');
 		ctx.clearRect(0, 0, width, height);
 		var tiles = storage.get(cvs, 'osmTiles');
-		
+
 		/*
 		 * Check if map tiles have to be drawn.
 		 */
 		if (tiles !== null) {
 			var numTiles = tiles.length;
-			
+
 			/*
 			 * Draw every single map tile.
 			 */
 			for (var i = 0; i < numTiles; i++) {
 				var currentTile = tiles[i];
-				
+
 				/*
 				 * Draw tile if map tile is available.
 				 */
 				if (currentTile !== null) {
 					this.drawTile(currentTile);
 				}
-				
+
 			}
-			
+
 		}
-		
+
 		var img = storage.get(cvs, 'lastImage');
-		
+
 		/*
 		 * Check if image overlay has to be drawn.
 		 */
 		if (img !== null) {
 			ctx.drawImage(img, 0, 0);
 		}
-		
+
 	};
-	
+
 	/*
 	 * Fetch a list of map tiles and invoke callback on each change.
 	 *
@@ -713,7 +713,7 @@ function UI() {
 	 */
 	this.fetchTiles = function(tileIds, callback) {
 		var firstTileToFetch = null;
-		
+
 		/*
 		 * Iterate over all tiles and find the first that is not yet
 		 * fetched.
@@ -721,21 +721,21 @@ function UI() {
 		for (var i = 0; i < tileIds.length; i++) {
 			var currentTile = tileIds[i];
 			var fetched = currentTile.fetched;
-			
+
 			/*
 			 * Check if this is the first tile to fetch.
 			 */
 			if ((firstTileToFetch === null) & (fetched === false)) {
 				firstTileToFetch = currentTile;
 			}
-			
+
 		}
-		
+
 		/*
 		 * Check if we have to fetch a tile.
 		 */
 		if (firstTileToFetch !== null) {
-			
+
 			/*
 			 * Internal callback invoked by fetchTile(...).
 			 */
@@ -745,19 +745,19 @@ function UI() {
 				callback(tileIds);
 				self.fetchTiles(tileIds, callback);
 			};
-			
+
 			this.fetchTile(firstTileToFetch, internalCallback);
 		}
-		
+
 	};
-	
+
 	/*
 	 * Redraw the map with the same image, but a different offset.
 	 */
 	this.moveMap = function(xoffs, yoffs) {
 		var cvs = document.getElementById('map_canvas');
 		var img = storage.get(cvs, 'lastImage');
-		
+
 		/*
 		 * Load or store x-offset.
 		 */
@@ -766,7 +766,7 @@ function UI() {
 		} else {
 			xoffs = storage.get(cvs, 'offsetX');
 		}
-		
+
 		/*
 		 * Load or store y-offset.
 		 */
@@ -775,7 +775,7 @@ function UI() {
 		} else {
 			yoffs = storage.get(cvs, 'offsetY');
 		}
-		
+
 		/*
 		 * Check if there is a stored image.
 		 */
@@ -794,9 +794,9 @@ function UI() {
 			var dy = yoffs + (0.5 * (height - scaledHeight));
 			ctx.drawImage(img, 0, 0, width, height, dx, dy, scaledWidth, scaledHeight);
 		}
-		
+
 	};
-	
+
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
@@ -834,7 +834,7 @@ function UI() {
 		longitudeField.value = longitude;
 		var latitudeField = document.getElementById('latitude_field');
 		latitudeField.value = latitude;
-		
+
 		/*
 		 * Use min-time.
 		 */
@@ -842,7 +842,7 @@ function UI() {
 			var mintimeString = mintime.toString();
 			rq.append('mintime', mintimeString);
 		}
-		
+
 		/*
 		 * Use max-time.
 		 */
@@ -850,7 +850,7 @@ function UI() {
 			var maxtimeString = maxtime.toString();
 			rq.append('maxtime', maxtimeString);
 		}
-		
+
 		rq.append('usebg', 'false');
 		var cgi = globals.cgi;
 		var data = rq.getData();
@@ -859,14 +859,14 @@ function UI() {
 		var currentRequestId = idRequest + 1;
 		storage.put(cvs, 'imageRequestId', currentRequestId);
 		storage.put(cvs, 'osmTiles', []);
-		
+
 		/*
 		 * This is called when the server sends data.
 		 */
 		var callback = function(img, idResponse) {
 			var cvs = document.getElementById('map_canvas');
 			var lastResponse = storage.get(cvs, 'imageResponseId');
-			
+
 			/*
 			 * Check if the response is more current than what we display.
 			 */
@@ -884,14 +884,14 @@ function UI() {
 				var ctx = cvs.getContext('2d');
 				ctx.clearRect(0, 0, width, height);
 				ctx.drawImage(img, 0, 0);
-				
+
 				/*
 				 * Check if we should use OSM tiles.
 				 */
 				if (useOSMTiles) {
 					var tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos);
 					storage.put(cvs, 'osmTiles', tileIds);
-					
+
 					/*
 					 * Internal callback necessary to have
 					 * "this" reference.
@@ -899,17 +899,17 @@ function UI() {
 					var internalCallback = function() {
 						self.updateTiles();
 					};
-					
+
 					self.fetchTiles(tileIds, internalCallback);
 				}
-				
+
 			}
-			
+
 		};
-		
+
 		ajax.requestImage(cgi, data, callback, true, currentRequestId);
 	};
-	
+
 }
 
 var ui = new UI();
@@ -921,7 +921,7 @@ function Handler() {
 	var handler = this;
 	this._timeoutScroll = null;
 	this._timeoutResize = null;
-	
+
 	/*
 	 * This is called when the map needs to be refreshed.
 	 */
@@ -937,7 +937,7 @@ function Handler() {
 		var useOSMTiles = storage.get(cvs, 'useOSMTiles');
 		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles);
 	};
-	
+
 	/*
 	 * Extracts coordinates from a single-point touch event.
 	 */
@@ -949,17 +949,17 @@ function Handler() {
 		var touches = e.targetTouches;
 		var numTouches = touches.length;
 		var touch = null;
-		
+
 		/*
 		 * If there are touches, extract the first one.
 		 */
 		if (numTouches > 0) {
 			touch = touches.item(0);
 		}
-		
+
 		var x = 0.0;
 		var y = 0.0;
-		
+
 		/*
 		 * If a touch was extracted, calculate coordinates relative to
 		 * the element position.
@@ -970,22 +970,22 @@ function Handler() {
 			var touchY = touch.pageY;
 			y = touchY - offsetY;
 		}
-		
+
 		var result = {
 			x: x,
 			y: y
 		};
-		
+
 		return result;
 	};
-	
+
 	/*
 	 * Extracts the distance from a multi-point touch event.
 	 */
 	this.touchEventToDistance = function(e) {
 		var touches = e.targetTouches;
 		var numTouches = touches.length;
-		
+
 		/*
 		 * If there are two touches, extract them and calculate their distance.
 		 */
@@ -1006,9 +1006,9 @@ function Handler() {
 		} else {
 			return 0.0;
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when a user touches the map.
 	 */
@@ -1019,7 +1019,7 @@ function Handler() {
 		var numTouches = touches.length;
 		var singleTouch = (numTouches === 1);
 		var multiTouch = (numTouches > 1);
-		
+
 		/*
 		 * Single touch moves the map, multi touch zooms.
 		 */
@@ -1044,22 +1044,22 @@ function Handler() {
 			storage.put(cvs, 'touchLastX', 0);
 			storage.put(cvs, 'touchLastY', 0);
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when a user moves a finger on the map.
 	 */
 	this.touchMove = function(e) {
 		var cvs = e.target;
 		var btn = storage.get(cvs, 'mouseButton');
-		
+
 		/*
 		 * If mouse button is depressed, move map, otherwise zoom map.
 		 */
 		if (btn) {
 			var interrupted = storage.get(cvs, 'dragInterrupted');
-			
+
 			/*
 			 * Only care if drag was not interrupted.
 			 */
@@ -1067,7 +1067,7 @@ function Handler() {
 				var touches = e.targetTouches;
 				var numTouches = touches.length;
 				var singleTouch = (numTouches === 1);
-				
+
 				/*
 				 * Only process single touches, not multi-touch
 				 * gestures.
@@ -1085,16 +1085,16 @@ function Handler() {
 					var relY = y - startY;
 					ui.moveMap(relX, relY);
 				}
-			
+
 			} else {
 				ui.moveMap(0, 0);
 			}
-			
+
 		} else {
 			var touches = e.targetTouches;
 			var numTouches = touches.length;
 			var multiTouch = (numTouches > 1);
-			
+
 			/*
 			 * Only process multi-touch gestures, not single
 			 * touches.
@@ -1107,36 +1107,36 @@ function Handler() {
 				var diffZoom = Math.round(5.0 * (Math.log(frac) / Math.log(2.0)));
 				var zoom = storage.get(cvs, 'imageZoom');
 				zoom += diffZoom;
-				
+
 				/*
 				 * Zoom level shall not go below zero.
 				 */
 				if (zoom < 0) {
 					zoom = 0;
 				}
-				
+
 				/*
 				 * Zoom level shall not go above 120.
 				 */
 				if (zoom > 120) {
 					zoom = 120;
 				}
-				
+
 				storage.put(cvs, 'zoomLevel', zoom);
 				ui.moveMap(null, null);
 			}
-			
+
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when a user lifts a finger off the map.
 	 */
 	this.touchEnd = function(e) {
 		var cvs = e.target;
 		var interrupted = storage.get(cvs, 'dragInterrupted');
-		
+
 		/*
 		 * Only move map position if drag was not interrupted.
 		 */
@@ -1146,7 +1146,7 @@ function Handler() {
 			var touches = e.targetTouches;
 			var numTouches = touches.length;
 			var noMoreTouches = (numTouches === 0);
-			
+
 			/*
 			 * Only commit value after the last finger has
 			 * been lifted off.
@@ -1174,18 +1174,18 @@ function Handler() {
 				storage.put(cvs, 'posY', posY);
 				handler.refresh();
 			}
-			
+
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when a user cancels a touch action.
 	 */
 	this.touchCancel = function(e) {
 		var cvs = e.target;
 		var btn = storage.get(cvs, 'mouseButton');
-		
+
 		/*
 		 * Abort action if mouse button was depressed.
 		 */
@@ -1193,16 +1193,16 @@ function Handler() {
 			storage.put(cvs, 'dragInterrupted', true);
 			ui.moveMap(0, 0);
 		}
-		
+
 		storage.put(cvs, 'mouseButton', false);
 	};
-	
+
 	/*
 	 * This is called when the user presses the mouse button.
 	 */
 	this.mouseDown = function(e) {
 		var btn = e.button;
-		
+
 		/*
 		 * Check if left mouse button was depressed.
 		 */
@@ -1215,15 +1215,15 @@ function Handler() {
 			storage.put(cvs, 'mouseStartY', y);
 			storage.put(cvs, 'dragInterrupted', false);
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when the user releases the mouse button.
 	 */
 	this.mouseUp = function(e) {
 		var btn = e.button;
-		
+
 		/*
 		 * Check if left mouse button was released.
 		 */
@@ -1233,7 +1233,7 @@ function Handler() {
 			var y = e.offsetY;
 			storage.put(cvs, 'mouseButton', false);
 			var interrupted = storage.get(cvs, 'dragInterrupted');
-			
+
 			/*
 			 * Load a new position if drag was not interrupted.
 			 */
@@ -1259,18 +1259,18 @@ function Handler() {
 				storage.put(cvs, 'posY', posY);
 				handler.refresh();
 			}
-			
+
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when the user moves the mouse over the map.
 	 */
 	this.mouseMove = function(e) {
 		var cvs = e.target;
 		var btn = storage.get(cvs, 'mouseButton');
-		
+
 		/*
 		 * Move map if mouse button is pressed.
 		 */
@@ -1283,9 +1283,9 @@ function Handler() {
 			var relY = y - startY;
 			ui.moveMap(relX, relY);
 		}
-		
+
 	};
-	
+
 	/*
 	 * This is called when the user moves the scroll wheel over the map.
 	 */
@@ -1296,55 +1296,55 @@ function Handler() {
 		var cvs = document.getElementById('map_canvas');
 		var zoom = storage.get(cvs, 'zoomLevel');
 		zoom -= direction;
-		
+
 		/*
 		 * Zoom level shall not go below zero.
 		 */
 		if (zoom < 0) {
 			zoom = 0;
 		}
-		
+
 		/*
 		 * Zoom level shall not go above 120.
 		 */
 		if (zoom > 120) {
 			zoom = 120;
 		}
-		
+
 		storage.put(cvs, 'zoomLevel', zoom);
-		
+
 		/*
 		 * Perform delayed refresh.
 		 */
 		var refresh = function() {
 			handler.refresh();
 		};
-		
+
 		var timeout = handler._timeoutScroll;
 		window.clearTimeout(timeout);
 		timeout = window.setTimeout(refresh, 250);
 		handler._timeoutScroll = timeout;
 		ui.moveMap(null, null);
 	};
-	
+
 	/*
 	 * This is called when the window is resized.
 	 */
 	this.resize = function() {
 		var timeout = handler._timeoutResize;
 		window.clearTimeout(timeout);
-		
+
 		/*
 		 * Perform delayed refresh.
 		 */
 		var resize = function() {
 			handler.refresh();
 		};
-		
+
 		timeout = window.setTimeout(resize, 100);
 		handler._timeoutResize = timeout;
 	};
-	
+
 	/*
 	 * Initializes the (right) side bar of the user interface.
 	 */
@@ -1371,7 +1371,7 @@ function Handler() {
 		buttonApply.className = 'button';
 		var buttonApplyCaption = document.createTextNode('Apply');
 		buttonApply.appendChild(buttonApplyCaption);
-		
+
 		/*
 		 * This is called when the user clicks on the 'Apply' button.
 		 */
@@ -1383,13 +1383,13 @@ function Handler() {
 			storage.put(cvs, 'maxTime', valueTo);
 			handler.refresh();
 		};
-		
+
 		elemButtons.appendChild(buttonApply);
 		var buttonHide = document.createElement('button');
 		buttonHide.className = 'button next';
 		var buttonHideCaption = document.createTextNode('Hide');
 		buttonHide.appendChild(buttonHideCaption);
-		
+
 		/*
 		 * This is called when the user clicks on the 'Hide' button.
 		 */
@@ -1397,7 +1397,7 @@ function Handler() {
 			sidebar.style.display = 'none';
 			opener.style.display = 'block';
 		};
-		
+
 		elemButtons.appendChild(buttonHide);
 		sidebar.appendChild(elemButtons);
 		var elemSpacerA = document.createElement('div');
@@ -1458,7 +1458,7 @@ function Handler() {
 		fieldLatitude.setAttribute('readonly', 'readonly');
 		elemLatitude.appendChild(fieldLatitude);
 		sidebar.appendChild(elemLatitude);
-		
+
 		/*
 		 * This is called when the user clicks on the sidebar opener.
 		 */
@@ -1466,9 +1466,9 @@ function Handler() {
 			opener.style.display = 'none';
 			sidebar.style.display = 'block';
 		};
-		
+
 	};
-	
+
 	/*
 	 * This is called when the user interface initializes.
 	 */
@@ -1513,7 +1513,7 @@ function Handler() {
 		helper.blockSite(false);
 		handler.refresh();
 	};
-	
+
 }
 
 /*

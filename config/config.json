@@ -3,7 +3,7 @@
 	"MapServer": "",
 	"MapCache": "data/tile/osm-${z}-${x}-${y}.png",
 	"UseMap": false,
-	
+
 	"WebServer": {
 		"Name": "location-visualizer/1.0.0",
 		"Port": "8080",
@@ -28,6 +28,6 @@
 		"DefaultMime": "application/octet-stream",
 		"ErrorMime": "text/plain; charset=utf-8"
 	}
-	
+
 }
 

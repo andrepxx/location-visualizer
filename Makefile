@@ -18,6 +18,7 @@ locviz-debug:
 
 fmt:
 	GOPATH=$(GOPATH) gofmt -w .
+	find \( -iname '*.css' -o -iname '*.js' -o -iname '*.json' -o -iname '*.md' -o -iname '*.xhtml' \) -execdir sed -i s/[[:space:]]*$$// {} \;
 
 keys:
 	mkdir keys
