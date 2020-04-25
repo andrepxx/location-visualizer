@@ -12,19 +12,19 @@ function Globals() {
 /*
  * The global state object.
  */
-var globals = new Globals();
+const globals = new Globals();
 
 /*
  * A class implementing data storage.
  */
 function Storage() {
-	var g_map = new WeakMap();
+	const g_map = new WeakMap();
 
 	/*
 	 * Store a value under a key inside an element.
 	 */
 	this.put = function(elem, key, value) {
-		var map = g_map.get(elem);
+		let map = g_map.get(elem);
 
 		/*
 		 * Check if element is still unknown.
@@ -41,7 +41,7 @@ function Storage() {
 	 * Fetch a value from a key inside an element.
 	 */
 	this.get = function(elem, key, value) {
-		var map = g_map.get(elem);
+		const map = g_map.get(elem);
 
 		/*
 		 * Check if element is unknown.
@@ -49,7 +49,7 @@ function Storage() {
 		if (map == null) {
 			return null;
 		} else {
-			var value = map.get(key);
+			const value = map.get(key);
 			return value;
 		}
 
@@ -59,7 +59,7 @@ function Storage() {
 	 * Check if a certain key exists inside an element.
 	 */
 	this.has = function(elem, key) {
-		var map = g_map.get(elem);
+		const map = g_map.get(elem);
 
 		/*
 		 * Check if element is unknown.
@@ -67,7 +67,7 @@ function Storage() {
 		if (map == null) {
 			return false;
 		} else {
-			var value = map.has(key);
+			const value = map.has(key);
 			return value;
 		}
 
@@ -77,7 +77,7 @@ function Storage() {
 	 * Remove a certain key from an element.
 	 */
 	this.remove = function(elem, key) {
-		var map = g_map.get(elem);
+		const map = g_map.get(elem);
 
 		/*
 		 * Check if element is known.
@@ -101,7 +101,7 @@ function Storage() {
 /*
  * The global storage object.
  */
-var storage = new Storage();
+const storage = new Storage();
 
 /*
  * A class supposed to make life a little easier.
@@ -112,8 +112,8 @@ function Helper() {
 	 * Blocks or unblocks the site for user interactions.
 	 */
 	this.blockSite = function(blocked) {
-		var blocker = document.getElementById('blocker');
-		var displayStyle = '';
+		const blocker = document.getElementById('blocker');
+		let displayStyle = '';
 
 		/*
 		 * If we should block the site, display blocker, otherwise hide it.
@@ -171,7 +171,7 @@ function Helper() {
 		 * As long as the element has child nodes, remove one.
 		 */
 		while (elem.hasChildNodes()) {
-			var child = elem.firstChild;
+			const child = elem.firstChild;
 			elem.removeChild(child);
 		}
 
@@ -186,7 +186,7 @@ function Helper() {
 		 * Try to parse JSON structure.
 		 */
 		try {
-			var obj = JSON.parse(jsonString);
+			const obj = JSON.parse(jsonString);
 			return obj;
 		} catch (ex) {
 			return null;
@@ -198,22 +198,22 @@ function Helper() {
 	 * Convert fractional degrees to degrees, minutes, seconds.
 	 */
 	this.convertToDMS = function(dd, suffixPos, suffixNeg) {
-		var deg = dd | 0;
-		var degString = deg.toFixed(0);
-		var degAbs = Math.abs(deg);
-		var degAbsString = degAbs.toFixed(0);
-		var frac = Math.abs(dd - deg);
-		var m = (frac * 60) | 0;
-		var mString = m.toFixed(0);
-		var sec = (frac * 3600) - (m * 60);
-		var secString = sec.toFixed(2);
-		var result = '';
+		const deg = dd | 0;
+		const degString = deg.toFixed(0);
+		const degAbs = Math.abs(deg);
+		const degAbsString = degAbs.toFixed(0);
+		const frac = Math.abs(dd - deg);
+		const m = (frac * 60) | 0;
+		const mString = m.toFixed(0);
+		const sec = (frac * 3600) - (m * 60);
+		const secString = sec.toFixed(2);
+		let result = '';
 
 		/*
 		 * Check whether to use sign or suffix.
 		 */
 		if ((suffixPos != null) & (suffixNeg != null)) {
-			var suffix = '';
+			let suffix = '';
 
 			/*
 			 * Choose suffix.
@@ -236,22 +236,22 @@ function Helper() {
 	 * Transform Mercator coordinates into geographic coordinates.
 	 */
 	this.transformCoordinates = function(xpos, ypos) {
-		var twoPi = 2.0 * Math.PI;
-		var halfPi = 0.5 * Math.PI;
-		var longitude = 360.0 * xpos;
-		var longitudeDMS = this.convertToDMS(longitude, 'E', 'W');
-		var ya = twoPi * ypos;
-		var yb = Math.exp(ya);
-		var yc = Math.atan(yb);
-		var yd = 2.0 * yc;
-		var ye = yd - halfPi;
-		var latitude = (360.0 / twoPi) * ye;
-		var latitudeDMS = this.convertToDMS(latitude, 'N', 'S');
+		const twoPi = 2.0 * Math.PI;
+		const halfPi = 0.5 * Math.PI;
+		const longitude = 360.0 * xpos;
+		const longitudeDMS = this.convertToDMS(longitude, 'E', 'W');
+		const ya = twoPi * ypos;
+		const yb = Math.exp(ya);
+		const yc = Math.atan(yb);
+		const yd = 2.0 * yc;
+		const ye = yd - halfPi;
+		const latitude = (360.0 / twoPi) * ye;
+		const latitudeDMS = this.convertToDMS(latitude, 'N', 'S');
 
 		/*
 		 * This is the result.
 		 */
-		var result = {
+		const result = {
 			longitude: longitudeDMS,
 			latitude: latitudeDMS
 		};
@@ -264,7 +264,7 @@ function Helper() {
 /*
  * The (global) helper object.
  */
-var helper = new Helper();
+const helper = new Helper();
 
 /*
  * A class implementing an Ajax engine.
@@ -286,7 +286,7 @@ function Ajax() {
 	 * Returns: Nothing.
 	 */
 	this.request = function(method, url, data, mimeType, callback, block) {
-		var xhr = new XMLHttpRequest();
+		const xhr = new XMLHttpRequest();
 
 		/*
 		 * Event handler for ReadyStateChange event.
@@ -312,7 +312,7 @@ function Ajax() {
 				 * Check if callback is registered.
 				 */
 				if (callback !== null) {
-					var content = xhr.responseText;
+					const content = xhr.responseText;
 					callback(content);
 				}
 
@@ -347,12 +347,12 @@ function Ajax() {
 	 */
 	this.requestImage = function(url, data, callback, block, id) {
 		helper.blockSite(block);
-		var img = new Image();
+		const img = new Image();
 
 		/*
 		 * Event handler for load event.
 		 */
-		var eventSuccess = function() {
+		const eventSuccess = function() {
 
 			/*
 			 * If we blocked the site on the request,
@@ -374,7 +374,7 @@ function Ajax() {
 		/*
 		 * Event handler for error event.
 		 */
-		var eventError = function() {
+		const eventError = function() {
 
 			/*
 			 * If we blocked the site on the request,
@@ -395,7 +395,7 @@ function Ajax() {
 
 		img.onload = eventSuccess;
 		img.onerror = eventError;
-		var uri = url + '?' + data;
+		const uri = url + '?' + data;
 		img.src = uri;
 	};
 
@@ -404,14 +404,14 @@ function Ajax() {
 /*
  * The (global) Ajax engine.
  */
-var ajax = new Ajax();
+const ajax = new Ajax();
 
 /*
  * A class implementing a key-value-pair.
  */
 function KeyValuePair(key, value) {
-	var g_key = key;
-	var g_value = value;
+	const g_key = key;
+	const g_value = value;
 
 	/*
 	 * Returns the key stored in this key-value pair.
@@ -433,13 +433,13 @@ function KeyValuePair(key, value) {
  * A class implementing a JSON request.
  */
 function Request() {
-	var g_keyValues = Array();
+	const g_keyValues = Array();
 
 	/*
 	 * Append a key-value-pair to a request.
 	 */
 	this.append = function(key, value) {
-		var kv = new KeyValuePair(key, value);
+		const kv = new KeyValuePair(key, value);
 		g_keyValues.push(kv);
 	};
 
@@ -447,18 +447,18 @@ function Request() {
 	 * Returns the URL encoded data for this request.
 	 */
 	this.getData = function() {
-		var numPairs = g_keyValues.length;
-		var s = '';
+		const numPairs = g_keyValues.length;
+		let s = '';
 
 		/*
 		 * Iterate over the key-value pairs.
 		 */
-		for (var i = 0; i < numPairs; i++) {
-			var keyValue = g_keyValues[i];
-			var key = keyValue.getKey();
-			var keyEncoded = encodeURIComponent(key);
-			var value = keyValue.getValue();
-			var valueEncoded = encodeURIComponent(value);
+		for (let i = 0; i < numPairs; i++) {
+			const keyValue = g_keyValues[i];
+			const key = keyValue.getKey();
+			const keyEncoded = encodeURIComponent(key);
+			const value = keyValue.getValue();
+			const valueEncoded = encodeURIComponent(value);
 
 			/*
 			 * If this is not the first key-value pair, we need a separator.
@@ -479,17 +479,17 @@ function Request() {
  * This class implements helper functions to build a user interface.
  */
 function UI() {
-	var self = this;
+	const self = this;
 
 	/*
 	 * Creates a generic UI element container with a label.
 	 */
 	this.createElement = function(labelCaption) {
-		var labelDiv = document.createElement('div');
+		const labelDiv = document.createElement('div');
 		labelDiv.className = 'label';
-		var labelNode = document.createTextNode(labelCaption);
+		const labelNode = document.createTextNode(labelCaption);
 		labelDiv.appendChild(labelNode)
-		var uiElement = document.createElement('div');
+		const uiElement = document.createElement('div');
 		uiElement.className = 'uielement';
 		uiElement.appendChild(labelDiv);
 		return uiElement;
@@ -501,19 +501,19 @@ function UI() {
 	 * inside the coordinate system.
 	 */
 	this.calculateTiles = function(xres, yres, zoom, xpos, ypos) {
-		var zoomExp = 0.2 * zoom;
-		var zoomFac = Math.pow(2.0, zoomExp);
-		var zoomFacInv = 1.0 / zoomFac;
-		var halfWidth = 0.5 * zoomFacInv;
-		var aspectRatio = yres / xres;
-		var halfHeight = aspectRatio * halfWidth;
-		var minX = xpos - halfWidth;
-		var maxX = xpos + halfWidth;
-		var minY = ypos - halfHeight;
-		var maxY = ypos + halfHeight;
-		var tileSize = globals.tileSize;
-		var osmZoomFloat = Math.log2(zoomFac * (xres / tileSize))
-		var osmZoom = Math.floor(osmZoomFloat);
+		const zoomExp = 0.2 * zoom;
+		const zoomFac = Math.pow(2.0, zoomExp);
+		const zoomFacInv = 1.0 / zoomFac;
+		const halfWidth = 0.5 * zoomFacInv;
+		const aspectRatio = yres / xres;
+		const halfHeight = aspectRatio * halfWidth;
+		const minX = xpos - halfWidth;
+		const maxX = xpos + halfWidth;
+		const minY = ypos - halfHeight;
+		const maxY = ypos + halfHeight;
+		const tileSize = globals.tileSize;
+		const osmZoomFloat = Math.log2(zoomFac * (xres / tileSize))
+		let osmZoom = Math.floor(osmZoomFloat);
 
 		/*
 		 * Limit OSM zoom.
@@ -524,32 +524,32 @@ function UI() {
 			osmZoom = 19.0;
 		}
 
-		var maxTileId = (1 << osmZoom) - 1;
-		var dxPerTile = Math.pow(2.0, -osmZoom);
-		var idxMinX = Math.floor((minX + 0.5) / dxPerTile);
-		var idxMaxX = Math.floor((maxX + 0.5) / dxPerTile);
-		var idxMinY = Math.floor((0.5 - maxY) / dxPerTile);
-		var idxMaxY = Math.floor((0.5 - minY) / dxPerTile);
-		var tileDescriptors = [];
+		const maxTileId = (1 << osmZoom) - 1;
+		const dxPerTile = Math.pow(2.0, -osmZoom);
+		const idxMinX = Math.floor((minX + 0.5) / dxPerTile);
+		const idxMaxX = Math.floor((maxX + 0.5) / dxPerTile);
+		const idxMinY = Math.floor((0.5 - maxY) / dxPerTile);
+		const idxMaxY = Math.floor((0.5 - minY) / dxPerTile);
+		const tileDescriptors = [];
 
 		/*
 		 * Iterate over the Y axis.
 		 */
-		for (var idxY = idxMinY; idxY <= idxMaxY; idxY++) {
+		for (let idxY = idxMinY; idxY <= idxMaxY; idxY++) {
 
 			/*
 			 * Iterate over the X axis.
 			 */
-			for (var idxX = idxMinX; idxX <= idxMaxX; idxX++) {
+			for (let idxX = idxMinX; idxX <= idxMaxX; idxX++) {
 
 				/*
 				 * Check if tile ID is valid.
 				 */
 				if ((idxX >= 0) & (idxX <= maxTileId) & (idxY >= 0) & (idxY <= maxTileId)) {
-					var tileMinX = (idxX * dxPerTile) - 0.5;
-					var tileMaxX = tileMinX + dxPerTile;
-					var tileMaxY = 0.5 - (idxY * dxPerTile);
-					var tileMinY = tileMaxY - dxPerTile;
+					const tileMinX = (idxX * dxPerTile) - 0.5;
+					const tileMaxX = tileMinX + dxPerTile;
+					const tileMaxY = 0.5 - (idxY * dxPerTile);
+					const tileMinY = tileMaxY - dxPerTile;
 
 					/*
 					 * Calculate tile IDs and limits.
@@ -560,7 +560,7 @@ function UI() {
 					 * Our coordinates have X axis to the right and
 					 * Y axis upwards and interval [-0.5, 0.5].
 					 */
-					var tileDescriptor = {
+					const tileDescriptor = {
 						osmX: idxX,
 						osmY: idxY,
 						osmZoom: osmZoom,
@@ -588,24 +588,24 @@ function UI() {
 	 * about update.
 	 */
 	this.fetchTile = function(tileDescriptor, listener) {
-		var x = tileDescriptor.osmX;
-		var y = tileDescriptor.osmY;
-		var z = tileDescriptor.osmZoom;
-		var rq = new Request();
+		const x = tileDescriptor.osmX;
+		const y = tileDescriptor.osmY;
+		const z = tileDescriptor.osmZoom;
+		const rq = new Request();
 		rq.append('cgi', 'get-tile');
-		var xString = x.toString();
+		const xString = x.toString();
 		rq.append('x', xString);
-		var yString = y.toString();
+		const yString = y.toString();
 		rq.append('y', yString);
-		var zString = z.toString();
+		const zString = z.toString();
 		rq.append('z', zString);
-		var cgi = globals.cgi;
-		var data = rq.getData();
+		const cgi = globals.cgi;
+		const data = rq.getData();
 
 		/*
 		 * This is called when the server sends data.
 		 */
-		var callback = function(img, idResponse) {
+		const callback = function(img, idResponse) {
 			listener(tileDescriptor, img);
 		};
 
@@ -616,37 +616,37 @@ function UI() {
 	 * Draws a tile on the map canvas.
 	 */
 	this.drawTile = function(tileDescriptor) {
-		var img = tileDescriptor.imgData;
+		const img = tileDescriptor.imgData;
 
 		/*
 		 * Check if current tile has image data attached.
 		 */
 		if (img !== null) {
-			var cvs = document.getElementById('map_canvas');
-			var xres = cvs.scrollWidth;
-			var yres = cvs.scrollHeight;
-			var posX = storage.get(cvs, 'posX');
-			var posY = storage.get(cvs, 'posY');
-			var zoom = storage.get(cvs, 'zoomLevel');
-			var zoomExp = 0.2 * zoom;
-			var zoomFac = Math.pow(2.0, zoomExp);
-			var zoomFacInv = 1.0 / zoomFac;
-			var halfWidth = 0.5 * zoomFacInv;
-			var aspectRatio = yres / xres;
-			var halfHeight = aspectRatio * halfWidth;
-			var minX = posX - halfWidth;
-			var maxX = posX + halfWidth;
-			var minY = posY - halfHeight;
-			var maxY = posY + halfHeight;
-			var tileMinX = tileDescriptor.minX;
-			var tileMinY = tileDescriptor.minY;
-			var tileMaxX = tileDescriptor.maxX;
-			var tileMaxY = tileDescriptor.maxY;
-			var destX = xres * ((tileMinX - minX) * zoomFac);
-			var destY = xres * ((maxY - tileMaxY) * zoomFac);
-			var destWidth = xres * ((tileMaxX - tileMinX) * zoomFac);
-			var destHeight = xres * ((tileMaxY - tileMinY) * zoomFac);
-			var ctx = cvs.getContext('2d');
+			const cvs = document.getElementById('map_canvas');
+			const xres = cvs.scrollWidth;
+			const yres = cvs.scrollHeight;
+			const posX = storage.get(cvs, 'posX');
+			const posY = storage.get(cvs, 'posY');
+			const zoom = storage.get(cvs, 'zoomLevel');
+			const zoomExp = 0.2 * zoom;
+			const zoomFac = Math.pow(2.0, zoomExp);
+			const zoomFacInv = 1.0 / zoomFac;
+			const halfWidth = 0.5 * zoomFacInv;
+			const aspectRatio = yres / xres;
+			const halfHeight = aspectRatio * halfWidth;
+			const minX = posX - halfWidth;
+			// const maxX = posX + halfWidth;
+			// const minY = posY - halfHeight;
+			const maxY = posY + halfHeight;
+			const tileMinX = tileDescriptor.minX;
+			const tileMinY = tileDescriptor.minY;
+			const tileMaxX = tileDescriptor.maxX;
+			const tileMaxY = tileDescriptor.maxY;
+			const destX = xres * ((tileMinX - minX) * zoomFac);
+			const destY = xres * ((maxY - tileMaxY) * zoomFac);
+			const destWidth = xres * ((tileMaxX - tileMinX) * zoomFac);
+			const destHeight = xres * ((tileMaxY - tileMinY) * zoomFac);
+			const ctx = cvs.getContext('2d');
 			ctx.drawImage(img, destX, destY, destWidth, destHeight);
 		}
 
@@ -656,24 +656,24 @@ function UI() {
 	 * This is called when a new map tile has been fetched.
 	 */
 	this.updateTiles = function(tileDescriptors) {
-		var cvs = document.getElementById('map_canvas');
-		var width = cvs.scrollWidth;
-		var height = cvs.scrollHeight;
-		var ctx = cvs.getContext('2d');
+		const cvs = document.getElementById('map_canvas');
+		const width = cvs.scrollWidth;
+		const height = cvs.scrollHeight;
+		const ctx = cvs.getContext('2d');
 		ctx.clearRect(0, 0, width, height);
-		var tiles = storage.get(cvs, 'osmTiles');
+		const tiles = storage.get(cvs, 'osmTiles');
 
 		/*
 		 * Check if map tiles have to be drawn.
 		 */
 		if (tiles !== null) {
-			var numTiles = tiles.length;
+			const numTiles = tiles.length;
 
 			/*
 			 * Draw every single map tile.
 			 */
-			for (var i = 0; i < numTiles; i++) {
-				var currentTile = tiles[i];
+			for (let i = 0; i < numTiles; i++) {
+				const currentTile = tiles[i];
 
 				/*
 				 * Draw tile if map tile is available.
@@ -686,7 +686,7 @@ function UI() {
 
 		}
 
-		var img = storage.get(cvs, 'lastImage');
+		const img = storage.get(cvs, 'lastImage');
 
 		/*
 		 * Check if image overlay has to be drawn.
@@ -712,15 +712,15 @@ function UI() {
 	 *   attached.
 	 */
 	this.fetchTiles = function(tileIds, callback) {
-		var firstTileToFetch = null;
+		let firstTileToFetch = null;
 
 		/*
 		 * Iterate over all tiles and find the first that is not yet
 		 * fetched.
 		 */
-		for (var i = 0; i < tileIds.length; i++) {
-			var currentTile = tileIds[i];
-			var fetched = currentTile.fetched;
+		for (let i = 0; i < tileIds.length; i++) {
+			const currentTile = tileIds[i];
+			const fetched = currentTile.fetched;
 
 			/*
 			 * Check if this is the first tile to fetch.
@@ -739,7 +739,7 @@ function UI() {
 			/*
 			 * Internal callback invoked by fetchTile(...).
 			 */
-			var internalCallback = function(tileDescriptor, img) {
+			const internalCallback = function(tileDescriptor, img) {
 				tileDescriptor.imgData = img;
 				tileDescriptor.fetched = true;
 				callback(tileIds);
@@ -755,8 +755,8 @@ function UI() {
 	 * Redraw the map with the same image, but a different offset.
 	 */
 	this.moveMap = function(xoffs, yoffs) {
-		var cvs = document.getElementById('map_canvas');
-		var img = storage.get(cvs, 'lastImage');
+		const cvs = document.getElementById('map_canvas');
+		const img = storage.get(cvs, 'lastImage');
 
 		/*
 		 * Load or store x-offset.
@@ -780,18 +780,18 @@ function UI() {
 		 * Check if there is a stored image.
 		 */
 		if (img !== null) {
-			var width = cvs.scrollWidth;
-			var height = cvs.scrollHeight;
-			var zoomLevelRequested = storage.get(cvs, 'zoomLevel');
-			var zoomLevelImage = storage.get(cvs, 'imageZoom');
-			var zoomLevelDiff = zoomLevelRequested - zoomLevelImage;
-			var zoomFac = Math.pow(2.0, 0.2 * zoomLevelDiff);
-			var scaledWidth = width * zoomFac;
-			var scaledHeight = height * zoomFac;
-			var ctx = cvs.getContext('2d');
+			const width = cvs.scrollWidth;
+			const height = cvs.scrollHeight;
+			const zoomLevelRequested = storage.get(cvs, 'zoomLevel');
+			const zoomLevelImage = storage.get(cvs, 'imageZoom');
+			const zoomLevelDiff = zoomLevelRequested - zoomLevelImage;
+			const zoomFac = Math.pow(2.0, 0.2 * zoomLevelDiff);
+			const scaledWidth = width * zoomFac;
+			const scaledHeight = height * zoomFac;
+			const ctx = cvs.getContext('2d');
 			ctx.clearRect(0, 0, width, height);
-			var dx = xoffs + (0.5 * (width - scaledWidth));
-			var dy = yoffs + (0.5 * (height - scaledHeight));
+			const dx = xoffs + (0.5 * (width - scaledWidth));
+			const dy = yoffs + (0.5 * (height - scaledHeight));
 			ctx.drawImage(img, 0, 0, width, height, dx, dy, scaledWidth, scaledHeight);
 		}
 
@@ -802,44 +802,44 @@ function UI() {
 	 */
 	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles) {
 		/* Earth circumference at the equator. */
-		var circ = 40074;
-		var rq = new Request();
+		const circ = 40074;
+		const rq = new Request();
 		rq.append('cgi', 'render');
-		var xresString = xres.toString();
+		const xresString = xres.toString();
 		rq.append('xres', xresString);
-		var yresString = yres.toString();
+		const yresString = yres.toString();
 		rq.append('yres', yresString);
-		var xposString = xpos.toString();
+		const xposString = xpos.toString();
 		rq.append('xpos', xposString);
-		var yposString = ypos.toString();
+		const yposString = ypos.toString();
 		rq.append('ypos', yposString);
-		var zoomString = zoom.toString();
+		const zoomString = zoom.toString();
 		rq.append('zoom', zoomString);
-		var northingField = document.getElementById('northing_field');
+		const northingField = document.getElementById('northing_field');
 		northingField.value = ypos.toFixed(10);
-		var eastingField = document.getElementById('easting_field');
+		const eastingField = document.getElementById('easting_field');
 		eastingField.value = xpos.toFixed(10);
-		var zoomField = document.getElementById('zoom_field');
+		const zoomField = document.getElementById('zoom_field');
 		zoomField.value = zoomString;
-		var xposKM = xpos * circ;
-		var yposKM = ypos * circ;
-		var eastingFieldKM = document.getElementById('easting_field_km');
+		const xposKM = xpos * circ;
+		const yposKM = ypos * circ;
+		const eastingFieldKM = document.getElementById('easting_field_km');
 		eastingFieldKM.value = xposKM.toFixed(3);
-		var northingFieldKM = document.getElementById('northing_field_km');
+		const northingFieldKM = document.getElementById('northing_field_km');
 		northingFieldKM.value = yposKM.toFixed(3);
-		var longLat = helper.transformCoordinates(xpos, ypos);
-		var longitude = longLat.longitude;
-		var latitude = longLat.latitude;
-		var longitudeField = document.getElementById('longitude_field');
+		const longLat = helper.transformCoordinates(xpos, ypos);
+		const longitude = longLat.longitude;
+		const latitude = longLat.latitude;
+		const longitudeField = document.getElementById('longitude_field');
 		longitudeField.value = longitude;
-		var latitudeField = document.getElementById('latitude_field');
+		const latitudeField = document.getElementById('latitude_field');
 		latitudeField.value = latitude;
 
 		/*
 		 * Use min-time.
 		 */
 		if (mintime !== null) {
-			var mintimeString = mintime.toString();
+			const mintimeString = mintime.toString();
 			rq.append('mintime', mintimeString);
 		}
 
@@ -847,25 +847,24 @@ function UI() {
 		 * Use max-time.
 		 */
 		if (maxtime !== null) {
-			var maxtimeString = maxtime.toString();
+			const maxtimeString = maxtime.toString();
 			rq.append('maxtime', maxtimeString);
 		}
 
 		rq.append('usebg', 'false');
-		var cgi = globals.cgi;
-		var data = rq.getData();
-		var cvs = document.getElementById('map_canvas');
-		var idRequest = storage.get(cvs, 'imageRequestId');
-		var currentRequestId = idRequest + 1;
+		const cgi = globals.cgi;
+		const data = rq.getData();
+		const cvs = document.getElementById('map_canvas');
+		const idRequest = storage.get(cvs, 'imageRequestId');
+		const currentRequestId = idRequest + 1;
 		storage.put(cvs, 'imageRequestId', currentRequestId);
 		storage.put(cvs, 'osmTiles', []);
 
 		/*
 		 * This is called when the server sends data.
 		 */
-		var callback = function(img, idResponse) {
-			var cvs = document.getElementById('map_canvas');
-			var lastResponse = storage.get(cvs, 'imageResponseId');
+		const callback = function(img, idResponse) {
+			const lastResponse = storage.get(cvs, 'imageResponseId');
 
 			/*
 			 * Check if the response is more current than what we display.
@@ -877,11 +876,11 @@ function UI() {
 				storage.put(cvs, 'offsetX', 0);
 				storage.put(cvs, 'offsetY', 0);
 				storage.put(cvs, 'dragInterrupted', true);
-				var width = cvs.scrollWidth;
-				var height = cvs.scrollHeight;
+				const width = cvs.scrollWidth;
+				const height = cvs.scrollHeight;
 				cvs.width = width;
 				cvs.height = height;
-				var ctx = cvs.getContext('2d');
+				const ctx = cvs.getContext('2d');
 				ctx.clearRect(0, 0, width, height);
 				ctx.drawImage(img, 0, 0);
 
@@ -889,14 +888,14 @@ function UI() {
 				 * Check if we should use OSM tiles.
 				 */
 				if (useOSMTiles) {
-					var tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos);
+					const tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos);
 					storage.put(cvs, 'osmTiles', tileIds);
 
 					/*
 					 * Internal callback necessary to have
 					 * "this" reference.
 					 */
-					var internalCallback = function() {
+					const internalCallback = function() {
 						self.updateTiles();
 					};
 
@@ -912,13 +911,13 @@ function UI() {
 
 }
 
-var ui = new UI();
+const ui = new UI();
 
 /*
  * This class implements all handler functions for user interaction.
  */
 function Handler() {
-	var handler = this;
+	const self = this;
 	this._timeoutScroll = null;
 	this._timeoutResize = null;
 
@@ -926,15 +925,15 @@ function Handler() {
 	 * This is called when the map needs to be refreshed.
 	 */
 	this.refresh = function() {
-		var cvs = document.getElementById('map_canvas');
-		var width = cvs.scrollWidth;
-		var height = cvs.scrollHeight;
-		var posX = storage.get(cvs, 'posX');
-		var posY = storage.get(cvs, 'posY');
-		var zoom = storage.get(cvs, 'zoomLevel');
-		var timeMin = storage.get(cvs, 'minTime');
-		var timeMax = storage.get(cvs, 'maxTime');
-		var useOSMTiles = storage.get(cvs, 'useOSMTiles');
+		const cvs = document.getElementById('map_canvas');
+		const width = cvs.scrollWidth;
+		const height = cvs.scrollHeight;
+		const posX = storage.get(cvs, 'posX');
+		const posY = storage.get(cvs, 'posY');
+		const zoom = storage.get(cvs, 'zoomLevel');
+		const timeMin = storage.get(cvs, 'minTime');
+		const timeMax = storage.get(cvs, 'maxTime');
+		const useOSMTiles = storage.get(cvs, 'useOSMTiles');
 		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles);
 	};
 
@@ -942,13 +941,13 @@ function Handler() {
 	 * Extracts coordinates from a single-point touch event.
 	 */
 	this.touchEventToCoordinates = function(e) {
-		var cvs = e.target;
-		var rect = cvs.getBoundingClientRect();
-		var offsetX = rect.left;
-		var offsetY = rect.top;
-		var touches = e.targetTouches;
-		var numTouches = touches.length;
-		var touch = null;
+		const cvs = e.target;
+		const rect = cvs.getBoundingClientRect();
+		const offsetX = rect.left;
+		const offsetY = rect.top;
+		const touches = e.targetTouches;
+		const numTouches = touches.length;
+		let touch = null;
 
 		/*
 		 * If there are touches, extract the first one.
@@ -957,21 +956,21 @@ function Handler() {
 			touch = touches.item(0);
 		}
 
-		var x = 0.0;
-		var y = 0.0;
+		let x = 0.0;
+		let y = 0.0;
 
 		/*
 		 * If a touch was extracted, calculate coordinates relative to
 		 * the element position.
 		 */
 		if (touch !== null) {
-			var touchX = touch.pageX;
+			const touchX = touch.pageX;
 			x = touchX - offsetX;
-			var touchY = touch.pageY;
+			const touchY = touch.pageY;
 			y = touchY - offsetY;
 		}
 
-		var result = {
+		const result = {
 			x: x,
 			y: y
 		};
@@ -983,25 +982,25 @@ function Handler() {
 	 * Extracts the distance from a multi-point touch event.
 	 */
 	this.touchEventToDistance = function(e) {
-		var touches = e.targetTouches;
-		var numTouches = touches.length;
+		const touches = e.targetTouches;
+		const numTouches = touches.length;
 
 		/*
 		 * If there are two touches, extract them and calculate their distance.
 		 */
 		if (numTouches === 2) {
-			var touchA = touches.item(0);
-			var touchB = touches.item(1);
-			var xA = touchA.pageX;
-			var yA = touchA.pageY;
-			var xB = touchB.pageX;
-			var yB = touchB.pageY;
-			var dX = xB - xA;
-			var dY = yB - yA;
-			var dXSquared = dX * dX;
-			var dYSquared = dY * dY;
-			var dSquared = dXSquared + dYSquared;
-			var distance = Math.sqrt(dSquared);
+			const touchA = touches.item(0);
+			const touchB = touches.item(1);
+			const xA = touchA.pageX;
+			const yA = touchA.pageY;
+			const xB = touchB.pageX;
+			const yB = touchB.pageY;
+			const dX = xB - xA;
+			const dY = yB - yA;
+			const dXSquared = dX * dX;
+			const dYSquared = dY * dY;
+			const dSquared = dXSquared + dYSquared;
+			const distance = Math.sqrt(dSquared);
 			return distance;
 		} else {
 			return 0.0;
@@ -1014,19 +1013,19 @@ function Handler() {
 	 */
 	this.touchStart = function(e) {
 		e.preventDefault();
-		var cvs = e.target;
-		var touches = e.targetTouches;
-		var numTouches = touches.length;
-		var singleTouch = (numTouches === 1);
-		var multiTouch = (numTouches > 1);
+		const cvs = e.target;
+		const touches = e.targetTouches;
+		const numTouches = touches.length;
+		const singleTouch = (numTouches === 1);
+		const multiTouch = (numTouches > 1);
 
 		/*
 		 * Single touch moves the map, multi touch zooms.
 		 */
 		if (singleTouch) {
-			var coords = handler.touchEventToCoordinates(e);
-			var x = coords.x;
-			var y = coords.y;
+			const coords = self.touchEventToCoordinates(e);
+			const x = coords.x;
+			const y = coords.y;
 			storage.put(cvs, 'mouseButton', true);
 			storage.put(cvs, 'dragInterrupted', false);
 			storage.put(cvs, 'touchStartX', x);
@@ -1035,7 +1034,7 @@ function Handler() {
 			storage.put(cvs, 'touchLastX', x);
 			storage.put(cvs, 'touchLastY', y);
 		} else if (multiTouch) {
-			var dist = handler.touchEventToDistance(e);
+			const dist = self.touchEventToDistance(e);
 			storage.put(cvs, 'mouseButton', false);
 			storage.put(cvs, 'dragInterrupted', true);
 			storage.put(cvs, 'touchStartX', 0);
@@ -1051,22 +1050,22 @@ function Handler() {
 	 * This is called when a user moves a finger on the map.
 	 */
 	this.touchMove = function(e) {
-		var cvs = e.target;
-		var btn = storage.get(cvs, 'mouseButton');
+		const cvs = e.target;
+		const btn = storage.get(cvs, 'mouseButton');
 
 		/*
 		 * If mouse button is depressed, move map, otherwise zoom map.
 		 */
 		if (btn) {
-			var interrupted = storage.get(cvs, 'dragInterrupted');
+			const interrupted = storage.get(cvs, 'dragInterrupted');
 
 			/*
 			 * Only care if drag was not interrupted.
 			 */
 			if (!interrupted) {
-				var touches = e.targetTouches;
-				var numTouches = touches.length;
-				var singleTouch = (numTouches === 1);
+				const touches = e.targetTouches;
+				const numTouches = touches.length;
+				const singleTouch = (numTouches === 1);
 
 				/*
 				 * Only process single touches, not multi-touch
@@ -1074,15 +1073,15 @@ function Handler() {
 				 */
 				if (singleTouch) {
 					e.preventDefault();
-					var coords = handler.touchEventToCoordinates(e);
-					var x = coords.x;
-					var y = coords.y;
+					const coords = self.touchEventToCoordinates(e);
+					const x = coords.x;
+					const y = coords.y;
 					storage.put(cvs, 'touchLastX', x);
 					storage.put(cvs, 'touchLastY', y);
-					var startX = storage.get(cvs, 'touchStartX');
-					var startY = storage.get(cvs, 'touchStartY');
-					var relX = x - startX;
-					var relY = y - startY;
+					const startX = storage.get(cvs, 'touchStartX');
+					const startY = storage.get(cvs, 'touchStartY');
+					const relX = x - startX;
+					const relY = y - startY;
 					ui.moveMap(relX, relY);
 				}
 
@@ -1091,9 +1090,9 @@ function Handler() {
 			}
 
 		} else {
-			var touches = e.targetTouches;
-			var numTouches = touches.length;
-			var multiTouch = (numTouches > 1);
+			const touches = e.targetTouches;
+			const numTouches = touches.length;
+			const multiTouch = (numTouches > 1);
 
 			/*
 			 * Only process multi-touch gestures, not single
@@ -1101,11 +1100,11 @@ function Handler() {
 			 */
 			if (multiTouch) {
 				e.preventDefault();
-				var dist = handler.touchEventToDistance(e);
-				var startDist = storage.get(cvs, 'touchStartDistance');
-				var frac = dist / startDist;
-				var diffZoom = Math.round(5.0 * (Math.log(frac) / Math.log(2.0)));
-				var zoom = storage.get(cvs, 'imageZoom');
+				const dist = self.touchEventToDistance(e);
+				const startDist = storage.get(cvs, 'touchStartDistance');
+				const frac = dist / startDist;
+				const diffZoom = Math.round(5.0 * (Math.log(frac) / Math.log(2.0)));
+				let zoom = storage.get(cvs, 'imageZoom');
 				zoom += diffZoom;
 
 				/*
@@ -1134,18 +1133,18 @@ function Handler() {
 	 * This is called when a user lifts a finger off the map.
 	 */
 	this.touchEnd = function(e) {
-		var cvs = e.target;
-		var interrupted = storage.get(cvs, 'dragInterrupted');
+		const cvs = e.target;
+		const interrupted = storage.get(cvs, 'dragInterrupted');
 
 		/*
 		 * Only move map position if drag was not interrupted.
 		 */
-		if (interrupted) {
-			handler.refresh();
+		if (interrupted === true) {
+			self.refresh();
 		} else {
-			var touches = e.targetTouches;
-			var numTouches = touches.length;
-			var noMoreTouches = (numTouches === 0);
+			const touches = e.targetTouches;
+			const numTouches = touches.length;
+			const noMoreTouches = (numTouches === 0);
 
 			/*
 			 * Only commit value after the last finger has
@@ -1153,26 +1152,26 @@ function Handler() {
 			 */
 			if (noMoreTouches) {
 				e.preventDefault();
-				var x = storage.get(cvs, 'touchLastX');
-				var y = storage.get(cvs, 'touchLastY');
-				var startX = storage.get(cvs, 'touchStartX');
-				var startY = storage.get(cvs, 'touchStartY');
-				var relX = x - startX;
-				var relY = y - startY;
-				var zoom = storage.get(cvs, 'zoomLevel');
-				var width = cvs.scrollWidth;
-				var fracX = relX / width;
-				var fracY = relY / width;
-				var zoomFac = Math.pow(2.0, -0.2 * zoom);
-				var moveX = zoomFac * fracX;
-				var moveY = zoomFac * fracY;
-				var posX = storage.get(cvs, 'posX');
-				var posY = storage.get(cvs, 'posY');
+				const x = storage.get(cvs, 'touchLastX');
+				const y = storage.get(cvs, 'touchLastY');
+				const startX = storage.get(cvs, 'touchStartX');
+				const startY = storage.get(cvs, 'touchStartY');
+				const relX = x - startX;
+				const relY = y - startY;
+				const zoom = storage.get(cvs, 'zoomLevel');
+				const width = cvs.scrollWidth;
+				const fracX = relX / width;
+				const fracY = relY / width;
+				const zoomFac = Math.pow(2.0, -0.2 * zoom);
+				const moveX = zoomFac * fracX;
+				const moveY = zoomFac * fracY;
+				let posX = storage.get(cvs, 'posX');
+				let posY = storage.get(cvs, 'posY');
 				posX -= moveX;
 				posY += moveY;
 				storage.put(cvs, 'posX', posX);
 				storage.put(cvs, 'posY', posY);
-				handler.refresh();
+				self.refresh();
 			}
 
 		}
@@ -1183,13 +1182,13 @@ function Handler() {
 	 * This is called when a user cancels a touch action.
 	 */
 	this.touchCancel = function(e) {
-		var cvs = e.target;
-		var btn = storage.get(cvs, 'mouseButton');
+		const cvs = e.target;
+		const btn = storage.get(cvs, 'mouseButton');
 
 		/*
 		 * Abort action if mouse button was depressed.
 		 */
-		if (btn) {
+		if (btn === true) {
 			storage.put(cvs, 'dragInterrupted', true);
 			ui.moveMap(0, 0);
 		}
@@ -1201,15 +1200,15 @@ function Handler() {
 	 * This is called when the user presses the mouse button.
 	 */
 	this.mouseDown = function(e) {
-		var btn = e.button;
+		const btn = e.button;
 
 		/*
 		 * Check if left mouse button was depressed.
 		 */
 		if (btn === 0) {
-			var cvs = e.target;
-			var x = e.offsetX;
-			var y = e.offsetY;
+			const cvs = e.target;
+			const x = e.offsetX;
+			const y = e.offsetY;
 			storage.put(cvs, 'mouseButton', true);
 			storage.put(cvs, 'mouseStartX', x);
 			storage.put(cvs, 'mouseStartY', y);
@@ -1222,17 +1221,17 @@ function Handler() {
 	 * This is called when the user releases the mouse button.
 	 */
 	this.mouseUp = function(e) {
-		var btn = e.button;
+		const btn = e.button;
 
 		/*
 		 * Check if left mouse button was released.
 		 */
 		if (btn === 0) {
-			var cvs = e.target;
-			var x = e.offsetX;
-			var y = e.offsetY;
+			const cvs = e.target;
+			const x = e.offsetX;
+			const y = e.offsetY;
 			storage.put(cvs, 'mouseButton', false);
-			var interrupted = storage.get(cvs, 'dragInterrupted');
+			const interrupted = storage.get(cvs, 'dragInterrupted');
 
 			/*
 			 * Load a new position if drag was not interrupted.
@@ -1240,24 +1239,24 @@ function Handler() {
 			if (interrupted === true) {
 				ui.moveMap(0, 0);
 			} else {
-				var startX = storage.get(cvs, 'mouseStartX');
-				var startY = storage.get(cvs, 'mouseStartY');
-				var relX = x - startX;
-				var relY = y - startY;
-				var zoom = storage.get(cvs, 'zoomLevel');
-				var width = cvs.scrollWidth;
-				var fracX = relX / width;
-				var fracY = relY / width;
-				var zoomFac = Math.pow(2.0, -0.2 * zoom);
-				var moveX = zoomFac * fracX;
-				var moveY = zoomFac * fracY;
-				var posX = storage.get(cvs, 'posX');
-				var posY = storage.get(cvs, 'posY');
+				const startX = storage.get(cvs, 'mouseStartX');
+				const startY = storage.get(cvs, 'mouseStartY');
+				const relX = x - startX;
+				const relY = y - startY;
+				const zoom = storage.get(cvs, 'zoomLevel');
+				const width = cvs.scrollWidth;
+				const fracX = relX / width;
+				const fracY = relY / width;
+				const zoomFac = Math.pow(2.0, -0.2 * zoom);
+				const moveX = zoomFac * fracX;
+				const moveY = zoomFac * fracY;
+				let posX = storage.get(cvs, 'posX');
+				let posY = storage.get(cvs, 'posY');
 				posX -= moveX;
 				posY += moveY;
 				storage.put(cvs, 'posX', posX);
 				storage.put(cvs, 'posY', posY);
-				handler.refresh();
+				self.refresh();
 			}
 
 		}
@@ -1268,19 +1267,19 @@ function Handler() {
 	 * This is called when the user moves the mouse over the map.
 	 */
 	this.mouseMove = function(e) {
-		var cvs = e.target;
-		var btn = storage.get(cvs, 'mouseButton');
+		const cvs = e.target;
+		const btn = storage.get(cvs, 'mouseButton');
 
 		/*
 		 * Move map if mouse button is pressed.
 		 */
 		if (btn === true) {
-			var x = e.offsetX;
-			var y = e.offsetY;
-			var startX = storage.get(cvs, 'mouseStartX');
-			var startY = storage.get(cvs, 'mouseStartY');
-			var relX = x - startX;
-			var relY = y - startY;
+			const x = e.offsetX;
+			const y = e.offsetY;
+			const startX = storage.get(cvs, 'mouseStartX');
+			const startY = storage.get(cvs, 'mouseStartY');
+			const relX = x - startX;
+			const relY = y - startY;
 			ui.moveMap(relX, relY);
 		}
 
@@ -1291,10 +1290,10 @@ function Handler() {
 	 */
 	this.scroll = function(e) {
 		e.preventDefault();
-		var delta = e.deltaY;
-		var direction = delta > 0 ? 1 : (delta < 0 ? -1 : 0);
-		var cvs = document.getElementById('map_canvas');
-		var zoom = storage.get(cvs, 'zoomLevel');
+		const delta = e.deltaY;
+		const direction = delta > 0 ? 1 : (delta < 0 ? -1 : 0);
+		const cvs = document.getElementById('map_canvas');
+		let zoom = storage.get(cvs, 'zoomLevel');
 		zoom -= direction;
 
 		/*
@@ -1316,14 +1315,14 @@ function Handler() {
 		/*
 		 * Perform delayed refresh.
 		 */
-		var refresh = function() {
-			handler.refresh();
+		const refresh = function() {
+			self.refresh();
 		};
 
-		var timeout = handler._timeoutScroll;
+		let timeout = self._timeoutScroll;
 		window.clearTimeout(timeout);
 		timeout = window.setTimeout(refresh, 250);
-		handler._timeoutScroll = timeout;
+		self._timeoutScroll = timeout;
 		ui.moveMap(null, null);
 	};
 
@@ -1331,63 +1330,63 @@ function Handler() {
 	 * This is called when the window is resized.
 	 */
 	this.resize = function() {
-		var timeout = handler._timeoutResize;
+		let timeout = self._timeoutResize;
 		window.clearTimeout(timeout);
 
 		/*
 		 * Perform delayed refresh.
 		 */
-		var resize = function() {
-			handler.refresh();
+		const resize = function() {
+			self.refresh();
 		};
 
 		timeout = window.setTimeout(resize, 100);
-		handler._timeoutResize = timeout;
+		self._timeoutResize = timeout;
 	};
 
 	/*
 	 * Initializes the (right) side bar of the user interface.
 	 */
 	this.initializeSidebar = function() {
-		var sidebar = document.getElementById('right_sidebar');
-		var opener = document.getElementById('right_sidebar_opener');
-		var dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
-		var elemFrom = ui.createElement('From');
-		var fieldFrom = document.createElement('input');
+		const sidebar = document.getElementById('right_sidebar');
+		const opener = document.getElementById('right_sidebar_opener');
+		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const elemFrom = ui.createElement('From');
+		const fieldFrom = document.createElement('input');
 		fieldFrom.className = 'textfield';
 		fieldFrom.setAttribute('type', 'text');
 		fieldFrom.setAttribute('placeholder', dateFormat);
 		elemFrom.appendChild(fieldFrom);
 		sidebar.appendChild(elemFrom);
-		var elemTo = ui.createElement('To');
-		var fieldTo = document.createElement('input');
+		const elemTo = ui.createElement('To');
+		const fieldTo = document.createElement('input');
 		fieldTo.className = 'textfield';
 		fieldTo.setAttribute('type', 'text');
 		fieldTo.setAttribute('placeholder', dateFormat);
 		elemTo.appendChild(fieldTo);
 		sidebar.appendChild(elemTo);
-		var elemButtons = ui.createElement('');
-		var buttonApply = document.createElement('button');
+		const elemButtons = ui.createElement('');
+		const buttonApply = document.createElement('button');
 		buttonApply.className = 'button';
-		var buttonApplyCaption = document.createTextNode('Apply');
+		const buttonApplyCaption = document.createTextNode('Apply');
 		buttonApply.appendChild(buttonApplyCaption);
 
 		/*
 		 * This is called when the user clicks on the 'Apply' button.
 		 */
 		buttonApply.onclick = function(e) {
-			var valueFrom = helper.cleanValue(fieldFrom.value);
-			var valueTo = helper.cleanValue(fieldTo.value);
-			var cvs = document.getElementById('map_canvas');
+			const valueFrom = helper.cleanValue(fieldFrom.value);
+			const valueTo = helper.cleanValue(fieldTo.value);
+			const cvs = document.getElementById('map_canvas');
 			storage.put(cvs, 'minTime', valueFrom);
 			storage.put(cvs, 'maxTime', valueTo);
-			handler.refresh();
+			self.refresh();
 		};
 
 		elemButtons.appendChild(buttonApply);
-		var buttonHide = document.createElement('button');
+		const buttonHide = document.createElement('button');
 		buttonHide.className = 'button next';
-		var buttonHideCaption = document.createTextNode('Hide');
+		const buttonHideCaption = document.createTextNode('Hide');
 		buttonHide.appendChild(buttonHideCaption);
 
 		/*
@@ -1400,59 +1399,59 @@ function Handler() {
 
 		elemButtons.appendChild(buttonHide);
 		sidebar.appendChild(elemButtons);
-		var elemSpacerA = document.createElement('div');
+		const elemSpacerA = document.createElement('div');
 		elemSpacerA.className = 'vspace';
 		sidebar.appendChild(elemSpacerA);
-		var elemNorthing = ui.createElement('Northing');
-		var fieldNorthing = document.createElement('input');
+		const elemNorthing = ui.createElement('Northing');
+		const fieldNorthing = document.createElement('input');
 		fieldNorthing.className = 'textfield';
 		fieldNorthing.setAttribute('id', 'northing_field');
 		fieldNorthing.setAttribute('readonly', 'readonly');
 		elemNorthing.appendChild(fieldNorthing);
 		sidebar.appendChild(elemNorthing);
-		var elemEasting = ui.createElement('Easting');
-		var fieldEasting = document.createElement('input');
+		const elemEasting = ui.createElement('Easting');
+		const fieldEasting = document.createElement('input');
 		fieldEasting.className = 'textfield';
 		fieldEasting.setAttribute('id', 'easting_field');
 		fieldEasting.setAttribute('readonly', 'readonly');
 		elemEasting.appendChild(fieldEasting);
 		sidebar.appendChild(elemEasting);
-		var elemZoom = ui.createElement('Zoom');
-		var fieldZoom = document.createElement('input');
+		const elemZoom = ui.createElement('Zoom');
+		const fieldZoom = document.createElement('input');
 		fieldZoom.className = 'textfield';
 		fieldZoom.setAttribute('id', 'zoom_field');
 		fieldZoom.setAttribute('readonly', 'readonly');
 		elemZoom.appendChild(fieldZoom);
 		sidebar.appendChild(elemZoom);
-		var elemSpacerB = document.createElement('div');
+		const elemSpacerB = document.createElement('div');
 		elemSpacerB.className = 'vspace';
 		sidebar.appendChild(elemSpacerB);
-		var elemNorthingKM = ui.createElement('N [km]');
-		var fieldNorthingKM = document.createElement('input');
+		const elemNorthingKM = ui.createElement('N [km]');
+		const fieldNorthingKM = document.createElement('input');
 		fieldNorthingKM.className = 'textfield';
 		fieldNorthingKM.setAttribute('id', 'northing_field_km');
 		fieldNorthingKM.setAttribute('readonly', 'readonly');
 		elemNorthingKM.appendChild(fieldNorthingKM);
 		sidebar.appendChild(elemNorthingKM);
-		var elemEastingKM = ui.createElement('E [km]');
-		var fieldEastingKM = document.createElement('input');
+		const elemEastingKM = ui.createElement('E [km]');
+		const fieldEastingKM = document.createElement('input');
 		fieldEastingKM.className = 'textfield';
 		fieldEastingKM.setAttribute('id', 'easting_field_km');
 		fieldEastingKM.setAttribute('readonly', 'readonly');
 		elemEastingKM.appendChild(fieldEastingKM);
 		sidebar.appendChild(elemEastingKM);
-		var elemSpacerC = document.createElement('div');
+		const elemSpacerC = document.createElement('div');
 		elemSpacerC.className = 'vspace';
 		sidebar.appendChild(elemSpacerC);
-		var elemLongitude = ui.createElement('Longitude');
-		var fieldLongitude = document.createElement('input');
+		const elemLongitude = ui.createElement('Longitude');
+		const fieldLongitude = document.createElement('input');
 		fieldLongitude.className = 'textfield';
 		fieldLongitude.setAttribute('id', 'longitude_field');
 		fieldLongitude.setAttribute('readonly', 'readonly');
 		elemLongitude.appendChild(fieldLongitude);
 		sidebar.appendChild(elemLongitude);
-		var elemLatitude = ui.createElement('Latitude');
-		var fieldLatitude = document.createElement('input');
+		const elemLatitude = ui.createElement('Latitude');
+		const fieldLatitude = document.createElement('input');
 		fieldLatitude.className = 'textfield';
 		fieldLatitude.setAttribute('id', 'latitude_field');
 		fieldLatitude.setAttribute('readonly', 'readonly');
@@ -1473,11 +1472,9 @@ function Handler() {
 	 * This is called when the user interface initializes.
 	 */
 	this.initialize = function() {
-		var body = document.getElementsByTagName('body')[0];
-		var div = document.getElementById('map_div');
-		var width = div.scrollWidth;
-		var height = div.scrollHeight;
-		var cvs = document.createElement('canvas');
+		const body = document.getElementsByTagName('body')[0];
+		const div = document.getElementById('map_div');
+		const cvs = document.createElement('canvas');
 		cvs.id = 'map_canvas';
 		cvs.className = 'mapcanvas';
 		storage.put(cvs, 'posX', 0.0);
@@ -1499,19 +1496,19 @@ function Handler() {
 		storage.put(cvs, 'offsetX', 0);
 		storage.put(cvs, 'offsetY', 0);
 		storage.put(cvs, 'dragInterrupted', false);
-		cvs.addEventListener('mousedown', handler.mouseDown);
-		cvs.addEventListener('mouseup', handler.mouseUp);
-		cvs.addEventListener('mousemove', handler.mouseMove);
-		cvs.addEventListener('wheel', handler.scroll);
-		cvs.addEventListener('touchstart', handler.touchStart);
-		cvs.addEventListener('touchmove', handler.touchMove);
-		cvs.addEventListener('touchend', handler.touchEnd);
-		cvs.addEventListener('touchcancel', handler.touchCancel);
-		window.addEventListener('resize', handler.resize);
+		cvs.addEventListener('mousedown', self.mouseDown);
+		cvs.addEventListener('mouseup', self.mouseUp);
+		cvs.addEventListener('mousemove', self.mouseMove);
+		cvs.addEventListener('wheel', self.scroll);
+		cvs.addEventListener('touchstart', self.touchStart);
+		cvs.addEventListener('touchmove', self.touchMove);
+		cvs.addEventListener('touchend', self.touchEnd);
+		cvs.addEventListener('touchcancel', self.touchCancel);
+		window.addEventListener('resize', self.resize);
 		div.appendChild(cvs);
-		handler.initializeSidebar();
+		self.initializeSidebar();
 		helper.blockSite(false);
-		handler.refresh();
+		self.refresh();
 	};
 
 }
@@ -1519,6 +1516,6 @@ function Handler() {
 /*
  * The (global) event handlers.
  */
-var handler = new Handler();
+const handler = new Handler();
 document.addEventListener('DOMContentLoaded', handler.initialize);
 
