@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -54,6 +55,7 @@ type Source interface {
  */
 type osmSourceStruct struct {
 	cachePath string
+	mutex     sync.RWMutex
 	uri       string
 }
 
@@ -159,6 +161,7 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 	} else {
 		readFromFile := false
 		pathFile := this.tilePath(templateFile, zoom, x, y)
+		this.mutex.RLock()
 		fd, err := os.Open(pathFile)
 		rect := image.ZR
 		img := image.NewNRGBA(rect)
@@ -203,6 +206,8 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 			fd.Close()
 		}
 
+		this.mutex.RUnlock()
+
 		/*
 		 * If tile was not found in cache, download it from tile server and
 		 * store it in cache.
@@ -223,6 +228,7 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 				 * Check if we have a valid request.
 				 */
 				if err == nil {
+					this.mutex.Lock()
 					req.Header.Set("User-Agent", "location-visualizer")
 					resp, err := client.Do(req)
 
@@ -276,6 +282,7 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 						body.Close()
 					}
 
+					this.mutex.Unlock()
 				}
 
 			}

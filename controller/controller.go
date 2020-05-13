@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 	"image/png"
 	"io/ioutil"
 	"math"
+	"os"
+	"runtime"
 	"strconv"
 )
 
@@ -70,7 +73,7 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 	z64, _ := strconv.ParseUint(zIn, 10, 8)
 	z := uint8(z64)
 	tileSource := this.tileSource
-	tile, err := tileSource.Get(z, x, y)
+	t, err := tileSource.Get(z, x, y)
 
 	/*
 	 * Check if tile could be fetched.
@@ -90,8 +93,8 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 		return response
 	} else {
-		img := tile.Image()
-		id := tile.Id()
+		img := t.Image()
+		id := t.Id()
 		idX := id.X()
 		idY := id.Y()
 		idZ := id.Zoom()
@@ -483,18 +486,44 @@ func (this *controllerStruct) Operate() {
 		if server == nil {
 			fmt.Printf("%s\n", "Web server did not enter message loop.")
 		} else {
-			channels := server.RegisterCgi("/cgi-bin/locviz")
+			requests := server.RegisterCgi("/cgi-bin/locviz")
 			server.Run()
 			tlsPort := serverCfg.TLSPort
 			fmt.Printf("Web interface ready: https://localhost:%s/\n", tlsPort)
 
 			/*
-			 * This is the actual message pump.
+			 * A worker processing HTTP requests.
+			 */
+			worker := func(requests <-chan webserver.HttpRequest) {
+
+				/*
+				 * This is the actual message pump.
+				 */
+				for request := range requests {
+					response := this.dispatch(request)
+					respond := request.Respond
+					respond <- response
+				}
+
+			}
+
+			numCPU := runtime.NumCPU()
+
+			/*
+			 * Spawn as many workers as we have CPUs.
+			 */
+			for i := 0; i < numCPU; i++ {
+				go worker(requests)
+			}
+
+			stdin := os.Stdin
+			scanner := bufio.NewScanner(stdin)
+
+			/*
+			 * Read from standard input forever.
 			 */
 			for {
-				request := <-channels.Requests
-				response := this.dispatch(request)
-				channels.Responses <- response
+				scanner.Scan()
 			}
 
 		}

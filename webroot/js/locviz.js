@@ -698,55 +698,33 @@ function UI() {
 	};
 
 	/*
-	 * Fetch a list of map tiles and invoke callback on each change.
-	 *
-	 * - Find first tile ID without image data attached.
-	 * - Invoke fetchTile(...) to fetch that tile.
-	 *
-	 * - When tile was fetched:
-	 *   - Associate image data with tile ID.
-	 *   - Notify callback that new tile was fetched.
-	 *   - Invoke yourself to fetch next missing tile.
-	 *
-	 * - Process terminates, when all tiles have image data
-	 *   attached.
+	 * Fetch a list of map tiles concurrently and invoke callback on each change.
 	 */
 	this.fetchTiles = function(tileIds, callback) {
-		let firstTileToFetch = null;
 
 		/*
-		 * Iterate over all tiles and find the first that is not yet
-		 * fetched.
+		 * Internal callback invoked by fetchTile(...).
+		 */
+		const internalCallback = function(tileDescriptor, img) {
+			tileDescriptor.imgData = img;
+			tileDescriptor.fetched = true;
+			callback(tileIds);
+		};
+
+		/*
+		 * Iterate over all tiles and fetch them.
 		 */
 		for (let i = 0; i < tileIds.length; i++) {
 			const currentTile = tileIds[i];
 			const fetched = currentTile.fetched;
 
 			/*
-			 * Check if this is the first tile to fetch.
+			 * Check if we have to fetch this tile.
 			 */
-			if ((firstTileToFetch === null) & (fetched === false)) {
-				firstTileToFetch = currentTile;
+			if (fetched === false) {
+				self.fetchTile(currentTile, internalCallback);
 			}
 
-		}
-
-		/*
-		 * Check if we have to fetch a tile.
-		 */
-		if (firstTileToFetch !== null) {
-
-			/*
-			 * Internal callback invoked by fetchTile(...).
-			 */
-			const internalCallback = function(tileDescriptor, img) {
-				tileDescriptor.imgData = img;
-				tileDescriptor.fetched = true;
-				callback(tileIds);
-				self.fetchTiles(tileIds, callback);
-			};
-
-			this.fetchTile(firstTileToFetch, internalCallback);
 		}
 
 	};
