@@ -45,9 +45,8 @@ type Tile interface {
  * A source for map tiles.
  */
 type Source interface {
-	Get(zoom uint8, x uint32, y uint32) (Tile, error)
+	Get(zoom uint8, x uint32, y uint32, colorScale float64) (Tile, error)
 	Prefetch(level uint8)
-	Render(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error)
 }
 
 /*
@@ -305,7 +304,7 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 /*
  * Perform color transformation on OSM data.
  */
-func (this *osmSourceStruct) transformColor(in color.NRGBA) color.NRGBA {
+func (this *osmSourceStruct) transformColor(in color.NRGBA, scale float64) color.NRGBA {
 	r := in.R
 	g := in.G
 	b := in.B
@@ -316,7 +315,7 @@ func (this *osmSourceStruct) transformColor(in color.NRGBA) color.NRGBA {
 	gInvFloat := 1.0 - gFloat
 	bInvFloat := 1.0 - bFloat
 	lumaFloat := (0.22 * rInvFloat) + (0.72 * gInvFloat) + (0.06 * bInvFloat)
-	lumaFloatHalved := 0.5 * lumaFloat
+	lumaFloatHalved := scale * lumaFloat
 	lumaFloatByte := math.Round(lumaFloatHalved * 255.0)
 	lumaByte := uint8(lumaFloatByte)
 
@@ -334,100 +333,9 @@ func (this *osmSourceStruct) transformColor(in color.NRGBA) color.NRGBA {
 }
 
 /*
- * Fetch a color from a set of OSM tiles, given X / Y coordinates.
- */
-func (this *osmSourceStruct) interpolateTiles(tiles []*osmTileStruct, zoom uint8, posX float64, posY float64) color.NRGBA {
-	tileSizeFloat := float64(TILE_SIZE)
-	zoomFloat := float64(zoom)
-	dxPerTile := math.Pow(2.0, -zoomFloat)
-	idxXFloat := (posX + 0.5) / dxPerTile
-	idxX := uint32(idxXFloat)
-
-	/*
-	 * Lower limit of index is zero.
-	 */
-	if idxXFloat < 0.0 {
-		idxX = 0
-	}
-
-	idxYFloat := (0.5 - posY) / dxPerTile
-	idxY := uint32(idxYFloat)
-
-	/*
-	 * Lower limit of index is zero.
-	 */
-	if idxYFloat < 0.0 {
-		idxY = 0
-	}
-
-	/*
-	 * ID of OSM tile we're looking for.
-	 */
-	requiredTileId := osmTileIdStruct{
-		zoom: zoom,
-		x:    idxX,
-		y:    idxY,
-	}
-
-	/*
-	 * Initialize color to black.
-	 */
-	c := color.NRGBA{
-		R: 0,
-		G: 0,
-		B: 0,
-		A: 255,
-	}
-
-	/*
-	 * Iterate over all tiles.
-	 */
-	for _, tile := range tiles {
-
-		/*
-		 * Make sure the tile is not nil.
-		 */
-		if tile != nil {
-			tileId := tile.tileId
-
-			/*
-			 * Make sure we have the correct tile.
-			 */
-			if tileId == requiredTileId {
-				tileIdX := tileId.x
-				tileIdXFloat := float64(tileIdX)
-				tileIdY := tileId.y
-				tileIdYFloat := float64(tileIdY)
-				tileMinX := (tileIdXFloat * dxPerTile) - 0.5
-				tileMaxY := 0.5 - (tileIdYFloat * dxPerTile)
-				img := tile.imageData
-
-				/*
-				 * Make sure the image is not nil.
-				 */
-				if img != nil {
-					coordsToPixels := tileSizeFloat / dxPerTile
-					relX := coordsToPixels * (posX - tileMinX)
-					relY := coordsToPixels * (tileMaxY - posY)
-					imgX := int(relX)
-					imgY := int(relY)
-					ci := img.NRGBAAt(imgX, imgY)
-					c = this.transformColor(ci)
-				}
-
-			}
-
-		}
-
-	}
-
-	return c
-}
-
-/*
  * Fetches a map tile from OSM or from the cache.
  */
-func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32) (Tile, error) {
+func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32, colorScale float64) (Tile, error) {
 
 	/*
 	 * Check if zoom level is in range.
@@ -447,6 +355,15 @@ func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32) (Tile, error) {
 			err := fmt.Errorf(msg, x, y, maxTileId, maxTileId, zoom)
 			return nil, err
 		} else {
+
+			/*
+			 * Make sure that color scale is in range.
+			 */
+			if colorScale < 0.0 {
+				colorScale = 0.0
+			} else if colorScale > 1.0 {
+				colorScale = 1.0
+			}
 
 			/*
 			 * Create OSM tile id.
@@ -478,7 +395,7 @@ func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32) (Tile, error) {
 				 */
 				for x := minX; x < maxX; x++ {
 					sourceColor := imgSource.NRGBAAt(x, y)
-					targetColor := this.transformColor(sourceColor)
+					targetColor := this.transformColor(sourceColor, colorScale)
 					imgTarget.Set(x, y, targetColor)
 				}
 
@@ -543,105 +460,6 @@ func (this *osmSourceStruct) Prefetch(zoomLevel uint8) {
 
 	}
 
-}
-
-/*
- * Fetches map data from OpenStreetMaps and renders it into an image.
- */
-func (this *osmSourceStruct) Render(xres uint32, yres uint32, minX float64, maxX float64, minY float64, maxY float64) (*image.NRGBA, error) {
-	tileSizeFloat := float64(TILE_SIZE)
-	xresFloat := float64(xres)
-	numTilesX := xresFloat / tileSizeFloat
-	dx := math.Abs(maxX - minX)
-	dxPerTile := dx / numTilesX
-	zoomFloat := -math.Log2(dxPerTile)
-
-	/*
-	 * Zoom cannot be negative.
-	 */
-	if zoomFloat < 0.0 {
-		zoomFloat = 0.0
-	}
-
-	zoom := uint8(zoomFloat)
-
-	/*
-	 * Limit to maximum OSM zoom level.
-	 */
-	if zoom > MAX_ZOOM_LEVEL {
-		zoom = MAX_ZOOM_LEVEL
-	}
-
-	zoomFloat = float64(zoom)
-	dxPerTile = math.Pow(2.0, -zoomFloat)
-	idxMinXFloat := (minX + 0.5) / dxPerTile
-	idxMinX := int32(idxMinXFloat)
-	idxMaxXFloat := (maxX + 0.5) / dxPerTile
-	idxMaxX := int32(idxMaxXFloat)
-	idxMinYFloat := (0.5 - maxY) / dxPerTile
-	idxMinY := int32(idxMinYFloat)
-	idxMaxYFloat := (0.5 - minY) / dxPerTile
-	idxMaxY := int32(idxMaxYFloat)
-	tiles := []*osmTileStruct{}
-
-	/*
-	 * Iterate over the Y axis.
-	 */
-	for idxY := idxMinY; idxY <= idxMaxY; idxY++ {
-		idxYY := uint32(idxY)
-
-		/*
-		 * Iterate over the X axis.
-		 */
-		for idxX := idxMinX; idxX <= idxMaxX; idxX++ {
-			idxXX := uint32(idxX)
-
-			/*
-			 * Create OSM tile ID.
-			 */
-			id := osmTileIdStruct{
-				zoom: zoom,
-				x:    idxXX,
-				y:    idxYY,
-			}
-
-			tile := this.getTile(id)
-			tiles = append(tiles, tile)
-		}
-
-	}
-
-	xresInt := int(xres)
-	yresInt := int(yres)
-	rect := image.Rect(0, 0, xresInt, yresInt)
-	img := image.NewNRGBA(rect)
-	yresFloat := float64(yres)
-	dy := math.Abs(maxY - minY)
-	ddx := dx / xresFloat
-	ddy := dy / yresFloat
-
-	/*
-	 * Render image line by line.
-	 */
-	for idxY32 := uint32(0); idxY32 < yres; idxY32++ {
-		idxYFloat := float64(idxY32)
-		idxY := int(idxY32)
-
-		/*
-		 * Render line pixel by pixel.
-		 */
-		for idxX32 := uint32(0); idxX32 < xres; idxX32++ {
-			idxXFloat := float64(idxX32)
-			idxX := int(idxX32)
-			posX := minX + (idxXFloat * ddx)
-			posY := maxY - (idxYFloat * ddy)
-			c := this.interpolateTiles(tiles, zoom, posX, posY)
-			img.SetNRGBA(idxX, idxY, c)
-		}
-
-	}
-
-	return img, nil
 }
 
 /*

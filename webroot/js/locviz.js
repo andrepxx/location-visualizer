@@ -500,7 +500,7 @@ function UI() {
 	 * display a certain portion of the map and their positions
 	 * inside the coordinate system.
 	 */
-	this.calculateTiles = function(xres, yres, zoom, xpos, ypos) {
+	this.calculateTiles = function(xres, yres, zoom, xpos, ypos, colorScale) {
 		const zoomExp = 0.2 * zoom;
 		const zoomFac = Math.pow(2.0, zoomExp);
 		const zoomFacInv = 1.0 / zoomFac;
@@ -564,6 +564,7 @@ function UI() {
 						osmX: idxX,
 						osmY: idxY,
 						osmZoom: osmZoom,
+						colorScale: colorScale,
 						dx: dxPerTile,
 						minX: tileMinX,
 						maxX: tileMaxX,
@@ -591,6 +592,7 @@ function UI() {
 		const x = tileDescriptor.osmX;
 		const y = tileDescriptor.osmY;
 		const z = tileDescriptor.osmZoom;
+		const colorScale = tileDescriptor.colorScale;
 		const rq = new Request();
 		rq.append('cgi', 'get-tile');
 		const xString = x.toString();
@@ -599,6 +601,8 @@ function UI() {
 		rq.append('y', yString);
 		const zString = z.toString();
 		rq.append('z', zString);
+		const colorScaleString = colorScale.toString();
+		rq.append('colorscale', colorScaleString);
 		const cgi = globals.cgi;
 		const data = rq.getData();
 
@@ -778,7 +782,7 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles) {
+	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale) {
 		/* Earth circumference at the equator. */
 		const circ = 40074;
 		const rq = new Request();
@@ -829,7 +833,6 @@ function UI() {
 			rq.append('maxtime', maxtimeString);
 		}
 
-		rq.append('usebg', 'false');
 		const cgi = globals.cgi;
 		const data = rq.getData();
 		const cvs = document.getElementById('map_canvas');
@@ -865,8 +868,8 @@ function UI() {
 				/*
 				 * Check if we should use OSM tiles.
 				 */
-				if (useOSMTiles) {
-					const tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos);
+				if (useOSMTiles & (colorScale !== '0')) {
+					const tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos, colorScale);
 					storage.put(cvs, 'osmTiles', tileIds);
 
 					/*
@@ -912,7 +915,8 @@ function Handler() {
 		const timeMin = storage.get(cvs, 'minTime');
 		const timeMax = storage.get(cvs, 'maxTime');
 		const useOSMTiles = storage.get(cvs, 'useOSMTiles');
-		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles);
+		const colorScale = storage.get(cvs, 'colorScale');
+		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale);
 	};
 
 	/*
@@ -1343,6 +1347,14 @@ function Handler() {
 		fieldTo.setAttribute('placeholder', dateFormat);
 		elemTo.appendChild(fieldTo);
 		sidebar.appendChild(elemTo);
+		const elemMapIntensity = ui.createElement('M. intens.');
+		const fieldMapIntensity = document.createElement('input');
+		fieldMapIntensity.className = 'textfield';
+		fieldMapIntensity.setAttribute('id', 'map_intensity_field');
+		fieldMapIntensity.setAttribute('type', 'text');
+		fieldMapIntensity.value = '5';
+		elemMapIntensity.appendChild(fieldMapIntensity);
+		sidebar.appendChild(elemMapIntensity);
 		const elemButtons = ui.createElement('');
 		const buttonApply = document.createElement('button');
 		buttonApply.className = 'button';
@@ -1355,7 +1367,9 @@ function Handler() {
 		buttonApply.onclick = function(e) {
 			const valueFrom = helper.cleanValue(fieldFrom.value);
 			const valueTo = helper.cleanValue(fieldTo.value);
+			const valueMapIntensity = helper.cleanValue(fieldMapIntensity.value);
 			const cvs = document.getElementById('map_canvas');
+			storage.put(cvs, 'colorScale', valueMapIntensity);
 			storage.put(cvs, 'minTime', valueFrom);
 			storage.put(cvs, 'maxTime', valueTo);
 			self.refresh();
@@ -1458,6 +1472,7 @@ function Handler() {
 		storage.put(cvs, 'posX', 0.0);
 		storage.put(cvs, 'posY', 0.0);
 		storage.put(cvs, 'zoomLevel', 0);
+		storage.put(cvs, 'colorScale', '5');
 		storage.put(cvs, 'minTime', null);
 		storage.put(cvs, 'maxTime', null);
 		storage.put(cvs, 'useOSMTiles', true);

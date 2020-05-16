@@ -12,9 +12,6 @@ import (
 	"github.com/andrepxx/sydney/color"
 	"github.com/andrepxx/sydney/coordinates"
 	"github.com/andrepxx/sydney/scene"
-	"image"
-	imagecolor "image/color"
-	"image/draw"
 	"image/png"
 	"io/ioutil"
 	"math"
@@ -72,8 +69,19 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 	zIn := request.Params["z"]
 	z64, _ := strconv.ParseUint(zIn, 10, 8)
 	z := uint8(z64)
+	colorScaleIn := request.Params["colorscale"]
+	colorScale64, colorScaleErr := strconv.ParseUint(colorScaleIn, 10, 8)
+	colorScaleFloat := 0.5
+
+	/*
+	 * Check if color scale is valid and in range.
+	 */
+	if colorScaleErr == nil && colorScale64 <= 10 {
+		colorScaleFloat = 0.1 * float64(colorScale64)
+	}
+
 	tileSource := this.tileSource
-	t, err := tileSource.Get(z, x, y)
+	t, err := tileSource.Get(z, x, y, colorScaleFloat)
 
 	/*
 	 * Check if tile could be fetched.
@@ -181,8 +189,6 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	ypos, _ := strconv.ParseFloat(yposIn, 64)
 	zoomIn := request.Params["zoom"]
 	zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
-	useBGIn := request.Params["usebg"]
-	useBG, _ := strconv.ParseBool(useBGIn)
 	minTimeIn := request.Params["mintime"]
 	minTime, _ := filter.ParseTime(minTimeIn)
 	maxTimeIn := request.Params["maxtime"]
@@ -224,55 +230,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 	scn.Aggregate(projectedData)
 	mapping := this.colorMapping
-	xresInt := int(xres)
-	yresInt := int(yres)
-	dim := image.Rect(0, 0, xresInt, yresInt)
-	target := image.NewNRGBA(dim)
-
-	/*
-	 * Check if we should render a map background.
-	 */
-	if useBG {
-
-		/*
-		 * The background color.
-		 */
-		c := imagecolor.NRGBA{
-			R: 0,
-			G: 0,
-			B: 0,
-			A: 255,
-		}
-
-		uniform := image.NewUniform(c)
-		draw.Draw(target, dim, uniform, image.ZP, draw.Over)
-		tileSource := this.tileSource
-
-		/*
-		 * Check if tile source was set.
-		 */
-		if tileSource != nil {
-			imgMap, err := tileSource.Render(xres, yres, minX, maxX, minY, maxY)
-
-			/*
-			 * Draw map tile if it was successfully rendered.
-			 */
-			if err == nil {
-				draw.Draw(target, dim, imgMap, image.ZP, draw.Over)
-			}
-
-		}
-
-	}
-
-	imgData, err := scn.Render(mapping)
-
-	/*
-	 * Draw data if it was successfully retrieved.
-	 */
-	if err == nil {
-		draw.Draw(target, dim, imgData, image.ZP, draw.Over)
-	}
+	target, err := scn.Render(mapping)
 
 	/*
 	 * Check if image could be rendered.
