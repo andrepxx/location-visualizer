@@ -42,10 +42,9 @@ type configStruct struct {
  * The controller for the DSP.
  */
 type controllerStruct struct {
-	colorMapping color.Mapping
-	config       configStruct
-	data         []geo.Location
-	tileSource   tile.Source
+	config     configStruct
+	data       []geo.Location
+	tileSource tile.Source
 }
 
 /*
@@ -189,13 +188,17 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	ypos, _ := strconv.ParseFloat(yposIn, 64)
 	zoomIn := request.Params["zoom"]
 	zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
+	zoomFloat := float64(zoom)
+	zoomExp := -0.2 * zoomFloat
+	zoomFac := math.Pow(2.0, zoomExp)
 	minTimeIn := request.Params["mintime"]
 	minTime, _ := filter.ParseTime(minTimeIn)
 	maxTimeIn := request.Params["maxtime"]
 	maxTime, _ := filter.ParseTime(maxTimeIn)
-	zoomFloat := float64(zoom)
-	zoomExp := -0.2 * zoomFloat
-	zoomFac := math.Pow(2.0, zoomExp)
+	fgColor := request.Params["fgcolor"]
+	spreadIn := request.Params["spread"]
+	spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
+	spread := uint8(spread64)
 	halfWidth := 0.5 * zoomFac
 	xresFloat := float64(xres)
 	yresFloat := float64(yres)
@@ -229,7 +232,33 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	}
 
 	scn.Aggregate(projectedData)
-	mapping := this.colorMapping
+	scn.Spread(spread)
+	mapping := color.DefaultMapping()
+
+	/*
+	 * Check if custom color mapping is required.
+	 */
+	switch fgColor {
+	case "red":
+		mapping = color.SimpleMapping(255, 0, 0)
+	case "green":
+		mapping = color.SimpleMapping(0, 255, 0)
+	case "blue":
+		mapping = color.SimpleMapping(0, 0, 255)
+	case "yellow":
+		mapping = color.SimpleMapping(255, 255, 0)
+	case "cyan":
+		mapping = color.SimpleMapping(0, 255, 255)
+	case "magenta":
+		mapping = color.SimpleMapping(255, 0, 255)
+	case "gray":
+		mapping = color.SimpleMapping(127, 127, 127)
+	case "brightblue":
+		mapping = color.SimpleMapping(127, 127, 255)
+	case "white":
+		mapping = color.SimpleMapping(255, 255, 255)
+	}
+
 	target, err := scn.Render(mapping)
 
 	/*
@@ -393,7 +422,6 @@ func (this *controllerStruct) initialize() error {
 					}
 
 					this.data = data
-					this.colorMapping = color.DefaultMapping()
 					cachePath := config.MapCache
 					uri := config.MapServer
 					useMap := config.UseMap

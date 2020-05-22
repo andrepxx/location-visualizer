@@ -496,6 +496,187 @@ function UI() {
 	};
 
 	/*
+	 * Initializes the (right) side bar of the user interface.
+	 */
+	this.initializeSidebar = function() {
+		const sidebar = document.getElementById('right_sidebar');
+		const opener = document.getElementById('right_sidebar_opener');
+		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const elemFrom = this.createElement('From');
+		const fieldFrom = document.createElement('input');
+		fieldFrom.className = 'textfield';
+		fieldFrom.setAttribute('type', 'text');
+		fieldFrom.setAttribute('placeholder', dateFormat);
+		elemFrom.appendChild(fieldFrom);
+		sidebar.appendChild(elemFrom);
+		const elemTo = this.createElement('To');
+		const fieldTo = document.createElement('input');
+		fieldTo.className = 'textfield';
+		fieldTo.setAttribute('type', 'text');
+		fieldTo.setAttribute('placeholder', dateFormat);
+		elemTo.appendChild(fieldTo);
+		sidebar.appendChild(elemTo);
+		const elemMapIntensity = this.createElement('M. intens.');
+		const fieldMapIntensity = document.createElement('input');
+		fieldMapIntensity.className = 'textfield';
+		fieldMapIntensity.setAttribute('id', 'map_intensity_field');
+		fieldMapIntensity.setAttribute('type', 'text');
+		fieldMapIntensity.value = '5';
+		elemMapIntensity.appendChild(fieldMapIntensity);
+		sidebar.appendChild(elemMapIntensity);
+		const elemSpread = this.createElement('Spread');
+		const fieldSpread = document.createElement('select');
+
+		/*
+		 * Add values of supported spread factors.
+		 */		
+		for (let i = 0; i < 5; i++) {
+			const v = i.toString();
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(v);
+			option.appendChild(optionNode);
+			fieldSpread.appendChild(option);
+		}
+
+		fieldSpread.className = 'textfield';
+		fieldSpread.setAttribute('id', 'spread_field');
+		fieldSpread.setAttribute('type', 'text');
+		fieldSpread.value = '0';
+		elemSpread.appendChild(fieldSpread);
+		sidebar.appendChild(elemSpread);
+		const elemColorMapping = this.createElement('Color map.');
+		const fieldColorMapping = document.createElement('select');
+		fieldColorMapping.className = 'textfield';
+		const colors = ['(default)', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'gray', 'brightblue', 'white'];
+
+		/*
+		 * Iterate over the colors and add them to dropdown.
+		 */
+		for (let i = 0; i < colors.length; i++) {
+			const color = colors[i];
+			const option = document.createElement('option');
+			option.setAttribute('value', color);
+			const optionNode = document.createTextNode(color);
+			option.appendChild(optionNode);
+			fieldColorMapping.appendChild(option);
+		}
+
+		elemColorMapping.appendChild(fieldColorMapping);
+		sidebar.appendChild(elemColorMapping);
+		const elemButtons = this.createElement('');
+		const buttonApply = document.createElement('button');
+		buttonApply.className = 'button';
+		const buttonApplyCaption = document.createTextNode('Apply');
+		buttonApply.appendChild(buttonApplyCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Apply' button.
+		 */
+		buttonApply.onclick = function(e) {
+			const valueFrom = helper.cleanValue(fieldFrom.value);
+			const valueTo = helper.cleanValue(fieldTo.value);
+			const valueMapIntensity = helper.cleanValue(fieldMapIntensity.value);
+			const valueSpread = helper.cleanValue(fieldSpread.value);
+			const valueFgColor = helper.cleanValue(fieldColorMapping.value);
+			const cvs = document.getElementById('map_canvas');
+			storage.put(cvs, 'colorScale', valueMapIntensity);
+			storage.put(cvs, 'spread', valueSpread);
+			storage.put(cvs, 'fgColor', valueFgColor);
+			storage.put(cvs, 'minTime', valueFrom);
+			storage.put(cvs, 'maxTime', valueTo);
+			handler.refresh();
+		};
+
+		elemButtons.appendChild(buttonApply);
+		const buttonHide = document.createElement('button');
+		buttonHide.className = 'button next';
+		const buttonHideCaption = document.createTextNode('Hide');
+		buttonHide.appendChild(buttonHideCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Hide' button.
+		 */
+		buttonHide.onclick = function(e) {
+			sidebar.style.display = 'none';
+			opener.style.display = 'block';
+		};
+
+		elemButtons.appendChild(buttonHide);
+		sidebar.appendChild(elemButtons);
+		const elemSpacerA = document.createElement('div');
+		elemSpacerA.className = 'vspace';
+		sidebar.appendChild(elemSpacerA);
+		const elemSpacerB = document.createElement('div');
+		elemSpacerB.className = 'vspace';
+		sidebar.appendChild(elemSpacerB);
+		const elemNorthing = this.createElement('Northing');
+		const fieldNorthing = document.createElement('input');
+		fieldNorthing.className = 'textfield';
+		fieldNorthing.setAttribute('id', 'northing_field');
+		fieldNorthing.setAttribute('readonly', 'readonly');
+		elemNorthing.appendChild(fieldNorthing);
+		sidebar.appendChild(elemNorthing);
+		const elemEasting = this.createElement('Easting');
+		const fieldEasting = document.createElement('input');
+		fieldEasting.className = 'textfield';
+		fieldEasting.setAttribute('id', 'easting_field');
+		fieldEasting.setAttribute('readonly', 'readonly');
+		elemEasting.appendChild(fieldEasting);
+		sidebar.appendChild(elemEasting);
+		const elemZoom = this.createElement('Zoom');
+		const fieldZoom = document.createElement('input');
+		fieldZoom.className = 'textfield';
+		fieldZoom.setAttribute('id', 'zoom_field');
+		fieldZoom.setAttribute('readonly', 'readonly');
+		elemZoom.appendChild(fieldZoom);
+		sidebar.appendChild(elemZoom);
+		const elemSpacerC = document.createElement('div');
+		elemSpacerC.className = 'vspace';
+		sidebar.appendChild(elemSpacerC);
+		const elemNorthingKM = this.createElement('N [km]');
+		const fieldNorthingKM = document.createElement('input');
+		fieldNorthingKM.className = 'textfield';
+		fieldNorthingKM.setAttribute('id', 'northing_field_km');
+		fieldNorthingKM.setAttribute('readonly', 'readonly');
+		elemNorthingKM.appendChild(fieldNorthingKM);
+		sidebar.appendChild(elemNorthingKM);
+		const elemEastingKM = this.createElement('E [km]');
+		const fieldEastingKM = document.createElement('input');
+		fieldEastingKM.className = 'textfield';
+		fieldEastingKM.setAttribute('id', 'easting_field_km');
+		fieldEastingKM.setAttribute('readonly', 'readonly');
+		elemEastingKM.appendChild(fieldEastingKM);
+		sidebar.appendChild(elemEastingKM);
+		const elemSpacerD = document.createElement('div');
+		elemSpacerD.className = 'vspace';
+		sidebar.appendChild(elemSpacerD);
+		const elemLongitude = this.createElement('Longitude');
+		const fieldLongitude = document.createElement('input');
+		fieldLongitude.className = 'textfield';
+		fieldLongitude.setAttribute('id', 'longitude_field');
+		fieldLongitude.setAttribute('readonly', 'readonly');
+		elemLongitude.appendChild(fieldLongitude);
+		sidebar.appendChild(elemLongitude);
+		const elemLatitude = this.createElement('Latitude');
+		const fieldLatitude = document.createElement('input');
+		fieldLatitude.className = 'textfield';
+		fieldLatitude.setAttribute('id', 'latitude_field');
+		fieldLatitude.setAttribute('readonly', 'readonly');
+		elemLatitude.appendChild(fieldLatitude);
+		sidebar.appendChild(elemLatitude);
+
+		/*
+		 * This is called when the user clicks on the sidebar opener.
+		 */
+		opener.onclick = function(e) {
+			opener.style.display = 'none';
+			sidebar.style.display = 'block';
+		};
+
+	};
+
+	/*
 	 * Calculate the IDs and positions of the tiles required to
 	 * display a certain portion of the map and their positions
 	 * inside the coordinate system.
@@ -782,7 +963,7 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale) {
+	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale, spread, fgColor) {
 		/* Earth circumference at the equator. */
 		const circ = 40074;
 		const rq = new Request();
@@ -831,6 +1012,22 @@ function UI() {
 		if (maxtime !== null) {
 			const maxtimeString = maxtime.toString();
 			rq.append('maxtime', maxtimeString);
+		}
+
+		/*
+		 * Use spread.
+		 */
+		if (spread !== null) {
+			const spreadString = spread.toString();
+			rq.append('spread', spreadString);
+		}
+
+		/*
+		 * Use fgColor.
+		 */
+		if (fgColor !== null) {
+			const fgColorString = fgColor.toString();
+			rq.append('fgcolor', fgColorString);
 		}
 
 		const cgi = globals.cgi;
@@ -916,7 +1113,9 @@ function Handler() {
 		const timeMax = storage.get(cvs, 'maxTime');
 		const useOSMTiles = storage.get(cvs, 'useOSMTiles');
 		const colorScale = storage.get(cvs, 'colorScale');
-		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale);
+		const spread = storage.get(cvs, 'spread');
+		const fgColor = storage.get(cvs, 'fgColor');
+		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale, spread, fgColor);
 	};
 
 	/*
@@ -1327,140 +1526,6 @@ function Handler() {
 	};
 
 	/*
-	 * Initializes the (right) side bar of the user interface.
-	 */
-	this.initializeSidebar = function() {
-		const sidebar = document.getElementById('right_sidebar');
-		const opener = document.getElementById('right_sidebar_opener');
-		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
-		const elemFrom = ui.createElement('From');
-		const fieldFrom = document.createElement('input');
-		fieldFrom.className = 'textfield';
-		fieldFrom.setAttribute('type', 'text');
-		fieldFrom.setAttribute('placeholder', dateFormat);
-		elemFrom.appendChild(fieldFrom);
-		sidebar.appendChild(elemFrom);
-		const elemTo = ui.createElement('To');
-		const fieldTo = document.createElement('input');
-		fieldTo.className = 'textfield';
-		fieldTo.setAttribute('type', 'text');
-		fieldTo.setAttribute('placeholder', dateFormat);
-		elemTo.appendChild(fieldTo);
-		sidebar.appendChild(elemTo);
-		const elemMapIntensity = ui.createElement('M. intens.');
-		const fieldMapIntensity = document.createElement('input');
-		fieldMapIntensity.className = 'textfield';
-		fieldMapIntensity.setAttribute('id', 'map_intensity_field');
-		fieldMapIntensity.setAttribute('type', 'text');
-		fieldMapIntensity.value = '5';
-		elemMapIntensity.appendChild(fieldMapIntensity);
-		sidebar.appendChild(elemMapIntensity);
-		const elemButtons = ui.createElement('');
-		const buttonApply = document.createElement('button');
-		buttonApply.className = 'button';
-		const buttonApplyCaption = document.createTextNode('Apply');
-		buttonApply.appendChild(buttonApplyCaption);
-
-		/*
-		 * This is called when the user clicks on the 'Apply' button.
-		 */
-		buttonApply.onclick = function(e) {
-			const valueFrom = helper.cleanValue(fieldFrom.value);
-			const valueTo = helper.cleanValue(fieldTo.value);
-			const valueMapIntensity = helper.cleanValue(fieldMapIntensity.value);
-			const cvs = document.getElementById('map_canvas');
-			storage.put(cvs, 'colorScale', valueMapIntensity);
-			storage.put(cvs, 'minTime', valueFrom);
-			storage.put(cvs, 'maxTime', valueTo);
-			self.refresh();
-		};
-
-		elemButtons.appendChild(buttonApply);
-		const buttonHide = document.createElement('button');
-		buttonHide.className = 'button next';
-		const buttonHideCaption = document.createTextNode('Hide');
-		buttonHide.appendChild(buttonHideCaption);
-
-		/*
-		 * This is called when the user clicks on the 'Hide' button.
-		 */
-		buttonHide.onclick = function(e) {
-			sidebar.style.display = 'none';
-			opener.style.display = 'block';
-		};
-
-		elemButtons.appendChild(buttonHide);
-		sidebar.appendChild(elemButtons);
-		const elemSpacerA = document.createElement('div');
-		elemSpacerA.className = 'vspace';
-		sidebar.appendChild(elemSpacerA);
-		const elemNorthing = ui.createElement('Northing');
-		const fieldNorthing = document.createElement('input');
-		fieldNorthing.className = 'textfield';
-		fieldNorthing.setAttribute('id', 'northing_field');
-		fieldNorthing.setAttribute('readonly', 'readonly');
-		elemNorthing.appendChild(fieldNorthing);
-		sidebar.appendChild(elemNorthing);
-		const elemEasting = ui.createElement('Easting');
-		const fieldEasting = document.createElement('input');
-		fieldEasting.className = 'textfield';
-		fieldEasting.setAttribute('id', 'easting_field');
-		fieldEasting.setAttribute('readonly', 'readonly');
-		elemEasting.appendChild(fieldEasting);
-		sidebar.appendChild(elemEasting);
-		const elemZoom = ui.createElement('Zoom');
-		const fieldZoom = document.createElement('input');
-		fieldZoom.className = 'textfield';
-		fieldZoom.setAttribute('id', 'zoom_field');
-		fieldZoom.setAttribute('readonly', 'readonly');
-		elemZoom.appendChild(fieldZoom);
-		sidebar.appendChild(elemZoom);
-		const elemSpacerB = document.createElement('div');
-		elemSpacerB.className = 'vspace';
-		sidebar.appendChild(elemSpacerB);
-		const elemNorthingKM = ui.createElement('N [km]');
-		const fieldNorthingKM = document.createElement('input');
-		fieldNorthingKM.className = 'textfield';
-		fieldNorthingKM.setAttribute('id', 'northing_field_km');
-		fieldNorthingKM.setAttribute('readonly', 'readonly');
-		elemNorthingKM.appendChild(fieldNorthingKM);
-		sidebar.appendChild(elemNorthingKM);
-		const elemEastingKM = ui.createElement('E [km]');
-		const fieldEastingKM = document.createElement('input');
-		fieldEastingKM.className = 'textfield';
-		fieldEastingKM.setAttribute('id', 'easting_field_km');
-		fieldEastingKM.setAttribute('readonly', 'readonly');
-		elemEastingKM.appendChild(fieldEastingKM);
-		sidebar.appendChild(elemEastingKM);
-		const elemSpacerC = document.createElement('div');
-		elemSpacerC.className = 'vspace';
-		sidebar.appendChild(elemSpacerC);
-		const elemLongitude = ui.createElement('Longitude');
-		const fieldLongitude = document.createElement('input');
-		fieldLongitude.className = 'textfield';
-		fieldLongitude.setAttribute('id', 'longitude_field');
-		fieldLongitude.setAttribute('readonly', 'readonly');
-		elemLongitude.appendChild(fieldLongitude);
-		sidebar.appendChild(elemLongitude);
-		const elemLatitude = ui.createElement('Latitude');
-		const fieldLatitude = document.createElement('input');
-		fieldLatitude.className = 'textfield';
-		fieldLatitude.setAttribute('id', 'latitude_field');
-		fieldLatitude.setAttribute('readonly', 'readonly');
-		elemLatitude.appendChild(fieldLatitude);
-		sidebar.appendChild(elemLatitude);
-
-		/*
-		 * This is called when the user clicks on the sidebar opener.
-		 */
-		opener.onclick = function(e) {
-			opener.style.display = 'none';
-			sidebar.style.display = 'block';
-		};
-
-	};
-
-	/*
 	 * This is called when the user interface initializes.
 	 */
 	this.initialize = function() {
@@ -1472,7 +1537,9 @@ function Handler() {
 		storage.put(cvs, 'posX', 0.0);
 		storage.put(cvs, 'posY', 0.0);
 		storage.put(cvs, 'zoomLevel', 0);
+		storage.put(cvs, 'spread', '0');
 		storage.put(cvs, 'colorScale', '5');
+		storage.put(cvs, 'fgColor', null);
 		storage.put(cvs, 'minTime', null);
 		storage.put(cvs, 'maxTime', null);
 		storage.put(cvs, 'useOSMTiles', true);
@@ -1499,7 +1566,7 @@ function Handler() {
 		cvs.addEventListener('touchcancel', self.touchCancel);
 		window.addEventListener('resize', self.resize);
 		div.appendChild(cvs);
-		self.initializeSidebar();
+		ui.initializeSidebar();
 		helper.blockSite(false);
 		self.refresh();
 	};
