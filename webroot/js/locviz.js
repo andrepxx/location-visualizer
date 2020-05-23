@@ -517,10 +517,22 @@ function UI() {
 		elemTo.appendChild(fieldTo);
 		sidebar.appendChild(elemTo);
 		const elemMapIntensity = this.createElement('M. intens.');
-		const fieldMapIntensity = document.createElement('input');
+		const fieldMapIntensity = document.createElement('select');
+
+		/*
+		 * Add values of supported spread factors.
+		 */		
+		for (let i = 0; i <= 10; i++) {
+			const v = i.toString();
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(v);
+			option.appendChild(optionNode);
+			fieldMapIntensity.appendChild(option);
+		}
+
 		fieldMapIntensity.className = 'textfield';
 		fieldMapIntensity.setAttribute('id', 'map_intensity_field');
-		fieldMapIntensity.setAttribute('type', 'text');
 		fieldMapIntensity.value = '5';
 		elemMapIntensity.appendChild(fieldMapIntensity);
 		sidebar.appendChild(elemMapIntensity);
@@ -541,7 +553,6 @@ function UI() {
 
 		fieldSpread.className = 'textfield';
 		fieldSpread.setAttribute('id', 'spread_field');
-		fieldSpread.setAttribute('type', 'text');
 		fieldSpread.value = '0';
 		elemSpread.appendChild(fieldSpread);
 		sidebar.appendChild(elemSpread);
