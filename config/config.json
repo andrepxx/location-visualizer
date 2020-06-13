@@ -2,7 +2,9 @@
 	"GeoData": "data/Standortverlauf.json",
 	"MapServer": "",
 	"MapCache": "data/tile/osm-${z}-${x}-${y}.png",
+	"SessionExpiry": "2h",
 	"UseMap": false,
+	"UserDB": "data/userdb.json",
 
 	"WebServer": {
 		"Name": "location-visualizer/1.0.0",

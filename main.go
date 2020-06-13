@@ -23,7 +23,6 @@ func main() {
 
 	/*
 	 * If we shall pre-fetch OSM tiles, do it.
-	 * Otherwise, start our the server.
 	 */
 	if (prefetchZoom >= 0) && (prefetchZoom < 256) {
 
@@ -39,7 +38,8 @@ func main() {
 		zoomLevel := uint8(prefetchZoom)
 		cn.Prefetch(zoomLevel)
 	} else {
-		cn.Operate()
+		args := flag.Args()
+		cn.Operate(args)
 	}
 
 }

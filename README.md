@@ -16,7 +16,18 @@ make
 
 This will create an RSA key pair for the TLS connection between the user-interface and the actual data processing backend (`make keys`) and then build the software for your system (`make`). The resulting executable is called `locviz`.
 
-Put your location data JSON file under `data/Standortverlauf.json` or adjust the path to the data file in `config/config.json`, then run the executable.
+Put your location data JSON file under `data/Standortverlauf.json` or adjust the path to the data file in `config/config.json`.
+
+Next, create a user, set a password and add permissions to fetch tiles and render data overlays.
+
+```
+./locviz create-user root
+./locviz set-password root secret
+./locviz add-permission root get-tile
+./locviz add-permission root render
+```
+
+Finally, run the executable.
 
 ```
 ./locviz
@@ -29,6 +40,20 @@ Web interface ready: https://localhost:8443/
 ```
 
 ... point your web browser to <https://localhost:8443/> to fire up the web interface and interact with the visualization.
+
+Log in with the user name and password defined above, in our example, these were `root` and `secret`, respectively.
+
+Commands:
+
+- `add-permission name permission`: Adds the permission `permission` to the user `name`.
+- `clear-password name`: Set the password of user `name` to an empty string.
+- `create-user name`: Create a new user `name`.
+- `has-permission name permission`: Check if user `name` has permission `permission`.
+- `list-permissions name`: List all permissions of user `name`.
+- `list-users`: List all users.
+- `remove-permission name permission`: Removes the permission `permission` from the user `name`.
+- `remove-user name`: Removes the user `name`.
+- `set-password name password`: Sets the password of user `name` to `password`.
 
 ## Integration with a map service like OpenStreetMaps
 

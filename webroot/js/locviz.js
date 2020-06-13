@@ -521,7 +521,7 @@ function UI() {
 
 		/*
 		 * Add values of supported spread factors.
-		 */		
+		 */
 		for (let i = 0; i <= 10; i++) {
 			const v = i.toString();
 			const option = document.createElement('option');
@@ -541,7 +541,7 @@ function UI() {
 
 		/*
 		 * Add values of supported spread factors.
-		 */		
+		 */
 		for (let i = 0; i < 5; i++) {
 			const v = i.toString();
 			const option = document.createElement('option');
@@ -614,6 +614,19 @@ function UI() {
 		};
 
 		elemButtons.appendChild(buttonHide);
+		const buttonLogout = document.createElement('button');
+		buttonLogout.className = 'button buttonred nextgap';
+		const buttonLogoutCaption = document.createTextNode('Logout');
+		buttonLogout.appendChild(buttonLogoutCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Logout' button.
+		 */
+		buttonLogout.onclick = function(e) {
+			self.logout();
+		};
+
+		elemButtons.appendChild(buttonLogout);
 		sidebar.appendChild(elemButtons);
 		const elemSpacerA = document.createElement('div');
 		elemSpacerA.className = 'vspace';
@@ -686,6 +699,166 @@ function UI() {
 		};
 
 	};
+
+	/*
+	 * This initializes the login dialog.
+	 */
+	this.initializeLogin = function(callback) {
+		const loginContent = document.getElementById('login_content');
+		const elemUser = this.createElement('User');
+		const fieldUser = document.createElement('input');
+		fieldUser.className = 'textfield';
+		fieldUser.setAttribute('type', 'text');
+		elemUser.appendChild(fieldUser);
+		loginContent.appendChild(elemUser);
+		const elemPassword = this.createElement('Password');
+		const fieldPassword = document.createElement('input');
+		fieldPassword.className = 'textfield';
+		fieldPassword.setAttribute('type', 'password');
+		fieldPassword.setAttribute('autocomplete', 'current-password');
+		elemPassword.appendChild(fieldPassword);
+		loginContent.appendChild(elemPassword);
+		const elemButtons = this.createElement('');
+		const buttonLogin = document.createElement('button');
+		buttonLogin.className = 'button';
+		const buttonLoginCaption = document.createTextNode('Login');
+		buttonLogin.appendChild(buttonLoginCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Login' button.
+		 */
+		buttonLogin.onclick = function(e) {
+			const cgi = globals.cgi;
+			const valueUser = helper.cleanValue(fieldUser.value);
+			const valuePassword = fieldPassword.value;
+			const rqChallenge = new Request();
+			rqChallenge.append('cgi', 'auth-request');
+			rqChallenge.append('name', valueUser);
+			const dataChallenge = rqChallenge.getData();
+			const mime = globals.mimeDefault;
+
+			/*
+			 * This is called when the server sends a challenge.
+			 */
+			const callbackChallenge = function(content) {
+				const challenge = JSON.parse(content);
+				const challengeSuccess = challenge.Success;
+
+				/*
+				 * Check if challenge could be obtained.
+				 */
+				if (challengeSuccess === true) {
+					const nonceEncoded = challenge.Nonce;
+					const nonce = atob(nonceEncoded);
+
+					/*
+					 * Function to convert character to integer.
+					 */
+					const charToInt = function(c) {
+						return c.charCodeAt(0);
+					};
+
+					const nonceArray = Uint8Array.from(nonce, charToInt);
+					const saltEncoded = challenge.Salt;
+					const salt = atob(saltEncoded);
+					const saltArray = Uint8Array.from(salt, charToInt);
+					const encoder = new TextEncoder('utf-8');
+					const passwordArray = encoder.encode(valuePassword);
+					const shaA = new jsSHA('SHA-512', 'UINT8ARRAY');
+					shaA.update(passwordArray);
+					const passwordHash = shaA.getHash('UINT8ARRAY');
+					const shaB = new jsSHA('SHA-512', 'UINT8ARRAY');
+					shaB.update(saltArray);
+					shaB.update(passwordHash);
+					const innerHash = shaB.getHash('UINT8ARRAY');
+					const shaC = new jsSHA('SHA-512', 'UINT8ARRAY');
+					shaC.update(nonceArray);
+					shaC.update(innerHash);
+					const outerHash = shaC.getHash('B64');
+					const rqResponse = new Request();
+					rqResponse.append('cgi', 'auth-response');
+					rqResponse.append('name', valueUser);
+					rqResponse.append('hash', outerHash);
+					const dataResponse = rqResponse.getData();
+
+					/*
+					 * This is called when the server sends a session token.
+					 */
+					const callbackToken = function(content) {
+						const token = JSON.parse(content);
+						const tokenSuccess = token.Success;
+
+						/*
+						 * Check if token could be obtained.
+						 */
+						if (tokenSuccess === true) {
+							fieldPassword.value = '';
+							const tokenData = token.Token;
+							callback(tokenData);
+						}
+
+					}
+
+					ajax.request('POST', cgi, dataResponse, mime, callbackToken, false);
+				}
+
+			};
+
+			ajax.request('POST', cgi, dataChallenge, mime, callbackChallenge, false);
+		};
+
+		elemButtons.appendChild(buttonLogin);
+		loginContent.appendChild(elemButtons);
+	};
+
+	/*
+	 * Show the login window.
+	 */
+	this.showLogin = function() {
+		const loginDiv = document.getElementById('login');
+		loginDiv.style.display = 'block';
+	};
+
+	/*
+	 * Hide the login window.
+	 */
+	this.hideLogin = function() {
+		const loginDiv = document.getElementById('login');
+		loginDiv.style.display = 'none';
+	};
+
+	/*
+	 * This is called when the user clicks on the 'Logout' button.
+	 */
+	this.logout = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'auth-logout');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
+
+		/*
+		 * This is called when the server confirms the logout.
+		 */
+		const callback = function(content) {
+			const response = JSON.parse(content);
+			const success = response.Success;
+
+			/*
+			 * Check if logout was successful.
+			 */
+			if (success === true) {
+				storage.put(cvs, 'token', null);
+				self.showLogin();
+			}
+
+		};
+
+		ajax.request('POST', cgi, data, mime, callback, false);
+	}
 
 	/*
 	 * Calculate the IDs and positions of the tiles required to
@@ -780,7 +953,7 @@ function UI() {
 	 * Fetches a of tiles from the server and notifies listener
 	 * about update.
 	 */
-	this.fetchTile = function(tileDescriptor, listener) {
+	this.fetchTile = function(token, tileDescriptor, listener) {
 		const x = tileDescriptor.osmX;
 		const y = tileDescriptor.osmY;
 		const z = tileDescriptor.osmZoom;
@@ -795,6 +968,14 @@ function UI() {
 		rq.append('z', zString);
 		const colorScaleString = colorScale.toString();
 		rq.append('colorscale', colorScaleString);
+
+		/*
+		 * Use session token.
+		 */
+		if (token !== null) {
+			rq.append('token', token);
+		}
+
 		const cgi = globals.cgi;
 		const data = rq.getData();
 
@@ -896,7 +1077,7 @@ function UI() {
 	/*
 	 * Fetch a list of map tiles concurrently and invoke callback on each change.
 	 */
-	this.fetchTiles = function(tileIds, callback) {
+	this.fetchTiles = function(token, tileIds, callback) {
 
 		/*
 		 * Internal callback invoked by fetchTile(...).
@@ -918,7 +1099,7 @@ function UI() {
 			 * Check if we have to fetch this tile.
 			 */
 			if (fetched === false) {
-				self.fetchTile(currentTile, internalCallback);
+				self.fetchTile(token, currentTile, internalCallback);
 			}
 
 		}
@@ -974,7 +1155,7 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale, spread, fgColor) {
+	this.updateMap = function(token, xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale, spread, fgColor) {
 		/* Earth circumference at the equator. */
 		const circ = 40074;
 		const rq = new Request();
@@ -1041,6 +1222,13 @@ function UI() {
 			rq.append('fgcolor', fgColorString);
 		}
 
+		/*
+		 * Use session token.
+		 */
+		if (token !== null) {
+			rq.append('token', token);
+		}
+
 		const cgi = globals.cgi;
 		const data = rq.getData();
 		const cvs = document.getElementById('map_canvas');
@@ -1071,7 +1259,13 @@ function UI() {
 				cvs.height = height;
 				const ctx = cvs.getContext('2d');
 				ctx.clearRect(0, 0, width, height);
-				ctx.drawImage(img, 0, 0);
+
+				/*
+				 * Draw image if it was retrieved.
+				 */
+				if (img !== null) {
+					ctx.drawImage(img, 0, 0);
+				}
 
 				/*
 				 * Check if we should use OSM tiles.
@@ -1088,7 +1282,7 @@ function UI() {
 						self.updateTiles();
 					};
 
-					self.fetchTiles(tileIds, internalCallback);
+					self.fetchTiles(token, tileIds, internalCallback);
 				}
 
 			}
@@ -1115,6 +1309,7 @@ function Handler() {
 	 */
 	this.refresh = function() {
 		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
 		const width = cvs.scrollWidth;
 		const height = cvs.scrollHeight;
 		const posX = storage.get(cvs, 'posX');
@@ -1126,7 +1321,7 @@ function Handler() {
 		const colorScale = storage.get(cvs, 'colorScale');
 		const spread = storage.get(cvs, 'spread');
 		const fgColor = storage.get(cvs, 'fgColor');
-		ui.updateMap(width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale, spread, fgColor);
+		ui.updateMap(token, width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale, spread, fgColor);
 	};
 
 	/*
@@ -1537,6 +1732,17 @@ function Handler() {
 	};
 
 	/*
+	 * This is called after the user authenticated successfully.
+	 */
+	this.loginSuccessful = function(token) {
+		const cvs = document.getElementById('map_canvas');
+		storage.put(cvs, 'token', token);
+		ui.hideLogin();
+		cvs.style.display = 'block';
+		self.refresh();
+	};
+
+	/*
 	 * This is called when the user interface initializes.
 	 */
 	this.initialize = function() {
@@ -1559,6 +1765,7 @@ function Handler() {
 		storage.put(cvs, 'imageZoom', 0);
 		storage.put(cvs, 'mouseStartX', 0);
 		storage.put(cvs, 'mouseStartY', 0);
+		storage.put(cvs, 'token', null);
 		storage.put(cvs, 'touchStartX', 0);
 		storage.put(cvs, 'touchStartY', 0);
 		storage.put(cvs, 'touchStartDistance', 0);
@@ -1578,8 +1785,8 @@ function Handler() {
 		window.addEventListener('resize', self.resize);
 		div.appendChild(cvs);
 		ui.initializeSidebar();
+		ui.initializeLogin(self.loginSuccessful);
 		helper.blockSite(false);
-		self.refresh();
 	};
 
 }
