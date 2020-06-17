@@ -11,6 +11,7 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/user"
 	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
 	"github.com/andrepxx/location-visualizer/webserver"
 	"github.com/andrepxx/sydney/color"
@@ -66,10 +67,21 @@ type webTokenStruct struct {
 }
 
 /*
+ * Limits for concurrent requests.
+ */
+type limitsStruct struct {
+	MaxAxis           uint32
+	MaxPixels         uint64
+	MaxRenderRequests uint32
+	MaxTileRequests   uint32
+}
+
+/*
  * The configuration for the controller.
  */
 type configStruct struct {
 	GeoData       string
+	Limits        limitsStruct
 	MapServer     string
 	MapCache      string
 	SessionExpiry string
@@ -87,6 +99,8 @@ type controllerStruct struct {
 	tileSource     tile.Source
 	userDBPath     string
 	userManager    user.Manager
+	semRender      sync.Semaphore
+	semTile        sync.Semaphore
 	sessionManager session.Manager
 }
 
@@ -99,25 +113,15 @@ type Controller interface {
 }
 
 /*
- * Marshals an object into a JSON representation or an error.
- * Returns the appropriate MIME type and binary representation.
+ * Acquires a semaphore.
  */
-func (this *controllerStruct) createJSON(obj interface{}) (string, []byte) {
-	buffer, err := json.MarshalIndent(obj, "", "\t")
+func (this *controllerStruct) acquire(sem sync.Semaphore) {
 
 	/*
-	 * Check if we got an error during marshalling.
+	 * Check if semaphore exists.
 	 */
-	if err != nil {
-		conf := this.config
-		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
-		errString := err.Error()
-		bufString := bytes.NewBufferString(errString)
-		bufBytes := bufString.Bytes()
-		return contentType, bufBytes
-	} else {
-		return "application/json; charset=utf-8", buffer
+	if sem != nil {
+		sem.Acquire()
 	}
 
 }
@@ -150,6 +154,44 @@ func (this *controllerStruct) checkPermission(encodedToken string, permission st
 			return permitted, err
 		}
 
+	}
+
+}
+
+/*
+ * Marshals an object into a JSON representation or an error.
+ * Returns the appropriate MIME type and binary representation.
+ */
+func (this *controllerStruct) createJSON(obj interface{}) (string, []byte) {
+	buffer, err := json.MarshalIndent(obj, "", "\t")
+
+	/*
+	 * Check if we got an error during marshalling.
+	 */
+	if err != nil {
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+		errString := err.Error()
+		bufString := bytes.NewBufferString(errString)
+		bufBytes := bufString.Bytes()
+		return contentType, bufBytes
+	} else {
+		return "application/json; charset=utf-8", buffer
+	}
+
+}
+
+/*
+ * Releases a semaphore.
+ */
+func (this *controllerStruct) release(sem sync.Semaphore) {
+
+	/*
+	 * Check if semaphore exists.
+	 */
+	if sem != nil {
+		sem.Release()
 	}
 
 }
@@ -560,7 +602,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 	 */
 	if err != nil {
 		msg := err.Error()
-		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
 		customMsgBuf := bytes.NewBufferString(customMsg)
 		customMsgBytes := customMsgBuf.Bytes()
 		conf := this.config
@@ -597,97 +639,39 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 		xresIn := request.Params["xres"]
 		xres64, _ := strconv.ParseUint(xresIn, 10, 16)
 		xres := uint32(xres64)
+		xres64 = uint64(xres)
 		yresIn := request.Params["yres"]
 		yres64, _ := strconv.ParseUint(yresIn, 10, 16)
 		yres := uint32(yres64)
-		xposIn := request.Params["xpos"]
-		xpos, _ := strconv.ParseFloat(xposIn, 64)
-		yposIn := request.Params["ypos"]
-		ypos, _ := strconv.ParseFloat(yposIn, 64)
-		zoomIn := request.Params["zoom"]
-		zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
-		zoomFloat := float64(zoom)
-		zoomExp := -0.2 * zoomFloat
-		zoomFac := math.Pow(2.0, zoomExp)
-		minTimeIn := request.Params["mintime"]
-		minTime, _ := filter.ParseTime(minTimeIn)
-		maxTimeIn := request.Params["maxtime"]
-		maxTime, _ := filter.ParseTime(maxTimeIn)
-		fgColor := request.Params["fgcolor"]
-		spreadIn := request.Params["spread"]
-		spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
-		spread := uint8(spread64)
-		halfWidth := 0.5 * zoomFac
-		xresFloat := float64(xres)
-		yresFloat := float64(yres)
-		aspectRatio := yresFloat / xresFloat
-		halfHeight := aspectRatio * halfWidth
-		minX := xpos - halfWidth
-		maxX := xpos + halfWidth
-		minY := ypos - halfHeight
-		maxY := ypos + halfHeight
-		scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
-		filteredData := this.data
-		minTimeIsZero := minTime.IsZero()
-		maxTimeIsZero := maxTime.IsZero()
+		yres64 = uint64(yres)
+		resolution := xres64 * yres64
+		conf := this.config
+		confLimits := conf.Limits
+		maxAxis := confLimits.MaxAxis
 
 		/*
-		 * Apply filter if at least one of the limits is set.
+		 * Ensure that resolution along X axis does not exceed limits.
 		 */
-		if !minTimeIsZero || !maxTimeIsZero {
-			flt := filter.Time(minTime, maxTime)
-			filteredData = filter.Apply(flt, filteredData)
+		if xres > maxAxis {
+			xres = maxAxis
 		}
 
-		numDataPoints := len(filteredData)
-		projectedData := make([]coordinates.Cartesian, numDataPoints)
-
 		/*
-		 * Obtain projected data points.
+		 * Ensure that resolution along Y axis does not exceed limits.
 		 */
-		for i, elem := range filteredData {
-			projectedData[i] = elem.Projected()
+		if yres > maxAxis {
+			yres = maxAxis
 		}
 
-		scn.Aggregate(projectedData)
-		scn.Spread(spread)
-		mapping := color.DefaultMapping()
+		maxPixels := confLimits.MaxPixels
 
 		/*
-		 * Check if custom color mapping is required.
+		 * Check if overall number of pixels is within limits.
 		 */
-		switch fgColor {
-		case "red":
-			mapping = color.SimpleMapping(255, 0, 0)
-		case "green":
-			mapping = color.SimpleMapping(0, 255, 0)
-		case "blue":
-			mapping = color.SimpleMapping(0, 0, 255)
-		case "yellow":
-			mapping = color.SimpleMapping(255, 255, 0)
-		case "cyan":
-			mapping = color.SimpleMapping(0, 255, 255)
-		case "magenta":
-			mapping = color.SimpleMapping(255, 0, 255)
-		case "gray":
-			mapping = color.SimpleMapping(127, 127, 127)
-		case "brightblue":
-			mapping = color.SimpleMapping(127, 127, 255)
-		case "white":
-			mapping = color.SimpleMapping(255, 255, 255)
-		}
-
-		target, err := scn.Render(mapping)
-
-		/*
-		 * Check if image could be rendered.
-		 */
-		if err != nil {
-			msg := err.Error()
-			customMsg := fmt.Sprintf("Failed to render image: %s", msg)
-			customMsgBuf := bytes.NewBufferString(customMsg)
-			customMsgBytes := customMsgBuf.Bytes()
-			conf := this.config
+		if resolution > maxPixels {
+			msg := fmt.Sprintf("Total number of pixels must not exceed %d.", maxPixels)
+			msgBuf := bytes.NewBufferString(msg)
+			msgBytes := msgBuf.Bytes()
 			confServer := conf.WebServer
 			contentType := confServer.ErrorMime
 
@@ -696,28 +680,96 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			 */
 			response := webserver.HttpResponse{
 				Header: map[string]string{"Content-type": contentType},
-				Body:   customMsgBytes,
+				Body:   msgBytes,
 			}
 
 			return response
 		} else {
+			xposIn := request.Params["xpos"]
+			xpos, _ := strconv.ParseFloat(xposIn, 64)
+			yposIn := request.Params["ypos"]
+			ypos, _ := strconv.ParseFloat(yposIn, 64)
+			zoomIn := request.Params["zoom"]
+			zoom, _ := strconv.ParseUint(zoomIn, 10, 8)
+			zoomFloat := float64(zoom)
+			zoomExp := -0.2 * zoomFloat
+			zoomFac := math.Pow(2.0, zoomExp)
+			minTimeIn := request.Params["mintime"]
+			minTime, _ := filter.ParseTime(minTimeIn)
+			maxTimeIn := request.Params["maxtime"]
+			maxTime, _ := filter.ParseTime(maxTimeIn)
+			fgColor := request.Params["fgcolor"]
+			spreadIn := request.Params["spread"]
+			spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
+			spread := uint8(spread64)
+			halfWidth := 0.5 * zoomFac
+			xresFloat := float64(xres)
+			yresFloat := float64(yres)
+			aspectRatio := yresFloat / xresFloat
+			halfHeight := aspectRatio * halfWidth
+			minX := xpos - halfWidth
+			maxX := xpos + halfWidth
+			minY := ypos - halfHeight
+			maxY := ypos + halfHeight
+			scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
+			filteredData := this.data
+			minTimeIsZero := minTime.IsZero()
+			maxTimeIsZero := maxTime.IsZero()
 
 			/*
-			 * Create a PNG encoder.
+			 * Apply filter if at least one of the limits is set.
 			 */
-			encoder := png.Encoder{
-				CompressionLevel: png.BestCompression,
+			if !minTimeIsZero || !maxTimeIsZero {
+				flt := filter.Time(minTime, maxTime)
+				filteredData = filter.Apply(flt, filteredData)
 			}
 
-			buf := &bytes.Buffer{}
-			err := encoder.Encode(buf, target)
+			numDataPoints := len(filteredData)
+			projectedData := make([]coordinates.Cartesian, numDataPoints)
 
 			/*
-			 * Check if image could be encoded.
+			 * Obtain projected data points.
+			 */
+			for i, elem := range filteredData {
+				projectedData[i] = elem.Projected()
+			}
+
+			scn.Aggregate(projectedData)
+			scn.Spread(spread)
+			mapping := color.DefaultMapping()
+
+			/*
+			 * Check if custom color mapping is required.
+			 */
+			switch fgColor {
+			case "red":
+				mapping = color.SimpleMapping(255, 0, 0)
+			case "green":
+				mapping = color.SimpleMapping(0, 255, 0)
+			case "blue":
+				mapping = color.SimpleMapping(0, 0, 255)
+			case "yellow":
+				mapping = color.SimpleMapping(255, 255, 0)
+			case "cyan":
+				mapping = color.SimpleMapping(0, 255, 255)
+			case "magenta":
+				mapping = color.SimpleMapping(255, 0, 255)
+			case "gray":
+				mapping = color.SimpleMapping(127, 127, 127)
+			case "brightblue":
+				mapping = color.SimpleMapping(127, 127, 255)
+			case "white":
+				mapping = color.SimpleMapping(255, 255, 255)
+			}
+
+			target, err := scn.Render(mapping)
+
+			/*
+			 * Check if image could be rendered.
 			 */
 			if err != nil {
 				msg := err.Error()
-				customMsg := fmt.Sprintf("Failed to encode image: %s\n", msg)
+				customMsg := fmt.Sprintf("Failed to render image: %s", msg)
 				customMsgBuf := bytes.NewBufferString(customMsg)
 				customMsgBytes := customMsgBuf.Bytes()
 				conf := this.config
@@ -734,17 +786,52 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 				return response
 			} else {
-				bufBytes := buf.Bytes()
 
 				/*
-				 * Create HTTP response.
+				 * Create a PNG encoder.
 				 */
-				response := webserver.HttpResponse{
-					Header: map[string]string{"Content-type": "image/png"},
-					Body:   bufBytes,
+				encoder := png.Encoder{
+					CompressionLevel: png.BestCompression,
 				}
 
-				return response
+				buf := &bytes.Buffer{}
+				err := encoder.Encode(buf, target)
+
+				/*
+				 * Check if image could be encoded.
+				 */
+				if err != nil {
+					msg := err.Error()
+					customMsg := fmt.Sprintf("Failed to encode image: %s\n", msg)
+					customMsgBuf := bytes.NewBufferString(customMsg)
+					customMsgBytes := customMsgBuf.Bytes()
+					conf := this.config
+					confServer := conf.WebServer
+					contentType := confServer.ErrorMime
+
+					/*
+					 * Create HTTP response.
+					 */
+					response := webserver.HttpResponse{
+						Header: map[string]string{"Content-type": contentType},
+						Body:   customMsgBytes,
+					}
+
+					return response
+				} else {
+					bufBytes := buf.Bytes()
+
+					/*
+					 * Create HTTP response.
+					 */
+					response := webserver.HttpResponse{
+						Header: map[string]string{"Content-type": "image/png"},
+						Body:   bufBytes,
+					}
+
+					return response
+				}
+
 			}
 
 		}
@@ -792,9 +879,15 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 	case "auth-response":
 		response = this.authResponseHandler(request)
 	case "get-tile":
+		sem := this.semTile
+		this.acquire(sem)
 		response = this.getTileHandler(request)
+		this.release(sem)
 	case "render":
+		sem := this.semRender
+		this.acquire(sem)
 		response = this.renderHandler(request)
+		this.release(sem)
 	default:
 		response = this.errorHandler(request)
 	}
@@ -1367,6 +1460,27 @@ func (this *controllerStruct) initialize() error {
 		if err != nil {
 			return fmt.Errorf("Could not decode config file: '%s'", CONFIG_PATH)
 		} else {
+			limits := config.Limits
+			maxRenderRequests := limits.MaxRenderRequests
+
+			/*
+			 * Create render semaphore if limit is in place.
+			 */
+			if maxRenderRequests > 0 {
+				semRender := sync.CreateSemaphore(maxRenderRequests)
+				this.semRender = semRender
+			}
+
+			maxTileRequests := limits.MaxTileRequests
+
+			/*
+			 * Create tile semaphore if limit is in place.
+			 */
+			if maxTileRequests > 0 {
+				semTile := sync.CreateSemaphore(maxTileRequests)
+				this.semTile = semTile
+			}
+
 			err = this.initializeUserDB()
 
 			/*

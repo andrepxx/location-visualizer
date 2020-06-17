@@ -1,5 +1,13 @@
 {
 	"GeoData": "data/Standortverlauf.json",
+
+	"Limits": {
+		"MaxAxis": 8192,
+		"MaxPixels": 41943040,
+		"MaxRenderRequests": 16,
+		"MaxTileRequests": 128
+	},
+
 	"MapServer": "",
 	"MapCache": "data/tile/osm-${z}-${x}-${y}.png",
 	"SessionExpiry": "2h",
