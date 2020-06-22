@@ -374,9 +374,15 @@ func (this *managerStruct) UserName(token Token) (string, error) {
 		case SESSION_EXPIRE:
 			this.mutex.RUnlock()
 			this.mutex.Lock()
-			// Have to search again, since we re-acquired the lock!
 			sid = this.sessionIdFromToken(t)
-			this.expire(sid)
+
+			/*
+			 * Have to search again, since we re-acquired the lock!
+			 */
+			if sid >= 0 {
+				this.expire(sid)
+			}
+
 			this.mutex.Unlock()
 			return "", fmt.Errorf("%s", "No session with this token found.")
 		default:
