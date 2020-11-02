@@ -140,9 +140,16 @@ func Evaluate(flt Filter, locs []geo.Location) []bool {
 /*
  * Creates a UTC time stamp from RFC3339 string representation.
  */
-func ParseTime(timestamp string) (time.Time, error) {
+func ParseTime(timestamp string, utc bool) (time.Time, error) {
 	t, err := time.ParseInLocation(time.RFC3339, timestamp, time.UTC)
-	t = t.UTC()
+
+	/*
+	 * Convert to UTC if requested.
+	 */
+	if utc {
+		t = t.UTC()
+	}
+
 	return t, err
 }
 

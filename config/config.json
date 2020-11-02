@@ -1,4 +1,5 @@
 {
+	"ActivityDB": "data/activitydb.json",
 	"GeoData": "data/Standortverlauf.json",
 
 	"Limits": {

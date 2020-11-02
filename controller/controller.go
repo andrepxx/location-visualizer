@@ -11,7 +11,8 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/user"
 	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
-	"github.com/andrepxx/location-visualizer/sync"
+	"github.com/andrepxx/location-visualizer/meta"
+	lsync "github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
 	"github.com/andrepxx/location-visualizer/webserver"
 	"github.com/andrepxx/sydney/color"
@@ -23,6 +24,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -30,8 +32,9 @@ import (
  * Constants for the controller.
  */
 const (
-	CONFIG_PATH                    = "config/config.json"
-	PERMISSIONS_USERDB os.FileMode = 0644
+	CONFIG_PATH                        = "config/config.json"
+	PERMISSIONS_ACTIVITYDB os.FileMode = 0644
+	PERMISSIONS_USERDB     os.FileMode = 0644
 )
 
 /*
@@ -67,6 +70,55 @@ type webTokenStruct struct {
 }
 
 /*
+ * Web representation of a running activity.
+ */
+type webRunningActivityStruct struct {
+	Zero       bool
+	Duration   string
+	DistanceKM string
+	StepCount  uint64
+	EnergyKJ   uint64
+}
+
+/*
+ * Web representation of a cycling activity.
+ */
+type webCyclingActivityStruct struct {
+	Zero       bool
+	Duration   string
+	DistanceKM string
+	EnergyKJ   uint64
+}
+
+/*
+ * Web representation of other activities.
+ */
+type webOtherActivityStruct struct {
+	Zero     bool
+	EnergyKJ uint64
+}
+
+/*
+ * Web representation of an activity group.
+ */
+type webActivityGroupStruct struct {
+	Begin    string
+	End      string
+	WeightKG string
+	Running  webRunningActivityStruct
+	Cycling  webCyclingActivityStruct
+	Other    webOtherActivityStruct
+}
+
+/*
+ * Web representation of activity information.
+ */
+type webActivitiesStruct struct {
+	Revision   uint64
+	Activities []webActivityGroupStruct
+}
+
+/*
  * Limits for concurrent requests.
  */
 type limitsStruct struct {
@@ -80,6 +132,7 @@ type limitsStruct struct {
  * The configuration for the controller.
  */
 type configStruct struct {
+	ActivityDB    string
 	GeoData       string
 	Limits        limitsStruct
 	MapServer     string
@@ -91,17 +144,21 @@ type configStruct struct {
 }
 
 /*
- * The controller for the DSP.
+ * The controller for the visualizer.
  */
 type controllerStruct struct {
-	config         configStruct
-	data           []geo.Location
-	tileSource     tile.Source
-	userDBPath     string
-	userManager    user.Manager
-	semRender      sync.Semaphore
-	semTile        sync.Semaphore
-	sessionManager session.Manager
+	activities          meta.Activities
+	activitiesLock      sync.RWMutex
+	activitiesWriteLock sync.Mutex
+	activityDBPath      string
+	config              configStruct
+	data                []geo.Location
+	tileSource          tile.Source
+	userDBPath          string
+	userManager         user.Manager
+	semRender           lsync.Semaphore
+	semTile             lsync.Semaphore
+	sessionManager      session.Manager
 }
 
 /*
@@ -115,7 +172,7 @@ type Controller interface {
 /*
  * Acquires a semaphore.
  */
-func (this *controllerStruct) acquire(sem sync.Semaphore) {
+func (this *controllerStruct) acquire(sem lsync.Semaphore) {
 
 	/*
 	 * Check if semaphore exists.
@@ -185,13 +242,178 @@ func (this *controllerStruct) createJSON(obj interface{}) (string, []byte) {
 /*
  * Releases a semaphore.
  */
-func (this *controllerStruct) release(sem sync.Semaphore) {
+func (this *controllerStruct) release(sem lsync.Semaphore) {
 
 	/*
 	 * Check if semaphore exists.
 	 */
 	if sem != nil {
 		sem.Release()
+	}
+
+}
+
+/*
+ * Add activity information to database.
+ */
+func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "activity-write")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		wr := webResponseStruct{}
+		beginIn := request.Params["begin"]
+		begin, err := filter.ParseTime(beginIn, false)
+
+		/*
+		 * The begin time has to be filled in correctly.
+		 */
+		if err != nil {
+			reason := "Failed to add activity: Could not parse the begin time."
+
+			/*
+			 * Indicate failure.
+			 */
+			wr = webResponseStruct{
+				Success: false,
+				Reason:  reason,
+			}
+
+		} else {
+			weightKG := request.Params["weightkg"]
+			runningDurationIn := request.Params["runningduration"]
+			runningDuration, _ := time.ParseDuration(runningDurationIn)
+			runningDistanceKM := request.Params["runningdistancekm"]
+			runningStepCountIn := request.Params["runningstepcount"]
+			runningStepCount, _ := strconv.ParseUint(runningStepCountIn, 10, 64)
+			runningEnergyKJIn := request.Params["runningenergykj"]
+			runningEnergyKJ, _ := strconv.ParseUint(runningEnergyKJIn, 10, 64)
+			cyclingDurationIn := request.Params["cyclingduration"]
+			cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
+			cyclingDistanceKM := request.Params["cyclingdistancekm"]
+			cycingEnergyKJIn := request.Params["cyclingenergykj"]
+			cyclingEnergyKJ, _ := strconv.ParseUint(cycingEnergyKJIn, 10, 64)
+			otherEnergyKJIn := request.Params["otherenergykj"]
+			otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
+
+			/*
+			 * Create activity info.
+			 */
+			info := meta.ActivityInfo{
+				Begin:             begin,
+				WeightKG:          weightKG,
+				RunningDuration:   runningDuration,
+				RunningDistanceKM: runningDistanceKM,
+				RunningStepCount:  runningStepCount,
+				RunningEnergyKJ:   runningEnergyKJ,
+				CyclingDuration:   cyclingDuration,
+				CyclingDistanceKM: cyclingDistanceKM,
+				CyclingEnergyKJ:   cyclingEnergyKJ,
+				OtherEnergyKJ:     otherEnergyKJ,
+			}
+
+			this.activitiesLock.Lock()
+			activities := this.activities
+			err := activities.Add(&info)
+
+			/*
+			 * Check if activity was added.
+			 */
+			if err != nil {
+				msg := err.Error()
+				reason := fmt.Sprintf("Failed to add activity: %s", msg)
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = webResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else {
+				err = this.syncActivityDB()
+
+				/*
+				 * Check if user database was synchronized.
+				 */
+				if err != nil {
+					msg := err.Error()
+					reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+					/*
+					 * Indicate failure.
+					 */
+					wr = webResponseStruct{
+						Success: false,
+						Reason:  reason,
+					}
+
+				} else {
+
+					/*
+					 * Indicate success.
+					 */
+					wr = webResponseStruct{
+						Success: true,
+						Reason:  "",
+					}
+
+				}
+
+			}
+
+			this.activitiesLock.Unlock()
+		}
+
+		mimeType, buffer := this.createJSON(wr)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
 	}
 
 }
@@ -418,14 +640,14 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 }
 
 /*
- * Renders a map tile.
+ * Retrieve all activity information from database.
  */
-func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webserver.HttpResponse {
+func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
-	perm, err := this.checkPermission(token, "get-tile")
+	perm, err := this.checkPermission(token, "activity-read")
 
 	/*
-	 * Check permissions
+	 * Check permissions.
 	 */
 	if err != nil {
 		msg := err.Error()
@@ -446,8 +668,165 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 		return response
 	} else if !perm {
-		customMsg := fmt.Sprintf("%s", "Forbidden!")
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		this.activitiesLock.RLock()
+		activities := this.activities
+		revision := activities.Revision()
+		numActivities := activities.Length()
+		webActivityGroups := make([]webActivityGroupStruct, 0)
+		timeFormat := time.RFC3339
+
+		/*
+		 * Iterate over all activities.
+		 */
+		for id := uint32(0); id < numActivities; id++ {
+			activityGroup, err := activities.Get(id)
+
+			/*
+			 * Check if activity group was found.
+			 */
+			if err == nil {
+				runningActivity := activityGroup.Running()
+				runningZero := runningActivity.Zero()
+				runningDuration := runningActivity.Duration()
+				runningDurationString := runningDuration.String()
+				runningDistanceKMString := runningActivity.DistanceKM()
+				runningStepCount := runningActivity.StepCount()
+				runningEnergyKJ := runningActivity.EnergyKJ()
+
+				/*
+				 * Create data structure representing running activity.
+				 */
+				webRunningActivity := webRunningActivityStruct{
+					Zero:       runningZero,
+					Duration:   runningDurationString,
+					DistanceKM: runningDistanceKMString,
+					StepCount:  runningStepCount,
+					EnergyKJ:   runningEnergyKJ,
+				}
+
+				cyclingActivity := activityGroup.Cycling()
+				cyclingZero := cyclingActivity.Zero()
+				cyclingDuration := cyclingActivity.Duration()
+				cyclingDurationString := cyclingDuration.String()
+				cyclingDistanceKMString := cyclingActivity.DistanceKM()
+				cyclingEnergyKJ := cyclingActivity.EnergyKJ()
+
+				/*
+				 * Create data structure representing cycling activity.
+				 */
+				webCyclingActivity := webCyclingActivityStruct{
+					Zero:       cyclingZero,
+					Duration:   cyclingDurationString,
+					DistanceKM: cyclingDistanceKMString,
+					EnergyKJ:   cyclingEnergyKJ,
+				}
+
+				otherActivity := activityGroup.Other()
+				otherZero := otherActivity.Zero()
+				otherEnergyKJ := otherActivity.EnergyKJ()
+
+				/*
+				 * Create data structure representing other activities.
+				 */
+				webOtherActivity := webOtherActivityStruct{
+					Zero:     otherZero,
+					EnergyKJ: otherEnergyKJ,
+				}
+
+				begin := activityGroup.Begin()
+				beginString := begin.Format(timeFormat)
+				end, _ := activities.End(id)
+				endString := end.Format(timeFormat)
+				weightKGString := activityGroup.WeightKG()
+
+				/*
+				 * Create data structure representing activity group.
+				 */
+				webActivityGroup := webActivityGroupStruct{
+					Begin:    beginString,
+					End:      endString,
+					WeightKG: weightKGString,
+					Running:  webRunningActivity,
+					Cycling:  webCyclingActivity,
+					Other:    webOtherActivity,
+				}
+
+				webActivityGroups = append(webActivityGroups, webActivityGroup)
+			}
+
+		}
+
+		this.activitiesLock.RUnlock()
+
+		/*
+		 * Create data structure representing all activity information.
+		 */
+		webActivities := webActivitiesStruct{
+			Revision:   revision,
+			Activities: webActivityGroups,
+		}
+
+		mimeType, buffer := this.createJSON(webActivities)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Render a map tile.
+ */
+func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "get-tile")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
 		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
 		conf := this.config
 		confServer := conf.WebServer
@@ -591,14 +970,14 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 }
 
 /*
- * Renders location data into an image.
+ * Import activity data from CSV and add it to the database.
  */
-func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webserver.HttpResponse {
+func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
-	perm, err := this.checkPermission(token, "render")
+	perm, err := this.checkPermission(token, "activity-write")
 
 	/*
-	 * Check permissions
+	 * Check permissions.
 	 */
 	if err != nil {
 		msg := err.Error()
@@ -619,8 +998,513 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 		return response
 	} else if !perm {
-		customMsg := fmt.Sprintf("%s", "Forbidden!")
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		wr := webResponseStruct{}
+		data := request.Params["data"]
+		this.activitiesLock.Lock()
+		activities := this.activities
+		err = activities.ImportCSV(data)
+
+		/*
+		 * Check if activity data was imported.
+		 */
+		if err != nil {
+			msg := err.Error()
+			reason := fmt.Sprintf("Failed to import activity data: %s", msg)
+
+			/*
+			 * Indicate failure.
+			 */
+			wr = webResponseStruct{
+				Success: false,
+				Reason:  reason,
+			}
+
+		} else {
+			err = this.syncActivityDB()
+
+			/*
+			 * Check if user database was synchronized.
+			 */
+			if err != nil {
+				msg := err.Error()
+				reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = webResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else {
+
+				/*
+				 * Indicate success.
+				 */
+				wr = webResponseStruct{
+					Success: true,
+					Reason:  "",
+				}
+
+			}
+
+		}
+
+		this.activitiesLock.Unlock()
+		mimeType, buffer := this.createJSON(wr)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Remove activity information from database.
+ */
+func (this *controllerStruct) removeActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "activity-write")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
 		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		wr := webResponseStruct{}
+		revisionIn := request.Params["revision"]
+		revision, err := strconv.ParseUint(revisionIn, 10, 64)
+
+		/*
+		 * Check if revision could be parsed.
+		 */
+		if err != nil {
+
+			/*
+			 * Indicate failure.
+			 */
+			wr = webResponseStruct{
+				Success: false,
+				Reason:  "Failed to remove activity: Invalid revision number.",
+			}
+
+		} else {
+			idIn := request.Params["id"]
+			id64, err := strconv.ParseUint(idIn, 10, 32)
+
+			/*
+			 * Check if ID could be parsed.
+			 */
+			if err != nil {
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = webResponseStruct{
+					Success: false,
+					Reason:  "Failed to remove activity: Invalid id.",
+				}
+
+			} else {
+				id := uint32(id64)
+				this.activitiesLock.Lock()
+				activities := this.activities
+				currentRevision := activities.Revision()
+
+				/*
+				 * Make sure that revision information matches.
+				 */
+				if revision != currentRevision {
+
+					/*
+					 * Indicate failure.
+					 */
+					wr = webResponseStruct{
+						Success: false,
+						Reason:  "Failed to remove activity: Activity data was changed in the meantime.",
+					}
+
+				} else {
+					err := activities.Remove(id)
+
+					/*
+					 * Check if activity was removed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						reason := fmt.Sprintf("Failed to remove activity: %s", msg)
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = webResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else {
+						err = this.syncActivityDB()
+
+						/*
+						 * Check if user database was synchronized.
+						 */
+						if err != nil {
+							msg := err.Error()
+							reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+							/*
+							 * Indicate failure.
+							 */
+							wr = webResponseStruct{
+								Success: false,
+								Reason:  reason,
+							}
+
+						} else {
+
+							/*
+							 * Indicate success.
+							 */
+							wr = webResponseStruct{
+								Success: true,
+								Reason:  "",
+							}
+
+						}
+
+					}
+
+				}
+
+				this.activitiesLock.Unlock()
+			}
+
+		}
+
+		mimeType, buffer := this.createJSON(wr)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Replace activity information inside the database.
+ */
+func (this *controllerStruct) replaceActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "activity-write")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		wr := webResponseStruct{}
+		revisionIn := request.Params["revision"]
+		revision, err := strconv.ParseUint(revisionIn, 10, 64)
+
+		/*
+		 * Check if revision could be parsed.
+		 */
+		if err != nil {
+
+			/*
+			 * Indicate failure.
+			 */
+			wr = webResponseStruct{
+				Success: false,
+				Reason:  "Failed to remove activity: Invalid revision number.",
+			}
+
+		} else {
+			idIn := request.Params["id"]
+			id64, err := strconv.ParseUint(idIn, 10, 32)
+
+			/*
+			 * Check if ID could be parsed.
+			 */
+			if err != nil {
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = webResponseStruct{
+					Success: false,
+					Reason:  "Failed to replace activity: Invalid id.",
+				}
+
+			} else {
+				id := uint32(id64)
+				beginIn := request.Params["begin"]
+				begin, err := filter.ParseTime(beginIn, false)
+
+				/*
+				 * The begin time has to be filled in correctly.
+				 */
+				if err != nil {
+					reason := "Failed to add activity: Could not parse the begin time."
+
+					/*
+					 * Indicate failure.
+					 */
+					wr = webResponseStruct{
+						Success: false,
+						Reason:  reason,
+					}
+
+				} else {
+					weightKG := request.Params["weightkg"]
+					runningDurationIn := request.Params["runningduration"]
+					runningDuration, _ := time.ParseDuration(runningDurationIn)
+					runningDistanceKM := request.Params["runningdistancekm"]
+					runningStepCountIn := request.Params["runningstepcount"]
+					runningStepCount, _ := strconv.ParseUint(runningStepCountIn, 10, 64)
+					runningEnergyKJIn := request.Params["runningenergykj"]
+					runningEnergyKJ, _ := strconv.ParseUint(runningEnergyKJIn, 10, 64)
+					cyclingDurationIn := request.Params["cyclingduration"]
+					cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
+					cyclingDistanceKM := request.Params["cyclingdistancekm"]
+					cycingEnergyKJIn := request.Params["cyclingenergykj"]
+					cyclingEnergyKJ, _ := strconv.ParseUint(cycingEnergyKJIn, 10, 64)
+					otherEnergyKJIn := request.Params["otherenergykj"]
+					otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
+
+					/*
+					 * Create activity info.
+					 */
+					info := meta.ActivityInfo{
+						Begin:             begin,
+						WeightKG:          weightKG,
+						RunningDuration:   runningDuration,
+						RunningDistanceKM: runningDistanceKM,
+						RunningStepCount:  runningStepCount,
+						RunningEnergyKJ:   runningEnergyKJ,
+						CyclingDuration:   cyclingDuration,
+						CyclingDistanceKM: cyclingDistanceKM,
+						CyclingEnergyKJ:   cyclingEnergyKJ,
+						OtherEnergyKJ:     otherEnergyKJ,
+					}
+
+					this.activitiesLock.Lock()
+					activities := this.activities
+					currentRevision := activities.Revision()
+
+					/*
+					 * Make sure that revision information matches.
+					 */
+					if revision != currentRevision {
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = webResponseStruct{
+							Success: false,
+							Reason:  "Failed to replace activity: Activity data was changed in the meantime.",
+						}
+
+					} else {
+						err := activities.Replace(id, &info)
+
+						/*
+						 * Check if activity was replaced.
+						 */
+						if err != nil {
+							msg := err.Error()
+							reason := fmt.Sprintf("Failed to replace activity: %s", msg)
+
+							/*
+							 * Indicate failure.
+							 */
+							wr = webResponseStruct{
+								Success: false,
+								Reason:  reason,
+							}
+
+						} else {
+							err = this.syncActivityDB()
+
+							/*
+							 * Check if user database was synchronized.
+							 */
+							if err != nil {
+								msg := err.Error()
+								reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+								/*
+								 * Indicate failure.
+								 */
+								wr = webResponseStruct{
+									Success: false,
+									Reason:  reason,
+								}
+
+							} else {
+
+								/*
+								 * Indicate success.
+								 */
+								wr = webResponseStruct{
+									Success: true,
+									Reason:  "",
+								}
+
+							}
+
+						}
+
+					}
+
+					this.activitiesLock.Unlock()
+				}
+
+			}
+
+		}
+
+		mimeType, buffer := this.createJSON(wr)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Render location data into an image.
+ */
+func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "render")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
 		conf := this.config
 		confServer := conf.WebServer
@@ -695,9 +1579,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			zoomExp := -0.2 * zoomFloat
 			zoomFac := math.Pow(2.0, zoomExp)
 			minTimeIn := request.Params["mintime"]
-			minTime, _ := filter.ParseTime(minTimeIn)
+			minTime, _ := filter.ParseTime(minTimeIn, true)
 			maxTimeIn := request.Params["maxtime"]
-			maxTime, _ := filter.ParseTime(maxTimeIn)
+			maxTime, _ := filter.ParseTime(maxTimeIn, true)
 			fgColor := request.Params["fgcolor"]
 			spreadIn := request.Params["spread"]
 			spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
@@ -872,17 +1756,27 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 	 * Find the right CGI to handle the request.
 	 */
 	switch cgi {
+	case "add-activity":
+		response = this.addActivityHandler(request)
 	case "auth-logout":
 		response = this.authLogoutHandler(request)
 	case "auth-request":
 		response = this.authRequestHandler(request)
 	case "auth-response":
 		response = this.authResponseHandler(request)
+	case "get-activities":
+		response = this.getActivitiesHandler(request)
 	case "get-tile":
 		sem := this.semTile
 		this.acquire(sem)
 		response = this.getTileHandler(request)
 		this.release(sem)
+	case "import-activity-csv":
+		response = this.importActivityCsvHandler(request)
+	case "remove-activity":
+		response = this.removeActivityHandler(request)
+	case "replace-activity":
+		response = this.replaceActivityHandler(request)
 	case "render":
 		sem := this.semRender
 		this.acquire(sem)
@@ -893,6 +1787,40 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 	}
 
 	return response
+}
+
+/*
+ * Synchronize activity database to disk.
+ */
+func (this *controllerStruct) syncActivityDB() error {
+	act := this.activities
+	buf, err := act.Export()
+
+	/*
+	 * Check if export failed.
+	 */
+	if err != nil {
+		msg := err.Error()
+		return fmt.Errorf("Error serializing activity database: %s", msg)
+	} else {
+		path := this.activityDBPath
+		this.activitiesWriteLock.Lock()
+		mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_ACTIVITYDB)
+		err := ioutil.WriteFile(path, buf, mode)
+		this.activitiesWriteLock.Unlock()
+
+		/*
+		 * Check if something went wrong.
+		 */
+		if err != nil {
+			msg := err.Error()
+			return fmt.Errorf("Error synchronizing activity database: %s", msg)
+		} else {
+			return nil
+		}
+
+	}
+
 }
 
 /*
@@ -1280,6 +2208,38 @@ func (this *controllerStruct) runServer() {
 }
 
 /*
+ * Initialize activity data.
+ */
+func (this *controllerStruct) initializeActivities() error {
+	config := this.config
+	activityDBPath := config.ActivityDB
+	contentActivityDB, err := ioutil.ReadFile(activityDBPath)
+
+	/*
+	 * Check if file could be read.
+	 */
+	if err != nil {
+		return fmt.Errorf("Failed to open activity database '%s'.", activityDBPath)
+	} else {
+		act := meta.CreateActivities()
+		err = act.Import(contentActivityDB)
+		this.activities = act
+		this.activityDBPath = activityDBPath
+
+		/*
+		 * Check if activity data could be decoded.
+		 */
+		if err != nil {
+			msg := err.Error()
+			return fmt.Errorf("Failed to import activity data: %s", msg)
+		}
+
+	}
+
+	return nil
+}
+
+/*
  * Initialize user database.
  */
 func (this *controllerStruct) initializeUserDB() error {
@@ -1291,7 +2251,7 @@ func (this *controllerStruct) initializeUserDB() error {
 	 * Check if file could be read.
 	 */
 	if err != nil {
-		return fmt.Errorf("Failed to open user database: '%s'", userDBPath)
+		return fmt.Errorf("Failed to open user database '%s'.", userDBPath)
 	} else {
 		r := rand.SystemPRNG()
 		seed := make([]byte, rand.SEED_SIZE)
@@ -1319,7 +2279,7 @@ func (this *controllerStruct) initializeUserDB() error {
 				 */
 				if err != nil {
 					msg := err.Error()
-					return fmt.Errorf("Failed to create user manager: ", msg)
+					return fmt.Errorf("Failed to create user manager: %s", msg)
 				} else {
 					this.userManager = userManager
 					this.userDBPath = userDBPath
@@ -1330,7 +2290,7 @@ func (this *controllerStruct) initializeUserDB() error {
 					 */
 					if err != nil {
 						msg := err.Error()
-						return fmt.Errorf("Failed to import user database: ", msg)
+						return fmt.Errorf("Failed to import user database: %s", msg)
 					} else {
 						expiryString := config.SessionExpiry
 						expiry, _ := time.ParseDuration(expiryString)
@@ -1349,7 +2309,7 @@ func (this *controllerStruct) initializeUserDB() error {
 						 */
 						if err != nil {
 							msg := err.Error()
-							return fmt.Errorf("Failed to create session manager: ", msg)
+							return fmt.Errorf("Failed to create session manager: %s", msg)
 						} else {
 							this.sessionManager = sessionManager
 							return nil
@@ -1379,7 +2339,7 @@ func (this *controllerStruct) initializeGeoData() error {
 	 * Check if file could be read.
 	 */
 	if err != nil {
-		return fmt.Errorf("Could not read geo data file '%s'.", geoDataPath)
+		return fmt.Errorf("Failed to read geo data file '%s'.", geoDataPath)
 	} else {
 		dataSet, err := geo.FromBytes(contentGeo)
 
@@ -1388,7 +2348,7 @@ func (this *controllerStruct) initializeGeoData() error {
 		 */
 		if err != nil {
 			msg := err.Error()
-			return fmt.Errorf("Could not decode geo data file '%s': %s", geoDataPath, msg)
+			return fmt.Errorf("Failed to decode geo data file '%s': %s", geoDataPath, msg)
 		} else {
 			numLocs := dataSet.LocationCount()
 			data := make([]geo.Location, numLocs)
@@ -1448,7 +2408,7 @@ func (this *controllerStruct) initialize() error {
 	 * Check if file could be read.
 	 */
 	if err != nil {
-		return fmt.Errorf("Could not open config file: '%s'", CONFIG_PATH)
+		return fmt.Errorf("Failed to open config file: '%s'", CONFIG_PATH)
 	} else {
 		config := configStruct{}
 		err = json.Unmarshal(content, &config)
@@ -1458,7 +2418,7 @@ func (this *controllerStruct) initialize() error {
 		 * Check if file failed to unmarshal.
 		 */
 		if err != nil {
-			return fmt.Errorf("Could not decode config file: '%s'", CONFIG_PATH)
+			return fmt.Errorf("Failed to decode config file: '%s'", CONFIG_PATH)
 		} else {
 			limits := config.Limits
 			maxRenderRequests := limits.MaxRenderRequests
@@ -1467,7 +2427,7 @@ func (this *controllerStruct) initialize() error {
 			 * Create render semaphore if limit is in place.
 			 */
 			if maxRenderRequests > 0 {
-				semRender := sync.CreateSemaphore(maxRenderRequests)
+				semRender := lsync.CreateSemaphore(maxRenderRequests)
 				this.semRender = semRender
 			}
 
@@ -1477,7 +2437,7 @@ func (this *controllerStruct) initialize() error {
 			 * Create tile semaphore if limit is in place.
 			 */
 			if maxTileRequests > 0 {
-				semTile := sync.CreateSemaphore(maxTileRequests)
+				semTile := lsync.CreateSemaphore(maxTileRequests)
 				this.semTile = semTile
 			}
 
@@ -1509,8 +2469,7 @@ func (this *controllerStruct) Operate(args []string) {
 	 */
 	if err != nil {
 		msg := err.Error()
-		msgNew := "Initialization failed: " + msg
-		fmt.Printf("%s\n", msgNew)
+		fmt.Printf("Initialization failed: %s\n", msg)
 	} else {
 		numArgs := len(args)
 
@@ -1518,8 +2477,27 @@ func (this *controllerStruct) Operate(args []string) {
 		 * If no arguments are passed, run the server, otherwise interpret them.
 		 */
 		if numArgs == 0 {
-			this.initializeGeoData()
+			err = this.initializeGeoData()
+
+			/*
+			 * Check if geo data could be loaded.
+			 */
+			if err != nil {
+				msg := err.Error()
+				fmt.Printf("Error loading geo data: %s\n", msg)
+			}
+
 			this.initializeTileSource()
+			err = this.initializeActivities()
+
+			/*
+			 * Check if activity data could be loaded.
+			 */
+			if err != nil {
+				msg := err.Error()
+				fmt.Printf("Error loading activity data: %s\n", msg)
+			}
+
 			this.runServer()
 		} else {
 			this.interpret(args)
@@ -1540,8 +2518,7 @@ func (this *controllerStruct) Prefetch(zoomLevel uint8) {
 	 */
 	if err != nil {
 		msg := err.Error()
-		msgNew := "Initialization failed: " + msg
-		fmt.Printf("%s\n", msgNew)
+		fmt.Printf("Initialization failed: %s\n", msg)
 	} else {
 		tileSource := this.tileSource
 		tileSource.Prefetch(zoomLevel)

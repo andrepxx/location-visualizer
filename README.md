@@ -2,6 +2,8 @@
 
 This software visualizes your location history, which you can obtain from Google Takeout, and displays it as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
+It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc. The longer-term goal of this project is to enable users to perform fitness and location tracking, together with the related data analysis, on their own infrastructure.
+
 ## Building the software
 
 To download and build the software from source for your system, run the following commands in a shell (assuming that `~/go` is your `$GOPATH`).
@@ -25,6 +27,8 @@ Next, create a user, set a password and add permissions to fetch tiles and rende
 ./locviz set-password root secret
 ./locviz add-permission root get-tile
 ./locviz add-permission root render
+./locviz add-permission root activity-read
+./locviz add-permission root activity-write
 ```
 
 Finally, run the executable.

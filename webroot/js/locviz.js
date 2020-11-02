@@ -484,9 +484,17 @@ function UI() {
 	/*
 	 * Creates a generic UI element container with a label.
 	 */
-	this.createElement = function(labelCaption) {
+	this.createElement = function(labelCaption, labelWidth) {
 		const labelDiv = document.createElement('div');
 		labelDiv.className = 'label';
+
+		/*
+		 * Check if width is specified.
+		 */
+		if (labelWidth !== null) {
+			labelDiv.style.width = labelWidth;
+		}
+
 		const labelNode = document.createTextNode(labelCaption);
 		labelDiv.appendChild(labelNode)
 		const uiElement = document.createElement('div');
@@ -496,27 +504,885 @@ function UI() {
 	};
 
 	/*
+	 * Insert an activity header into the body of a table.
+	 */
+	this.insertActivityHeader = function(body) {
+		const headRowA = document.createElement('tr');
+		const headElemEmptyA = document.createElement('td');
+		headElemEmptyA.className = 'activitiestablecell tablehead';
+		const headElemEmptyAColSpan = document.createAttribute('colspan');
+		headElemEmptyAColSpan.value = '2';
+		headElemEmptyA.setAttributeNode(headElemEmptyAColSpan);
+		headRowA.appendChild(headElemEmptyA);
+		const headElemRunning = document.createElement('td');
+		headElemRunning.className = 'activitiestablecell tablehead';
+		const headElemRunningColSpan = document.createAttribute('colspan');
+		headElemRunningColSpan.value = '4';
+		headElemRunning.setAttributeNode(headElemRunningColSpan);
+		const labelRunning = document.createTextNode('RUNNING');
+		headElemRunning.appendChild(labelRunning);
+		headRowA.appendChild(headElemRunning);
+		const headElemCycling = document.createElement('td');
+		headElemCycling.className = 'activitiestablecell tablehead';
+		const headElemCyclingColSpan = document.createAttribute('colspan');
+		headElemCyclingColSpan.value = '3';
+		headElemCycling.setAttributeNode(headElemCyclingColSpan);
+		const labelCycling = document.createTextNode('CYCLING');
+		headElemCycling.appendChild(labelCycling);
+		headRowA.appendChild(headElemCycling);
+		const headElemOther = document.createElement('td');
+		headElemOther.className = 'activitiestablecell tablehead';
+		const labelOther = document.createTextNode('OTHER');
+		headElemOther.appendChild(labelOther);
+		headRowA.appendChild(headElemOther);
+		body.appendChild(headRowA);
+		const headElemEmptyB = document.createElement('td');
+		headElemEmptyB.className = 'activitiestablecell tablehead';
+		const headElemEmptyBColSpan = document.createAttribute('colspan');
+		headElemEmptyBColSpan.value = '2';
+		headElemEmptyB.setAttributeNode(headElemEmptyBColSpan);
+		headRowA.appendChild(headElemEmptyB);
+		body.appendChild(headRowA);
+		const headRowB = document.createElement('tr');
+		const headElemBegin = document.createElement('td');
+		headElemBegin.className = 'activitiestablecell tablehead';
+		headElemBegin.style.minWidth = '210px';
+		const labelBegin = document.createTextNode('Begin');
+		headElemBegin.appendChild(labelBegin);
+		headRowB.appendChild(headElemBegin);
+		const headElemWeightKG = document.createElement('td');
+		headElemWeightKG.className = 'activitiestablecell tablehead';
+		const labelWeightKG = document.createTextNode('Weight [kg]');
+		headElemWeightKG.appendChild(labelWeightKG);
+		headRowB.appendChild(headElemWeightKG);
+		const headElemRunningDuration = document.createElement('td');
+		headElemRunningDuration.className = 'activitiestablecell tablehead';
+		headElemRunningDuration.style.minWidth = '80px';
+		const labelRunningDuration = document.createTextNode('Duration');
+		headElemRunningDuration.appendChild(labelRunningDuration);
+		headRowB.appendChild(headElemRunningDuration);
+		const headElemRunningDistanceKM = document.createElement('td');
+		headElemRunningDistanceKM.className = 'activitiestablecell tablehead';
+		const labelRunningDistanceKM = document.createTextNode('Distance [km]');
+		headElemRunningDistanceKM.appendChild(labelRunningDistanceKM);
+		headRowB.appendChild(headElemRunningDistanceKM);
+		const headElemRunningStepCount = document.createElement('td');
+		headElemRunningStepCount.className = 'activitiestablecell tablehead';
+		const labelRunningStepCount = document.createTextNode('Step count');
+		headElemRunningStepCount.appendChild(labelRunningStepCount);
+		headRowB.appendChild(headElemRunningStepCount);
+		const headElemRunningEnergyKJ = document.createElement('td');
+		headElemRunningEnergyKJ.className = 'activitiestablecell tablehead';
+		const labelRunningEnergyKJ = document.createTextNode('Energy [kJ]');
+		headElemRunningEnergyKJ.appendChild(labelRunningEnergyKJ);
+		headRowB.appendChild(headElemRunningEnergyKJ);
+		const headElemCyclingDuration = document.createElement('td');
+		headElemCyclingDuration.className = 'activitiestablecell tablehead';
+		headElemCyclingDuration.style.minWidth = '80px';
+		const labelCyclingDuration = document.createTextNode('Duration');
+		headElemCyclingDuration.appendChild(labelCyclingDuration);
+		headRowB.appendChild(headElemCyclingDuration);
+		const headElemCyclingDistanceKM = document.createElement('td');
+		headElemCyclingDistanceKM.className = 'activitiestablecell tablehead';
+		const labelCyclingDistanceKM = document.createTextNode('Distance [km]');
+		headElemCyclingDistanceKM.appendChild(labelCyclingDistanceKM);
+		headRowB.appendChild(headElemCyclingDistanceKM);
+		const headElemCyclingEnergyKJ = document.createElement('td');
+		headElemCyclingEnergyKJ.className = 'activitiestablecell tablehead';
+		const labelCyclingEnergyKJ = document.createTextNode('Energy [kJ]');
+		headElemCyclingEnergyKJ.appendChild(labelCyclingEnergyKJ);
+		headRowB.appendChild(headElemCyclingEnergyKJ);
+		const headElemOtherEnergyKJ = document.createElement('td');
+		headElemOtherEnergyKJ.className = 'activitiestablecell tablehead';
+		const labelOtherEnergyKJ = document.createTextNode('Energy [kJ]');
+		headElemOtherEnergyKJ.appendChild(labelOtherEnergyKJ);
+		headRowB.appendChild(headElemOtherEnergyKJ);
+		const headElemEdit = document.createElement('td');
+		headElemEdit.className = 'activitiestablecell tablehead';
+		const labelEdit = document.createTextNode('Edit');
+		headElemEdit.appendChild(labelEdit);
+		headRowB.appendChild(headElemEdit);
+		const headElemRemove = document.createElement('td');
+		headElemRemove.className = 'activitiestablecell tablehead';
+		headElemRemove.style.minWidth = '140px';
+		const labelRemove = document.createTextNode('Remove');
+		headElemRemove.appendChild(labelRemove);
+		headRowB.appendChild(headElemRemove);
+		body.appendChild(headRowB);
+	};
+
+	/*
+	 * Function to parse activities and display them as a table
+	 * inside a div element.
+	 */
+	this.displayActivities = function(div, response) {
+		helper.clearElement(div);
+		const table = document.createElement('table');
+		table.className = 'activitiestable';
+		const body = document.createElement('tbody');
+		const activities = response.Activities;
+		const numActivities = activities.length;
+		var allRemoveLinks = [];
+		var allYesNoLinks = [];
+		var currentYearAndMonth = '';
+
+		/*
+		 * Iterate over all activities.
+		 */
+		for (let i = 0; i < numActivities; i++) {
+			const activity = activities[i];
+			const row = document.createElement('tr');
+			row.className = 'activitiestablerow';
+			const begin = activity.Begin;
+			const beginLength = begin.length;
+
+			/*
+			 * Check if beginning time stamp contains at least year and month.
+			 */
+			if (beginLength >= 7) {
+				const yearAndMonth = begin.substring(0, 7);
+
+				/*
+				 * If year and month changed, insert another header.
+				 */
+				if (yearAndMonth != currentYearAndMonth) {
+					this.insertActivityHeader(body);
+					currentYearAndMonth = yearAndMonth;
+				}
+
+			}
+
+			const beginElem = document.createElement('td');
+			beginElem.className = 'activitiestablecell';
+			const beginDiv = document.createElement('div');
+			beginDiv.className = 'link';
+			beginDiv.style.display = 'inline-block';
+			const beginNode = document.createTextNode(begin);
+			beginDiv.appendChild(beginNode);
+
+			/*
+			 * This is called when the user clicks on the begin time.
+			 */
+			beginDiv.onclick = function(e) {
+				const cvs = document.getElementById('map_canvas');
+				const valueFrom = activity.Begin;
+				const valueTo = activity.End;
+				const fieldFrom = document.getElementById('right_sidebar_field_from');
+				fieldFrom.value = valueFrom;
+				const fieldTo = document.getElementById('right_sidebar_field_to');
+				fieldTo.value = valueTo;
+				storage.put(cvs, 'minTime', valueFrom);
+				storage.put(cvs, 'maxTime', valueTo);
+				handler.refresh();
+			};
+
+			beginElem.appendChild(beginDiv);
+			row.appendChild(beginElem);
+			const weightKG = activity.WeightKG;
+			const weightKGElem = document.createElement('td');
+			weightKGElem.className = 'activitiestablecell';
+			const weightKGNode = document.createTextNode(weightKG);
+			weightKGElem.appendChild(weightKGNode);
+			row.appendChild(weightKGElem);
+			const running = activity.Running;
+			const runningZero = running.Zero;
+
+			/*
+			 * Insert blank or running information.
+			 */
+			if (runningZero === true) {
+				const runningElem = document.createElement('td');
+				runningElem.className = 'activitiestablecell';
+				const runningColSpan = document.createAttribute('colspan');
+				runningColSpan.value = '4';
+				runningElem.setAttributeNode(runningColSpan);
+				row.appendChild(runningElem);
+			} else {
+				const runningDuration = running.Duration;
+				const runningDurationElem = document.createElement('td');
+				runningDurationElem.className = 'activitiestablecell';
+				const runningDurationNode = document.createTextNode(runningDuration);
+				runningDurationElem.appendChild(runningDurationNode);
+				row.appendChild(runningDurationElem);
+				const runningDistanceKM = running.DistanceKM;
+				const runningDistanceKMElem = document.createElement('td');
+				runningDistanceKMElem.className = 'activitiestablecell';
+				const runningDistanceKMNode = document.createTextNode(runningDistanceKM);
+				runningDistanceKMElem.appendChild(runningDistanceKMNode);
+				row.appendChild(runningDistanceKMElem);
+				const runningStepCount = running.StepCount;
+				const runningStepCountString = runningStepCount.toString();
+				const runningStepCountElem = document.createElement('td');
+				runningStepCountElem.className = 'activitiestablecell';
+				const runningStepCountNode = document.createTextNode(runningStepCountString);
+				runningStepCountElem.appendChild(runningStepCountNode);
+				row.appendChild(runningStepCountElem);
+				const runningEnergyKJ = running.EnergyKJ;
+				const runningEnergyKJString = runningEnergyKJ.toString();
+				const runningEnergyKJElem = document.createElement('td');
+				runningEnergyKJElem.className = 'activitiestablecell';
+				const runningEnergyKJNode = document.createTextNode(runningEnergyKJString);
+				runningEnergyKJElem.appendChild(runningEnergyKJNode);
+				row.appendChild(runningEnergyKJElem);
+			}
+
+			const cycling = activity.Cycling;
+			const cyclingZero = cycling.Zero;
+
+			/*
+			 * Insert blank or cycling information.
+			 */
+			if (cyclingZero === true) {
+				const cyclingElem = document.createElement('td');
+				cyclingElem.className = 'activitiestablecell';
+				const cyclingColSpan = document.createAttribute('colspan');
+				cyclingColSpan.value = '3';
+				cyclingElem.setAttributeNode(cyclingColSpan);
+				row.appendChild(cyclingElem);
+			} else {
+				const cyclingDuration = cycling.Duration;
+				const cyclingDurationElem = document.createElement('td');
+				cyclingDurationElem.className = 'activitiestablecell';
+				const cyclingDurationNode = document.createTextNode(cyclingDuration);
+				cyclingDurationElem.appendChild(cyclingDurationNode);
+				row.appendChild(cyclingDurationElem);
+				const cyclingDistanceKM = cycling.DistanceKM;
+				const cyclingDistanceKMElem = document.createElement('td');
+				cyclingDistanceKMElem.className = 'activitiestablecell';
+				const cyclingDistanceKMNode = document.createTextNode(cyclingDistanceKM);
+				cyclingDistanceKMElem.appendChild(cyclingDistanceKMNode);
+				row.appendChild(cyclingDistanceKMElem);
+				const cyclingEnergyKJ = cycling.EnergyKJ;
+				const cyclingEnergyKJString = cyclingEnergyKJ.toString();
+				const cyclingEnergyKJElem = document.createElement('td');
+				cyclingEnergyKJElem.className = 'activitiestablecell';
+				const cyclingEnergyKJNode = document.createTextNode(cyclingEnergyKJString);
+				cyclingEnergyKJElem.appendChild(cyclingEnergyKJNode);
+				row.appendChild(cyclingEnergyKJElem);
+			}
+
+			const other = activity.Other;
+			const otherZero = other.Zero;
+
+			/*
+			 * Insert blank or other information.
+			 */
+			if (otherZero === true) {
+				const otherElem = document.createElement('td');
+				otherElem.className = 'activitiestablecell';
+				row.appendChild(otherElem);
+			} else {
+				const otherEnergyKJ = other.EnergyKJ;
+				const otherEnergyKJString = otherEnergyKJ.toString();
+				const otherEnergyKJElem = document.createElement('td');
+				otherEnergyKJElem.className = 'activitiestablecell';
+				const otherEnergyKJNode = document.createTextNode(otherEnergyKJString);
+				otherEnergyKJElem.appendChild(otherEnergyKJNode);
+				row.appendChild(otherEnergyKJElem);
+			}
+
+			const editElem = document.createElement('td');
+			editElem.className = 'activitiestablecell';
+			editElem.style.textAlign = 'left';
+			const editLink = document.createElement('div');
+			editLink.className = 'link';
+			const editCaption = document.createTextNode('Edit');
+			editLink.appendChild(editCaption);
+
+			/*
+			 * Open dialog for editing when user clicks 'edit'.
+			 */
+			editLink.onclick = function(e) {
+				self.displayActivitiesEditDialog(response, i);
+			};
+
+			editElem.appendChild(editLink);
+			row.appendChild(editElem);
+			const removeElem = document.createElement('td');
+			removeElem.className = 'activitiestablecell';
+			removeElem.style.textAlign = 'left';
+			const removeQuestionDiv = document.createElement('div');
+			allYesNoLinks.push(removeQuestionDiv);
+			removeQuestionDiv.style.display = 'none';
+			const removeQuestionCaption = document.createTextNode('Remove?');
+			removeQuestionDiv.appendChild(removeQuestionCaption);
+			removeElem.appendChild(removeQuestionDiv);
+			const removeLinkYes = document.createElement('div');
+			allYesNoLinks.push(removeLinkYes);
+			removeLinkYes.className = 'link';
+			removeLinkYes.style.display = 'none';
+			removeLinkYes.style.paddingLeft = '5px';
+			const removeCaptionYes = document.createTextNode('yes');
+			removeLinkYes.appendChild(removeCaptionYes);
+
+			/*
+			 * Remove entry when user clicks 'yes'.
+			 */
+			removeLinkYes.onclick = function(e) {
+				const cgi = globals.cgi;
+				const request = new Request();
+				request.append('cgi', 'remove-activity');
+				const id = i.toString();
+				request.append('id', id);
+				const revision = response.Revision;
+				const revisionString = revision.toString();
+				request.append('revision', revisionString);
+				const cvs = document.getElementById('map_canvas');
+				const token = storage.get(cvs, 'token');
+				request.append('token', token);
+				const data = request.getData();
+				const mime = globals.mimeDefault;
+
+				/*
+				 * This is called when the server returns a response.
+				 */
+				const callback = function(content) {
+					handler.showActivities();
+				};
+
+				ajax.request('POST', cgi, data, mime, callback, false);
+			};
+
+			removeElem.appendChild(removeLinkYes);
+			const removeLinkNo = document.createElement('div');
+			allYesNoLinks.push(removeLinkNo);
+			removeLinkNo.className = 'link';
+			removeLinkNo.style.display = 'none';
+			removeLinkNo.style.paddingLeft = '5px';
+			const removeCaptionNo = document.createTextNode('no');
+			removeLinkNo.appendChild(removeCaptionNo);
+
+			/*
+			 * Hide both options when user clicks 'no'.
+			 */
+			removeLinkNo.onclick = function(e) {
+				removeQuestionDiv.style.display = 'none';
+				removeLinkYes.style.display = 'none';
+				removeLinkNo.style.display = 'none';
+				removeLink.style.display = 'inline-block';
+			};
+
+			removeElem.appendChild(removeLinkNo);
+			const removeLink = document.createElement('div');
+			allRemoveLinks.push(removeLink);
+			removeLink.className = 'link';
+			removeLink.style.display = 'inline-block';
+			const removeCaption = document.createTextNode('Remove');
+			removeLink.appendChild(removeCaption);
+
+			/*
+			 * This is called when the user clicks on the 'remove' link.
+			 */
+			removeLink.onclick = function(e) {
+
+				/*
+				 * Show all remove links.
+				 */
+				for (var i = 0; i < allRemoveLinks.length; i++) {
+					const link = allRemoveLinks[i];
+					link.style.display = 'inline-block';
+				}
+
+				/*
+				 * Hide all yes / no links.
+				 */
+				for (var i = 0; i < allYesNoLinks.length; i++) {
+					const link = allYesNoLinks[i];
+					link.style.display = 'none';
+				}
+
+				removeQuestionDiv.style.display = 'inline-block';
+				removeLinkYes.style.display = 'inline-block';
+				removeLinkNo.style.display = 'inline-block';
+				removeLink.style.display = 'none';
+			};
+
+			removeElem.appendChild(removeLink);
+			row.appendChild(removeElem);
+			body.appendChild(row);
+		}
+
+		this.insertActivityHeader(body);
+		table.appendChild(body);
+		div.appendChild(table);
+		const spacerDiv = document.createElement('div');
+		spacerDiv.className = 'vspace';
+		div.appendChild(spacerDiv);
+		const buttonDiv = document.createElement('div');
+		const buttonAdd = document.createElement('button');
+		buttonAdd.className = 'button';
+		const buttonAddCaption = document.createTextNode('Add');
+		buttonAdd.appendChild(buttonAddCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Add' button.
+		 */
+		buttonAdd.onclick = function(e) {
+			self.displayActivitiesAddDialog();
+		};
+
+		buttonDiv.appendChild(buttonAdd);
+		const buttonImport = document.createElement('button');
+		buttonImport.className = 'button';
+		const buttonImportCaption = document.createTextNode('Import');
+		buttonImport.appendChild(buttonImportCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Import' button.
+		 */
+		buttonImport.onclick = function(e) {
+			self.displayActivitiesImportDialog();
+		};
+
+		buttonDiv.appendChild(buttonImport);
+		const buttonBack = document.createElement('button');
+		buttonBack.className = 'button';
+		const buttonBackCaption = document.createTextNode('Back');
+		buttonBack.appendChild(buttonBackCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Back' button.
+		 */
+		buttonBack.onclick = function(e) {
+			div.style.display = 'none';
+		};
+
+		buttonDiv.appendChild(buttonBack);
+		div.appendChild(buttonDiv);
+		div.style.display = 'block';
+	};
+
+	/*
+	 * Display dialog to add an activity.
+	 */
+	this.displayActivitiesAddDialog = function() {
+		const div = document.getElementById('activitiesdialog');
+		const innerDiv = document.getElementById('activitiesdialog_content');
+		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const elemBegin = this.createElement('Begin', '180px');
+		const fieldBegin = document.createElement('input');
+		fieldBegin.className = 'textfield';
+		fieldBegin.setAttribute('type', 'text');
+		fieldBegin.setAttribute('placeholder', dateFormat);
+		elemBegin.appendChild(fieldBegin);
+		innerDiv.appendChild(elemBegin);
+		const elemWeightKG = this.createElement('Weight [kg]', '180px');
+		const fieldWeightKG = document.createElement('input');
+		fieldWeightKG.className = 'textfield rightalign';
+		fieldWeightKG.setAttribute('type', 'text');
+		fieldWeightKG.setAttribute('placeholder', '75.0');
+		elemWeightKG.appendChild(fieldWeightKG);
+		innerDiv.appendChild(elemWeightKG);
+		const elemRunningDuration = this.createElement('Running duration', '180px');
+		const fieldRunningDuration = document.createElement('input');
+		fieldRunningDuration.className = 'textfield rightalign';
+		fieldRunningDuration.setAttribute('type', 'text');
+		fieldRunningDuration.setAttribute('placeholder', '1h30m');
+		elemRunningDuration.appendChild(fieldRunningDuration);
+		innerDiv.appendChild(elemRunningDuration);
+		const elemRunningDistanceKM = this.createElement('Running distance [km]', '180px');
+		const fieldRunningDistanceKM = document.createElement('input');
+		fieldRunningDistanceKM.className = 'textfield rightalign';
+		fieldRunningDistanceKM.setAttribute('type', 'text');
+		fieldRunningDistanceKM.setAttribute('placeholder', '15.0');
+		elemRunningDistanceKM.appendChild(fieldRunningDistanceKM);
+		innerDiv.appendChild(elemRunningDistanceKM);
+		const elemRunningStepCount = this.createElement('Running step count', '180px');
+		const fieldRunningStepCount = document.createElement('input');
+		fieldRunningStepCount.className = 'textfield rightalign';
+		fieldRunningStepCount.setAttribute('type', 'text');
+		fieldRunningStepCount.setAttribute('placeholder', '18000');
+		elemRunningStepCount.appendChild(fieldRunningStepCount);
+		innerDiv.appendChild(elemRunningStepCount);
+		const elemRunningEnergyKJ = this.createElement('Running energy [kJ]', '180px');
+		const fieldRunningEnergyKJ = document.createElement('input');
+		fieldRunningEnergyKJ.className = 'textfield rightalign';
+		fieldRunningEnergyKJ.setAttribute('type', 'text');
+		fieldRunningEnergyKJ.setAttribute('placeholder', '10000');
+		elemRunningEnergyKJ.appendChild(fieldRunningEnergyKJ);
+		innerDiv.appendChild(elemRunningEnergyKJ);
+		const elemCyclingDuration = this.createElement('Cycling duration', '180px');
+		const fieldCyclingDuration = document.createElement('input');
+		fieldCyclingDuration.className = 'textfield rightalign';
+		fieldCyclingDuration.setAttribute('type', 'text');
+		fieldCyclingDuration.setAttribute('placeholder', '1h30m');
+		elemCyclingDuration.appendChild(fieldCyclingDuration);
+		innerDiv.appendChild(elemCyclingDuration);
+		const elemCyclingDistanceKM = this.createElement('Cycling distance [km]', '180px');
+		const fieldCyclingDistanceKM = document.createElement('input');
+		fieldCyclingDistanceKM.className = 'textfield rightalign';
+		fieldCyclingDistanceKM.setAttribute('type', 'text');
+		fieldCyclingDistanceKM.setAttribute('placeholder', '45.0');
+		elemCyclingDistanceKM.appendChild(fieldCyclingDistanceKM);
+		innerDiv.appendChild(elemCyclingDistanceKM);
+		const elemCyclingEnergyKJ = this.createElement('Cycling energy [kJ]', '180px');
+		const fieldCyclingEnergyKJ = document.createElement('input');
+		fieldCyclingEnergyKJ.className = 'textfield rightalign';
+		fieldCyclingEnergyKJ.setAttribute('type', 'text');
+		fieldCyclingEnergyKJ.setAttribute('placeholder', '10000');
+		elemCyclingEnergyKJ.appendChild(fieldCyclingEnergyKJ);
+		innerDiv.appendChild(elemCyclingEnergyKJ);
+		const elemOtherEnergyKJ = this.createElement('Other energy [kJ]', '180px');
+		const fieldOtherEnergyKJ = document.createElement('input');
+		fieldOtherEnergyKJ.className = 'textfield rightalign';
+		fieldOtherEnergyKJ.setAttribute('type', 'text');
+		fieldOtherEnergyKJ.setAttribute('placeholder', '5000');
+		elemOtherEnergyKJ.appendChild(fieldOtherEnergyKJ);
+		innerDiv.appendChild(elemOtherEnergyKJ);
+		const buttonAdd = document.createElement('button');
+		buttonAdd.className = 'button';
+		const buttonAddCaption = document.createTextNode('Add');
+		buttonAdd.appendChild(buttonAddCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Add' button.
+		 */
+		buttonAdd.onclick = function(e) {
+			const cgi = globals.cgi;
+			const request = new Request();
+			request.append('cgi', 'add-activity');
+			const begin = fieldBegin.value;
+			request.append('begin', begin);
+			const weightKG = fieldWeightKG.value;
+			request.append('weightkg', weightKG);
+			const runningDuration = fieldRunningDuration.value;
+			request.append('runningduration', runningDuration);
+			const runningDistanceKM = fieldRunningDistanceKM.value;
+			request.append('runningdistancekm', runningDistanceKM);
+			const runningStepCount = fieldRunningStepCount.value;
+			request.append('runningstepcount', runningStepCount);
+			const runningEnergyKJ = fieldRunningEnergyKJ.value;
+			request.append('runningenergykj', runningEnergyKJ);
+			const cyclingDuration = fieldCyclingDuration.value;
+			request.append('cyclingduration', cyclingDuration);
+			const cyclingDistanceKM = fieldCyclingDistanceKM.value;
+			request.append('cyclingdistancekm', cyclingDistanceKM);
+			const cyclingEnergyKJ = fieldCyclingEnergyKJ.value;
+			request.append('cyclingenergykj', cyclingEnergyKJ);
+			const otherEnergyKJ = fieldOtherEnergyKJ.value;
+			request.append('otherenergykj', otherEnergyKJ);
+			const cvs = document.getElementById('map_canvas');
+			const token = storage.get(cvs, 'token');
+			request.append('token', token);
+			const data = request.getData();
+			const mime = globals.mimeDefault;
+
+			/*
+			 * This is called when the server returns a response.
+			 */
+			const callback = function(content) {
+				const response = JSON.parse(content);
+				const success = response.Success;
+
+				/*
+				 * Check if logout was successful.
+				 */
+				if (success === true) {
+					div.style.display = 'none';
+					helper.clearElement(innerDiv);
+					handler.showActivities();
+				}
+
+			};
+
+			ajax.request('POST', cgi, data, mime, callback, false);
+		};
+
+		innerDiv.appendChild(buttonAdd);
+		const buttonCancel = document.createElement('button');
+		buttonCancel.className = 'button';
+		const buttonCancelCaption = document.createTextNode('Cancel');
+		buttonCancel.appendChild(buttonCancelCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Cancel' button.
+		 */
+		buttonCancel.onclick = function(e) {
+			div.style.display = 'none';
+			helper.clearElement(innerDiv);
+		};
+
+		innerDiv.appendChild(buttonCancel);
+		div.style.display = 'block';
+	};
+
+	/*
+	 * Display dialog to edit an activity.
+	 */
+	this.displayActivitiesEditDialog = function(response, idx) {
+		const activities = response.Activities;
+		const activity = activities[idx];
+		const div = document.getElementById('activitiesdialog');
+		const innerDiv = document.getElementById('activitiesdialog_content');
+		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const valueBegin = activity.Begin;
+		const valueBeginString = valueBegin.toString();
+		const elemBegin = this.createElement('Begin', '180px');
+		const fieldBegin = document.createElement('input');
+		fieldBegin.className = 'textfield';
+		fieldBegin.setAttribute('type', 'text');
+		fieldBegin.value = valueBeginString;
+		elemBegin.appendChild(fieldBegin);
+		innerDiv.appendChild(elemBegin);
+		const valueWeightKG = activity.WeightKG;
+		const valueWeightKGString = valueWeightKG.toString();
+		const elemWeightKG = this.createElement('Weight [kg]', '180px');
+		const fieldWeightKG = document.createElement('input');
+		fieldWeightKG.className = 'textfield rightalign';
+		fieldWeightKG.setAttribute('type', 'text');
+		fieldWeightKG.value = valueWeightKGString;
+		elemWeightKG.appendChild(fieldWeightKG);
+		innerDiv.appendChild(elemWeightKG);
+		const runningActivity = activity.Running;
+		const valueRunningDuration = runningActivity.Duration;
+		const valueRunningDurationString = valueRunningDuration.toString();
+		const elemRunningDuration = this.createElement('Running duration', '180px');
+		const fieldRunningDuration = document.createElement('input');
+		fieldRunningDuration.className = 'textfield rightalign';
+		fieldRunningDuration.setAttribute('type', 'text');
+		fieldRunningDuration.value = valueRunningDurationString;
+		elemRunningDuration.appendChild(fieldRunningDuration);
+		innerDiv.appendChild(elemRunningDuration);
+		const valueRunningDistanceKM = runningActivity.DistanceKM;
+		const valueRunningDistanceKMString = valueRunningDistanceKM.toString();
+		const elemRunningDistanceKM = this.createElement('Running distance [km]', '180px');
+		const fieldRunningDistanceKM = document.createElement('input');
+		fieldRunningDistanceKM.className = 'textfield rightalign';
+		fieldRunningDistanceKM.setAttribute('type', 'text');
+		fieldRunningDistanceKM.value = valueRunningDistanceKMString;
+		elemRunningDistanceKM.appendChild(fieldRunningDistanceKM);
+		innerDiv.appendChild(elemRunningDistanceKM);
+		const valueRunningStepCount = runningActivity.StepCount;
+		const valueRunningStepCountString = valueRunningStepCount.toString();
+		const elemRunningStepCount = this.createElement('Running step count', '180px');
+		const fieldRunningStepCount = document.createElement('input');
+		fieldRunningStepCount.className = 'textfield rightalign';
+		fieldRunningStepCount.setAttribute('type', 'text');
+		fieldRunningStepCount.value = valueRunningStepCountString;
+		elemRunningStepCount.appendChild(fieldRunningStepCount);
+		innerDiv.appendChild(elemRunningStepCount);
+		const valueRunningEnergyKJ = runningActivity.EnergyKJ;
+		const valueRunningEnergyKJString = valueRunningEnergyKJ.toString();
+		const elemRunningEnergyKJ = this.createElement('Running energy [kJ]', '180px');
+		const fieldRunningEnergyKJ = document.createElement('input');
+		fieldRunningEnergyKJ.className = 'textfield rightalign';
+		fieldRunningEnergyKJ.setAttribute('type', 'text');
+		fieldRunningEnergyKJ.value = valueRunningEnergyKJString;
+		elemRunningEnergyKJ.appendChild(fieldRunningEnergyKJ);
+		innerDiv.appendChild(elemRunningEnergyKJ);
+		const cyclingActivity = activity.Cycling;
+		const valueCyclingDuration = cyclingActivity.Duration;
+		const valueCyclingDurationString = valueCyclingDuration.toString();
+		const elemCyclingDuration = this.createElement('Cycling duration', '180px');
+		const fieldCyclingDuration = document.createElement('input');
+		fieldCyclingDuration.className = 'textfield rightalign';
+		fieldCyclingDuration.setAttribute('type', 'text');
+		fieldCyclingDuration.value = valueCyclingDurationString;
+		elemCyclingDuration.appendChild(fieldCyclingDuration);
+		innerDiv.appendChild(elemCyclingDuration);
+		const valueCyclingDistanceKM = cyclingActivity.DistanceKM;
+		const valueCyclingDistanceKMString = valueCyclingDistanceKM.toString();
+		const elemCyclingDistanceKM = this.createElement('Cycling distance [km]', '180px');
+		const fieldCyclingDistanceKM = document.createElement('input');
+		fieldCyclingDistanceKM.className = 'textfield rightalign';
+		fieldCyclingDistanceKM.setAttribute('type', 'text');
+		fieldCyclingDistanceKM.value = valueCyclingDistanceKMString;
+		elemCyclingDistanceKM.appendChild(fieldCyclingDistanceKM);
+		innerDiv.appendChild(elemCyclingDistanceKM);
+		const valueCyclingEnergyKJ = cyclingActivity.EnergyKJ;
+		const valueCyclingEnergyKJString = valueCyclingEnergyKJ.toString();
+		const elemCyclingEnergyKJ = this.createElement('Cycling energy [kJ]', '180px');
+		const fieldCyclingEnergyKJ = document.createElement('input');
+		fieldCyclingEnergyKJ.className = 'textfield rightalign';
+		fieldCyclingEnergyKJ.setAttribute('type', 'text');
+		fieldCyclingEnergyKJ.value = valueCyclingEnergyKJString;
+		elemCyclingEnergyKJ.appendChild(fieldCyclingEnergyKJ);
+		innerDiv.appendChild(elemCyclingEnergyKJ);
+		const otherActivity = activity.Other;
+		const valueOtherEnergyKJ = otherActivity.EnergyKJ;
+		const valueOtherEnergyKJString = valueOtherEnergyKJ.toString();
+		const elemOtherEnergyKJ = this.createElement('Other energy [kJ]', '180px');
+		const fieldOtherEnergyKJ = document.createElement('input');
+		fieldOtherEnergyKJ.className = 'textfield rightalign';
+		fieldOtherEnergyKJ.setAttribute('type', 'text');
+		fieldOtherEnergyKJ.value = valueOtherEnergyKJString;
+		elemOtherEnergyKJ.appendChild(fieldOtherEnergyKJ);
+		innerDiv.appendChild(elemOtherEnergyKJ);
+		const buttonEdit = document.createElement('button');
+		buttonEdit.className = 'button';
+		const buttonEditCaption = document.createTextNode('Edit');
+		buttonEdit.appendChild(buttonEditCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Edit' button.
+		 */
+		buttonEdit.onclick = function(e) {
+			const cgi = globals.cgi;
+			const request = new Request();
+			request.append('cgi', 'replace-activity');
+			const id = idx.toString();
+			request.append('id', id);
+			const revision = response.Revision;
+			request.append('revision', revision);
+			const begin = fieldBegin.value;
+			request.append('begin', begin);
+			const weightKG = fieldWeightKG.value;
+			request.append('weightkg', weightKG);
+			const runningDuration = fieldRunningDuration.value;
+			request.append('runningduration', runningDuration);
+			const runningDistanceKM = fieldRunningDistanceKM.value;
+			request.append('runningdistancekm', runningDistanceKM);
+			const runningStepCount = fieldRunningStepCount.value;
+			request.append('runningstepcount', runningStepCount);
+			const runningEnergyKJ = fieldRunningEnergyKJ.value;
+			request.append('runningenergykj', runningEnergyKJ);
+			const cyclingDuration = fieldCyclingDuration.value;
+			request.append('cyclingduration', cyclingDuration);
+			const cyclingDistanceKM = fieldCyclingDistanceKM.value;
+			request.append('cyclingdistancekm', cyclingDistanceKM);
+			const cyclingEnergyKJ = fieldCyclingEnergyKJ.value;
+			request.append('cyclingenergykj', cyclingEnergyKJ);
+			const otherEnergyKJ = fieldOtherEnergyKJ.value;
+			request.append('otherenergykj', otherEnergyKJ);
+			const cvs = document.getElementById('map_canvas');
+			const token = storage.get(cvs, 'token');
+			request.append('token', token);
+			const data = request.getData();
+			const mime = globals.mimeDefault;
+
+			/*
+			 * This is called when the server returns a response.
+			 */
+			const callback = function(content) {
+				const response = JSON.parse(content);
+				const success = response.Success;
+
+				/*
+				 * Check if logout was successful.
+				 */
+				if (success === true) {
+					div.style.display = 'none';
+					helper.clearElement(innerDiv);
+					handler.showActivities();
+				}
+
+			};
+
+			ajax.request('POST', cgi, data, mime, callback, false);
+		};
+
+		innerDiv.appendChild(buttonEdit);
+		const buttonCancel = document.createElement('button');
+		buttonCancel.className = 'button';
+		const buttonCancelCaption = document.createTextNode('Cancel');
+		buttonCancel.appendChild(buttonCancelCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Cancel' button.
+		 */
+		buttonCancel.onclick = function(e) {
+			div.style.display = 'none';
+			helper.clearElement(innerDiv);
+		};
+
+		innerDiv.appendChild(buttonCancel);
+		div.style.display = 'block';
+	};
+
+	/*
+	 * Display dialog to import activities.
+	 */
+	this.displayActivitiesImportDialog = function() {
+		const div = document.getElementById('activitiesdialog');
+		const innerDiv = document.getElementById('activitiesdialog_content');
+		const importArea = document.createElement('textarea');
+		importArea.className = 'textarea';
+		innerDiv.appendChild(importArea);
+		const buttonsDiv = document.createElement('div');
+		const buttonImport = document.createElement('button');
+		buttonImport.className = 'button';
+		const buttonImportCaption = document.createTextNode('Import');
+		buttonImport.appendChild(buttonImportCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Import' button.
+		 */
+		buttonImport.onclick = function(e) {
+			const cgi = globals.cgi;
+			const request = new Request();
+			request.append('cgi', 'import-activity-csv');
+			const importData = importArea.value;
+			request.append('data', importData);
+			const cvs = document.getElementById('map_canvas');
+			const token = storage.get(cvs, 'token');
+			request.append('token', token);
+			const data = request.getData();
+			const mime = globals.mimeDefault;
+
+			/*
+			 * This is called when the server returns a response.
+			 */
+			const callback = function(content) {
+				const response = JSON.parse(content);
+				const success = response.Success;
+
+				/*
+				 * Check if logout was successful.
+				 */
+				if (success === true) {
+					div.style.display = 'none';
+					helper.clearElement(innerDiv);
+					handler.showActivities();
+				}
+
+			};
+
+			ajax.request('POST', cgi, data, mime, callback, false);
+		};
+
+		buttonsDiv.appendChild(buttonImport);
+		const buttonCancel = document.createElement('button');
+		buttonCancel.className = 'button';
+		const buttonCancelCaption = document.createTextNode('Cancel');
+		buttonCancel.appendChild(buttonCancelCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Cancel' button.
+		 */
+		buttonCancel.onclick = function(e) {
+			div.style.display = 'none';
+			helper.clearElement(innerDiv);
+		};
+
+		buttonsDiv.appendChild(buttonCancel);
+		innerDiv.appendChild(buttonsDiv);
+		div.style.display = 'block';
+	};
+
+	/*
 	 * Initializes the (right) side bar of the user interface.
 	 */
 	this.initializeSidebar = function() {
 		const sidebar = document.getElementById('right_sidebar');
 		const opener = document.getElementById('right_sidebar_opener');
 		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
-		const elemFrom = this.createElement('From');
+		const elemFrom = this.createElement('From', null);
 		const fieldFrom = document.createElement('input');
 		fieldFrom.className = 'textfield';
+		fieldFrom.setAttribute('id', 'right_sidebar_field_from');
 		fieldFrom.setAttribute('type', 'text');
 		fieldFrom.setAttribute('placeholder', dateFormat);
 		elemFrom.appendChild(fieldFrom);
 		sidebar.appendChild(elemFrom);
-		const elemTo = this.createElement('To');
+		const elemTo = this.createElement('To', null);
 		const fieldTo = document.createElement('input');
+		fieldTo.setAttribute('id', 'right_sidebar_field_to');
 		fieldTo.className = 'textfield';
 		fieldTo.setAttribute('type', 'text');
 		fieldTo.setAttribute('placeholder', dateFormat);
 		elemTo.appendChild(fieldTo);
 		sidebar.appendChild(elemTo);
-		const elemMapIntensity = this.createElement('M. intens.');
+		const elemMapIntensity = this.createElement('M. intens.', null);
 		const fieldMapIntensity = document.createElement('select');
 
 		/*
@@ -536,7 +1402,7 @@ function UI() {
 		fieldMapIntensity.value = '5';
 		elemMapIntensity.appendChild(fieldMapIntensity);
 		sidebar.appendChild(elemMapIntensity);
-		const elemSpread = this.createElement('Spread');
+		const elemSpread = this.createElement('Spread', null);
 		const fieldSpread = document.createElement('select');
 
 		/*
@@ -556,7 +1422,7 @@ function UI() {
 		fieldSpread.value = '0';
 		elemSpread.appendChild(fieldSpread);
 		sidebar.appendChild(elemSpread);
-		const elemColorMapping = this.createElement('Color map.');
+		const elemColorMapping = this.createElement('Color map.', null);
 		const fieldColorMapping = document.createElement('select');
 		fieldColorMapping.className = 'textfield';
 		const colors = ['(default)', 'red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'gray', 'brightblue', 'white'];
@@ -575,7 +1441,7 @@ function UI() {
 
 		elemColorMapping.appendChild(fieldColorMapping);
 		sidebar.appendChild(elemColorMapping);
-		const elemButtons = this.createElement('');
+		const elemButtons = this.createElement('', null);
 		const buttonApply = document.createElement('button');
 		buttonApply.className = 'button';
 		const buttonApplyCaption = document.createTextNode('Apply');
@@ -614,6 +1480,19 @@ function UI() {
 		};
 
 		elemButtons.appendChild(buttonHide);
+		const buttonActivities = document.createElement('button');
+		buttonActivities.className = 'button next';
+		const buttonActivitiesCaption = document.createTextNode('Activities');
+		buttonActivities.appendChild(buttonActivitiesCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Activities' button.
+		 */
+		buttonActivities.onclick = function(e) {
+			handler.showActivities();
+		};
+
+		elemButtons.appendChild(buttonActivities);
 		const buttonLogout = document.createElement('button');
 		buttonLogout.className = 'button buttonred nextgap';
 		const buttonLogoutCaption = document.createTextNode('Logout');
@@ -623,7 +1502,7 @@ function UI() {
 		 * This is called when the user clicks on the 'Logout' button.
 		 */
 		buttonLogout.onclick = function(e) {
-			self.logout();
+			handler.logout();
 		};
 
 		elemButtons.appendChild(buttonLogout);
@@ -634,23 +1513,23 @@ function UI() {
 		const elemSpacerB = document.createElement('div');
 		elemSpacerB.className = 'vspace';
 		sidebar.appendChild(elemSpacerB);
-		const elemNorthing = this.createElement('Northing');
+		const elemNorthing = this.createElement('Northing', null);
 		const fieldNorthing = document.createElement('input');
-		fieldNorthing.className = 'textfield';
+		fieldNorthing.className = 'textfield rightalign';
 		fieldNorthing.setAttribute('id', 'northing_field');
 		fieldNorthing.setAttribute('readonly', 'readonly');
 		elemNorthing.appendChild(fieldNorthing);
 		sidebar.appendChild(elemNorthing);
-		const elemEasting = this.createElement('Easting');
+		const elemEasting = this.createElement('Easting', null);
 		const fieldEasting = document.createElement('input');
-		fieldEasting.className = 'textfield';
+		fieldEasting.className = 'textfield rightalign';
 		fieldEasting.setAttribute('id', 'easting_field');
 		fieldEasting.setAttribute('readonly', 'readonly');
 		elemEasting.appendChild(fieldEasting);
 		sidebar.appendChild(elemEasting);
-		const elemZoom = this.createElement('Zoom');
+		const elemZoom = this.createElement('Zoom', null);
 		const fieldZoom = document.createElement('input');
-		fieldZoom.className = 'textfield';
+		fieldZoom.className = 'textfield rightalign';
 		fieldZoom.setAttribute('id', 'zoom_field');
 		fieldZoom.setAttribute('readonly', 'readonly');
 		elemZoom.appendChild(fieldZoom);
@@ -658,16 +1537,16 @@ function UI() {
 		const elemSpacerC = document.createElement('div');
 		elemSpacerC.className = 'vspace';
 		sidebar.appendChild(elemSpacerC);
-		const elemNorthingKM = this.createElement('N [km]');
+		const elemNorthingKM = this.createElement('N [km]', null);
 		const fieldNorthingKM = document.createElement('input');
-		fieldNorthingKM.className = 'textfield';
+		fieldNorthingKM.className = 'textfield rightalign';
 		fieldNorthingKM.setAttribute('id', 'northing_field_km');
 		fieldNorthingKM.setAttribute('readonly', 'readonly');
 		elemNorthingKM.appendChild(fieldNorthingKM);
 		sidebar.appendChild(elemNorthingKM);
-		const elemEastingKM = this.createElement('E [km]');
+		const elemEastingKM = this.createElement('E [km]', null);
 		const fieldEastingKM = document.createElement('input');
-		fieldEastingKM.className = 'textfield';
+		fieldEastingKM.className = 'textfield rightalign';
 		fieldEastingKM.setAttribute('id', 'easting_field_km');
 		fieldEastingKM.setAttribute('readonly', 'readonly');
 		elemEastingKM.appendChild(fieldEastingKM);
@@ -675,14 +1554,14 @@ function UI() {
 		const elemSpacerD = document.createElement('div');
 		elemSpacerD.className = 'vspace';
 		sidebar.appendChild(elemSpacerD);
-		const elemLongitude = this.createElement('Longitude');
+		const elemLongitude = this.createElement('Longitude', null);
 		const fieldLongitude = document.createElement('input');
 		fieldLongitude.className = 'textfield';
 		fieldLongitude.setAttribute('id', 'longitude_field');
 		fieldLongitude.setAttribute('readonly', 'readonly');
 		elemLongitude.appendChild(fieldLongitude);
 		sidebar.appendChild(elemLongitude);
-		const elemLatitude = this.createElement('Latitude');
+		const elemLatitude = this.createElement('Latitude', null);
 		const fieldLatitude = document.createElement('input');
 		fieldLatitude.className = 'textfield';
 		fieldLatitude.setAttribute('id', 'latitude_field');
@@ -705,20 +1584,20 @@ function UI() {
 	 */
 	this.initializeLogin = function(callback) {
 		const loginContent = document.getElementById('login_content');
-		const elemUser = this.createElement('User');
+		const elemUser = this.createElement('User', null);
 		const fieldUser = document.createElement('input');
 		fieldUser.className = 'textfield';
 		fieldUser.setAttribute('type', 'text');
 		elemUser.appendChild(fieldUser);
 		loginContent.appendChild(elemUser);
-		const elemPassword = this.createElement('Password');
+		const elemPassword = this.createElement('Password', null);
 		const fieldPassword = document.createElement('input');
 		fieldPassword.className = 'textfield';
 		fieldPassword.setAttribute('type', 'password');
 		fieldPassword.setAttribute('autocomplete', 'current-password');
 		elemPassword.appendChild(fieldPassword);
 		loginContent.appendChild(elemPassword);
-		const elemButtons = this.createElement('');
+		const elemButtons = this.createElement('', null);
 		const buttonLogin = document.createElement('button');
 		buttonLogin.className = 'button';
 		const buttonLoginCaption = document.createTextNode('Login');
@@ -826,39 +1705,6 @@ function UI() {
 		const loginDiv = document.getElementById('login');
 		loginDiv.style.display = 'none';
 	};
-
-	/*
-	 * This is called when the user clicks on the 'Logout' button.
-	 */
-	this.logout = function() {
-		const cvs = document.getElementById('map_canvas');
-		const token = storage.get(cvs, 'token');
-		const cgi = globals.cgi;
-		const request = new Request();
-		request.append('cgi', 'auth-logout');
-		request.append('token', token);
-		const data = request.getData();
-		const mime = globals.mimeDefault;
-
-		/*
-		 * This is called when the server confirms the logout.
-		 */
-		const callback = function(content) {
-			const response = JSON.parse(content);
-			const success = response.Success;
-
-			/*
-			 * Check if logout was successful.
-			 */
-			if (success === true) {
-				storage.put(cvs, 'token', null);
-				self.showLogin();
-			}
-
-		};
-
-		ajax.request('POST', cgi, data, mime, callback, false);
-	}
 
 	/*
 	 * Calculate the IDs and positions of the tiles required to
@@ -1741,6 +2587,64 @@ function Handler() {
 		cvs.style.display = 'block';
 		self.refresh();
 	};
+
+	/*
+	 * This is called when the user clicks on the 'Activities' button.
+	 */
+	this.showActivities = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'get-activities');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
+
+		/*
+		 * This is called when the server returns activities.
+		 */
+		const callback = function(content) {
+			const response = JSON.parse(content);
+			const div = document.getElementById('activities');
+			ui.displayActivities(div, response);
+		};
+
+		ajax.request('POST', cgi, data, mime, callback, false);
+	};
+
+	/*
+	 * This is called when the user clicks on the 'Logout' button.
+	 */
+	this.logout = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'auth-logout');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
+
+		/*
+		 * This is called when the server confirms the logout.
+		 */
+		const callback = function(content) {
+			const response = JSON.parse(content);
+			const success = response.Success;
+
+			/*
+			 * Check if logout was successful.
+			 */
+			if (success === true) {
+				storage.put(cvs, 'token', null);
+				ui.showLogin();
+			}
+
+		};
+
+		ajax.request('POST', cgi, data, mime, callback, false);
+	}
 
 	/*
 	 * This is called when the user interface initializes.

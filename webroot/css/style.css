@@ -1,3 +1,66 @@
+.activitiesdialogdiv
+{
+	bottom: 0px;
+	cursor: wait;
+	display: none;
+	left: 0px;
+	position: fixed;
+	right: 0px;
+	top: 0px;
+	vertical-align: middle;
+}
+
+.activitiesdialogcontent
+{
+	background-color: #333333;
+	border-color: #777777;
+	border-radius: 15px;
+	border-style: solid;
+	border-width: 2px;
+	color: #ffffff;
+	cursor: default;
+	left: 50%;
+	padding: 15px;
+	position: absolute;
+	top: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.activitiesdiv
+{
+	background-color: #000000;
+	bottom: 0px;
+	display: none;
+	left: 0px;
+	overflow: auto;
+	padding: 15px;
+	position: fixed;
+	right: 0px;
+	top: 0px;
+}
+
+.activitiestable
+{
+	border-collapse: collapse;
+	text-align: right;
+}
+
+.activitiestablecell
+{
+	border: 1px solid #ffffff;
+	padding: 5px;
+}
+
+.activitiestablerow
+{
+	background-color: #222222;
+}
+
+.activitiestablerow:hover
+{
+	background-color: #444444;
+}
+
 .attributiondiv
 {
 	background-color: #000000;
@@ -111,6 +174,7 @@
 .link
 {
 	color: #aaaaff;
+	cursor: pointer;
 	text-decoration: none;
 }
 
@@ -191,6 +255,11 @@
 	width: 20px;
 }
 
+.rightalign
+{
+	text-align: right;
+}
+
 .rightopener
 {
 	border-left: 1px solid #444444;
@@ -215,11 +284,40 @@
 	width: 400px;
 }
 
+.tablehead
+{
+	background-color: #222244;
+	text-align: center;
+}
+
+.textarea
+{
+	-moz-appearance: none;
+	-webkit-appearance: none;
+	background-color: #222222;
+	border-color: #666666;
+	border-radius: 0px;
+	border-style: solid;
+	border-width: 1px;
+	color: #ffffff;
+	font-family: monospace;
+	margin: 0px;
+	position: relative;
+	height: 300px;
+	width: 400px;
+}
+
+.textarea::placeholder
+{
+	color: #666666;
+	opacity: 1;
+}
+
 .textfield
 {
 	-moz-appearance: none;
 	-webkit-appearance: none;
-	background-color: #000000;
+	background-color: #111111;
 	border-color: #666666;
 	border-radius: 0px;
 	border-style: solid;
