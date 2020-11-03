@@ -615,7 +615,7 @@ func (this *activitiesStruct) searchActivity(begin time.Time) (uint64, bool) {
 		/*
 		 * Binary search algorithm.
 		 */
-		for idxLeft <= idxRight {
+		for idxLeft < idxRight {
 			diff := idxRight - idxLeft
 			diffHalf := diff >> 1
 			idxPivot := idxLeft + diffHalf
@@ -628,8 +628,24 @@ func (this *activitiesStruct) searchActivity(begin time.Time) (uint64, bool) {
 			 */
 			if pivotBegin.After(begin) {
 				idxRight = idxPivot - 1
+
+				/*
+				 * Prevent underflow.
+				 */
+				if idxRight > idxPivot {
+					idxRight = idxPivot
+				}
+
 			} else if pivotBegin.Before(begin) {
 				idxLeft = idxPivot + 1
+
+				/*
+				 * Prevent overflow.
+				 */
+				if idxLeft < idxPivot {
+					idxLeft = idxPivot
+				}
+
 			} else {
 				return idxPivot, true
 			}
