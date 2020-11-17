@@ -20,7 +20,7 @@ import (
 const (
 	EXPECTED_NUM_FIELDS = 10
 	LOWER_BEFORE_SHIFT  = (math.MaxUint64 / 10) + 1
-	REX_FLOAT           = "^(\\s*)(\\d*)(\\.?)(\\d*)(\\s*)$"
+	REX_FLOAT           = "^\\s*\\d*\\.?\\d*\\s*$"
 	TIME_DAY            = 24 * time.Hour
 )
 
@@ -600,24 +600,23 @@ func createActivityGroup(info *ActivityInfo) (activityGroupStruct, error) {
  * time shall be inserted into the groups slice, and the second return value is
  * false.
  */
-func (this *activitiesStruct) searchActivity(begin time.Time) (uint64, bool) {
+func (this *activitiesStruct) searchActivity(begin time.Time) (int, bool) {
 	groups := this.groups
 	numGroups := len(groups)
-	numGroups64 := uint64(numGroups)
-	idxLeft := uint64(0)
+	idxLeft := int(0)
 
 	/*
 	 * The case that there are no groups requires special handling.
 	 */
-	if numGroups64 > 0 {
-		idxRight := numGroups64 - 1
+	if numGroups > 0 {
+		idxRight := numGroups - 1
 
 		/*
 		 * Binary search algorithm.
 		 */
-		for idxLeft < idxRight {
+		for idxLeft <= idxRight {
 			diff := idxRight - idxLeft
-			diffHalf := diff >> 1
+			diffHalf := diff / 2
 			idxPivot := idxLeft + diffHalf
 			pivot := groups[idxPivot]
 			pivotBegin := pivot.begin
@@ -972,7 +971,7 @@ func (this *activitiesStruct) ImportCSV(data string) error {
 
 			} else {
 				beginString := record[0]
-				begin, err := filter.ParseTime(beginString, false)
+				begin, err := filter.ParseTime(beginString, false, false)
 
 				/*
 				 * Check if begin time could be parsed.

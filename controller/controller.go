@@ -300,7 +300,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 	} else {
 		wr := webResponseStruct{}
 		beginIn := request.Params["begin"]
-		begin, err := filter.ParseTime(beginIn, false)
+		begin, err := filter.ParseTime(beginIn, false, false)
 
 		/*
 		 * The begin time has to be filled in correctly.
@@ -1335,7 +1335,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 			} else {
 				id := uint32(id64)
 				beginIn := request.Params["begin"]
-				begin, err := filter.ParseTime(beginIn, false)
+				begin, err := filter.ParseTime(beginIn, false, false)
 
 				/*
 				 * The begin time has to be filled in correctly.
@@ -1579,9 +1579,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			zoomExp := -0.2 * zoomFloat
 			zoomFac := math.Pow(2.0, zoomExp)
 			minTimeIn := request.Params["mintime"]
-			minTime, _ := filter.ParseTime(minTimeIn, true)
+			minTime, _ := filter.ParseTime(minTimeIn, true, true)
 			maxTimeIn := request.Params["maxtime"]
-			maxTime, _ := filter.ParseTime(maxTimeIn, true)
+			maxTime, _ := filter.ParseTime(maxTimeIn, true, true)
 			fgColor := request.Params["fgcolor"]
 			spreadIn := request.Params["spread"]
 			spread64, _ := strconv.ParseUint(spreadIn, 10, 8)

@@ -1,13 +1,16 @@
 package filter
 
 import (
+	"fmt"
 	"github.com/andrepxx/location-visualizer/geo"
+	"regexp"
 	"time"
 )
 
 const (
 	MILLISECONDS_PER_SECOND     = 1000
 	NANOSECONDS_PER_MILLISECOND = 1000000
+	REX_SLOPPY_TIME             = "^\\s*(\\d{4})(-(\\d{2}))?(-(\\d{2}))?(((T|\\s)(\\d{2})(:(\\d{2}))(:(\\d{2}))?)?((Z)|((\\s+(GMT|UTC))?(([+-])(\\d{2})(:(\\d{2}))?)?)))?\\s*$"
 )
 
 /*
@@ -23,6 +26,81 @@ type Filter interface {
 type timeFilterStruct struct {
 	min time.Time
 	max time.Time
+}
+
+/*
+ * Get string value with default value if empty.
+ */
+func getValue(values []string, idx int, d string) string {
+	numValues := len(values)
+
+	/*
+	 * If index is out of range, return default value.
+	 */
+	if idx > numValues {
+		return d
+	} else {
+		value := values[idx]
+
+		/*
+		 * If value is empty, return default value.
+		 */
+		if value == "" {
+			return d
+		} else {
+			return value
+		}
+
+	}
+
+}
+
+/*
+ * Convert "sloppy" time stamp to RFC3339 representation.
+ */
+func fromSloppyTime(in string) (string, error) {
+	rex, _ := regexp.Compile(REX_SLOPPY_TIME)
+
+	/*
+	 * Check if regular expression compiles.
+	 */
+	if rex == nil {
+		return "", fmt.Errorf("Failed to compile regular expression: %s", REX_SLOPPY_TIME)
+	} else {
+		groups := rex.FindStringSubmatch(in)
+
+		/*
+		 * Extract values if regular expression matches.
+		 */
+		if groups == nil {
+			return "", fmt.Errorf("Time stamp does not match regular expression: %s", REX_SLOPPY_TIME)
+		} else {
+			year := getValue(groups, 1, "0001")
+			month := getValue(groups, 3, "01")
+			day := getValue(groups, 5, "01")
+			hour := getValue(groups, 9, "00")
+			minute := getValue(groups, 11, "00")
+			second := getValue(groups, 13, "00")
+			z := getValue(groups, 15, "")
+			result := ""
+
+			/*
+			 * Check if "Z" representation is used for UTC.
+			 */
+			if z != "" {
+				result = fmt.Sprintf("%s-%s-%sT%s:%s:%s%s", year, month, day, hour, minute, second, z)
+			} else {
+				offsetSign := getValue(groups, 20, "+")
+				offsetHours := getValue(groups, 21, "00")
+				offsetMinutes := getValue(groups, 23, "00")
+				result = fmt.Sprintf("%s-%s-%sT%s:%s:%s%s%s:%s", year, month, day, hour, minute, second, offsetSign, offsetHours, offsetMinutes)
+			}
+
+			return result, nil
+		}
+
+	}
+
 }
 
 /*
@@ -140,17 +218,34 @@ func Evaluate(flt Filter, locs []geo.Location) []bool {
 /*
  * Creates a UTC time stamp from RFC3339 string representation.
  */
-func ParseTime(timestamp string, utc bool) (time.Time, error) {
-	t, err := time.ParseInLocation(time.RFC3339, timestamp, time.UTC)
+func ParseTime(timestamp string, sloppy bool, utc bool) (time.Time, error) {
+	err := error(nil)
 
 	/*
-	 * Convert to UTC if requested.
+	 * Convert sloppy time to RFC3339 representation.
 	 */
-	if utc {
-		t = t.UTC()
+	if sloppy {
+		timestamp, err = fromSloppyTime(timestamp)
 	}
 
-	return t, err
+	/*
+	 * Check if error occured so far.
+	 */
+	if err != nil {
+		return time.Time{}, err
+	} else {
+		t, err := time.ParseInLocation(time.RFC3339, timestamp, time.UTC)
+
+		/*
+		 * Convert to UTC if requested.
+		 */
+		if utc {
+			t = t.UTC()
+		}
+
+		return t, err
+	}
+
 }
 
 /*
