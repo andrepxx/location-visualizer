@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/andrepxx/location-visualizer/geo"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -67,7 +68,8 @@ func fromSloppyTime(in string) (string, error) {
 	if rex == nil {
 		return "", fmt.Errorf("Failed to compile regular expression: %s", REX_SLOPPY_TIME)
 	} else {
-		groups := rex.FindStringSubmatch(in)
+		upper := strings.ToUpper(in)
+		groups := rex.FindStringSubmatch(upper)
 
 		/*
 		 * Extract values if regular expression matches.
