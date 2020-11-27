@@ -905,9 +905,65 @@ function UI() {
 		this.insertActivityHeader(body);
 		table.appendChild(body);
 		div.appendChild(table);
-		const spacerDiv = document.createElement('div');
-		spacerDiv.className = 'vspace';
-		div.appendChild(spacerDiv);
+		const spacerDivA = document.createElement('div');
+		spacerDivA.className = 'vspace';
+		div.appendChild(spacerDivA);
+
+		/*
+		 * Insert label and value into statistics table.
+		 */
+		const insertIntoTable = function(body, label, value) {
+			const tr = document.createElement('tr');
+			tr.className = 'activitiestablerow';
+			const labelTd = document.createElement('td');
+			labelTd.className = 'activitiestablecell labelcell';
+			const labelNode = document.createTextNode(label);
+			labelTd.appendChild(labelNode);
+			tr.appendChild(labelTd);
+			const valueTd = document.createElement('td');
+			valueTd.className = 'activitiestablecell';
+			const valueNode = document.createTextNode(value);
+			valueTd.appendChild(valueNode);
+			tr.appendChild(valueTd);
+			body.appendChild(tr);
+		};
+
+		const statistics = response.Statistics;
+		const statisticsTable = document.createElement('table');
+		statisticsTable.className = 'activitiestable';
+		const statisticsBody = document.createElement('tbody');
+		const running = statistics.Running;
+		const runningDuration = running.Duration;
+		const runningDurationString = runningDuration.toString();
+		insertIntoTable(statisticsBody, 'Running duration', runningDurationString);
+		const runningDistanceKM = running.DistanceKM;
+		const runningDistanceKMString = runningDistanceKM.toString();
+		insertIntoTable(statisticsBody, 'Running distance [km]', runningDistanceKMString);
+		const runningStepCount = running.StepCount;
+		const runningStepCountString = runningStepCount.toString();
+		insertIntoTable(statisticsBody, 'Running step count', runningStepCountString);
+		const runningEnergyKJ = running.EnergyKJ;
+		const runningEnergyKJString = runningEnergyKJ.toString();
+		insertIntoTable(statisticsBody, 'Running energy [kJ]', runningEnergyKJString);
+		const cycling = statistics.Cycling;
+		const cyclingDuration = cycling.Duration;
+		const cyclingDurationString = cyclingDuration.toString();
+		insertIntoTable(statisticsBody, 'Cycling duration', cyclingDurationString);
+		const cyclingDistanceKM = cycling.DistanceKM;
+		const cyclingDistanceKMString = cyclingDistanceKM.toString();
+		insertIntoTable(statisticsBody, 'Cycling distance [km]', cyclingDistanceKMString);
+		const cyclingEnergyKJ = cycling.EnergyKJ;
+		const cyclingEnergyKJString = cyclingEnergyKJ.toString();
+		insertIntoTable(statisticsBody, 'Cycling energy [kJ]', cyclingEnergyKJString);
+		const other = statistics.Other;
+		const otherEnergyKJ = other.EnergyKJ;
+		const otherEnergyKJString = otherEnergyKJ.toString();
+		insertIntoTable(statisticsBody, 'Other energy [kJ]', otherEnergyKJString);
+		statisticsTable.appendChild(statisticsBody);
+		div.appendChild(statisticsTable);
+		const spacerDivB = document.createElement('div');
+		spacerDivB.className = 'vspace';
+		div.appendChild(spacerDivB);
 		const buttonDiv = document.createElement('div');
 		const buttonAdd = document.createElement('button');
 		buttonAdd.className = 'button';
@@ -923,7 +979,7 @@ function UI() {
 
 		buttonDiv.appendChild(buttonAdd);
 		const buttonImport = document.createElement('button');
-		buttonImport.className = 'button';
+		buttonImport.className = 'button next';
 		const buttonImportCaption = document.createTextNode('Import');
 		buttonImport.appendChild(buttonImportCaption);
 
@@ -936,7 +992,7 @@ function UI() {
 
 		buttonDiv.appendChild(buttonImport);
 		const buttonBack = document.createElement('button');
-		buttonBack.className = 'button';
+		buttonBack.className = 'button next';
 		const buttonBackCaption = document.createTextNode('Back');
 		buttonBack.appendChild(buttonBackCaption);
 

@@ -111,11 +111,21 @@ type webActivityGroupStruct struct {
 }
 
 /*
+ * Web representation of activity statistics.
+ */
+type webActivityStatisticsStruct struct {
+	Running webRunningActivityStruct
+	Cycling webCyclingActivityStruct
+	Other   webOtherActivityStruct
+}
+
+/*
  * Web representation of activity information.
  */
 type webActivitiesStruct struct {
 	Revision   uint64
 	Activities []webActivityGroupStruct
+	Statistics webActivityStatisticsStruct
 }
 
 /*
@@ -772,6 +782,64 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 
 		}
 
+		activityStatistics := activities.Statistics()
+		runningActivity := activityStatistics.Running()
+		runningZero := runningActivity.Zero()
+		runningDuration := runningActivity.Duration()
+		runningDurationString := runningDuration.String()
+		runningDistanceKMString := runningActivity.DistanceKM()
+		runningStepCount := runningActivity.StepCount()
+		runningEnergyKJ := runningActivity.EnergyKJ()
+
+		/*
+		 * Create data structure representing running activity.
+		 */
+		webRunningActivity := webRunningActivityStruct{
+			Zero:       runningZero,
+			Duration:   runningDurationString,
+			DistanceKM: runningDistanceKMString,
+			StepCount:  runningStepCount,
+			EnergyKJ:   runningEnergyKJ,
+		}
+
+		cyclingActivity := activityStatistics.Cycling()
+		cyclingZero := cyclingActivity.Zero()
+		cyclingDuration := cyclingActivity.Duration()
+		cyclingDurationString := cyclingDuration.String()
+		cyclingDistanceKMString := cyclingActivity.DistanceKM()
+		cyclingEnergyKJ := cyclingActivity.EnergyKJ()
+
+		/*
+		 * Create data structure representing cycling activity.
+		 */
+		webCyclingActivity := webCyclingActivityStruct{
+			Zero:       cyclingZero,
+			Duration:   cyclingDurationString,
+			DistanceKM: cyclingDistanceKMString,
+			EnergyKJ:   cyclingEnergyKJ,
+		}
+
+		otherActivity := activityStatistics.Other()
+		otherZero := otherActivity.Zero()
+		otherEnergyKJ := otherActivity.EnergyKJ()
+
+		/*
+		 * Create data structure representing other activities.
+		 */
+		webOtherActivity := webOtherActivityStruct{
+			Zero:     otherZero,
+			EnergyKJ: otherEnergyKJ,
+		}
+
+		/*
+		 * Create data structure representing overall activity statistics.
+		 */
+		webActivityStatistics := webActivityStatisticsStruct{
+			Running: webRunningActivity,
+			Cycling: webCyclingActivity,
+			Other:   webOtherActivity,
+		}
+
 		this.activitiesLock.RUnlock()
 
 		/*
@@ -780,6 +848,7 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		webActivities := webActivitiesStruct{
 			Revision:   revision,
 			Activities: webActivityGroups,
+			Statistics: webActivityStatistics,
 		}
 
 		mimeType, buffer := this.createJSON(webActivities)

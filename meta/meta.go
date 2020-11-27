@@ -66,6 +66,15 @@ type ActivityGroup interface {
 }
 
 /*
+ * Activity stats carry cumulative statistics about activities.
+ */
+type ActivityStatistics interface {
+	Cycling() CyclingActivity
+	Other() OtherActivity
+	Running() RunningActivity
+}
+
+/*
  * Data structure to obtain information about activities from external caller.
  *
  * This is used to reduce the number of parameters passed to the method
@@ -98,6 +107,7 @@ type Activities interface {
 	Remove(id uint32) error
 	Replace(id uint32, info *ActivityInfo) error
 	Revision() uint64
+	Statistics() ActivityStatistics
 }
 
 /*
@@ -155,12 +165,38 @@ type activityGroupStruct struct {
 }
 
 /*
+ * Data structure representing cumulative statistics about multiple activity
+ * groups.
+ */
+type activityStatisticsStruct struct {
+	running runningActivityStruct
+	cycling cyclingActivityStruct
+	other   otherActivityStruct
+}
+
+/*
  * Data structure storing all activities.
  */
 type activitiesStruct struct {
 	mutex    sync.RWMutex
 	groups   []activityGroupStruct
 	revision uint64
+}
+
+/*
+ * Create an unsigned fixed-point number with a given number of decimal places
+ * and a zero value.
+ */
+func createUnsignedFixed(decimalPlaces uint8) unsignedFixed {
+
+	/*
+	 * Create unsigned fixed-point number.
+	 */
+	fx := unsignedFixed{
+		exponent: decimalPlaces,
+	}
+
+	return fx
 }
 
 /*
@@ -307,6 +343,136 @@ func parseUnsignedFixed(value string, decimalPlaces uint8) (unsignedFixed, error
 }
 
 /*
+ * Add two unsigned fixed-point numbers.
+ */
+func (this *unsignedFixed) add(other unsignedFixed) (unsignedFixed, error) {
+	exp := this.exponent
+	shifted, err := other.shift(exp)
+
+	/*
+	 * Check if overflow occured during shift.
+	 */
+	if err != nil {
+
+		/*
+		 * Create unsigned fixed-point number.
+		 */
+		fx := unsignedFixed{
+			mantissa: math.MaxUint64,
+			exponent: exp,
+		}
+
+		return fx, err
+	} else {
+		tm := this.mantissa
+		sm := shifted.mantissa
+		sum := tm + sm
+
+		/*
+		 * Check if overflow occured during addition.
+		 */
+		if sum < tm || sum < sm {
+
+			/*
+			 * Create unsigned fixed-point number.
+			 */
+			fx := unsignedFixed{
+				mantissa: math.MaxUint64,
+				exponent: exp,
+			}
+
+			return fx, fmt.Errorf("Failed to perform addition: Overflow occured.")
+		} else {
+
+			/*
+			 * Create unsigned fixed-point number.
+			 */
+			fx := unsignedFixed{
+				mantissa: sum,
+				exponent: exp,
+			}
+
+			return fx, nil
+		}
+
+	}
+
+}
+
+/*
+ * Shift this unsigned fixed-point number until it has the required number of
+ * decimal places.
+ */
+func (this *unsignedFixed) shift(decimalPlaces uint8) (unsignedFixed, error) {
+	m := this.mantissa
+	exp := this.exponent
+	fail := false
+
+	/*
+	 * Shift decimal point to the left.
+	 */
+	for exp < decimalPlaces {
+
+		/*
+		 * Handle overflow before multiplication.
+		 */
+		if m >= LOWER_BEFORE_SHIFT {
+			m = math.MaxUint64
+			fail = true
+		} else {
+			m *= 10
+			exp++
+		}
+
+	}
+
+	lastDigit := uint64(0)
+
+	/*
+	 * Shift decimal point to the right.
+	 */
+	for exp > decimalPlaces {
+		lastDigit = m % 10
+		m /= 10
+		exp--
+	}
+
+	/*
+	 * Round upwards if last discarded digit is at least five.
+	 */
+	if lastDigit >= 5 {
+		m++
+	}
+
+	/*
+	 * Create unsigned fixed-point number.
+	 */
+	fx := unsignedFixed{
+		mantissa: m,
+		exponent: exp,
+	}
+
+	/*
+	 * Check if overflow occured.
+	 */
+	if fail {
+		return fx, fmt.Errorf("%s", "Failed to perform shift: Overflow occured.")
+	} else {
+		return fx, nil
+	}
+
+}
+
+/*
+ * Checks if this unsigned fixed-point number is zero.
+ */
+func (this *unsignedFixed) zero() bool {
+	m := this.mantissa
+	result := m == 0
+	return result
+}
+
+/*
  * Convert unsigned fixed-point number to string.
  */
 func (this *unsignedFixed) String() string {
@@ -350,15 +516,6 @@ func (this *unsignedFixed) String() string {
 }
 
 /*
- * Checks if this unsigned fixed-point number is zero.
- */
-func (this *unsignedFixed) Zero() bool {
-	m := this.mantissa
-	result := m == 0
-	return result
-}
-
-/*
  * The distance travelled running.
  */
 func (this *runningActivityStruct) DistanceKM() string {
@@ -397,7 +554,7 @@ func (this *runningActivityStruct) StepCount() uint64 {
 func (this *runningActivityStruct) Zero() bool {
 	duration := this.duration
 	distanceKM := this.distanceKM
-	distanceKMZero := distanceKM.Zero()
+	distanceKMZero := distanceKM.zero()
 	stepCount := this.stepCount
 	energyKJ := this.energyKJ
 	result := (duration == 0) && (distanceKMZero) && (stepCount == 0) && (energyKJ == 0)
@@ -427,7 +584,7 @@ func (this *cyclingActivityStruct) Duration() time.Duration {
 func (this *cyclingActivityStruct) Zero() bool {
 	duration := this.duration
 	distanceKM := this.distanceKM
-	distanceKMZero := distanceKM.Zero()
+	distanceKMZero := distanceKM.zero()
 	energyKJ := this.energyKJ
 	result := (duration == 0) && (distanceKMZero) && (energyKJ == 0)
 	return result
@@ -585,6 +742,30 @@ func createActivityGroup(info *ActivityInfo) (activityGroupStruct, error) {
 	}
 
 	return g, errResult
+}
+
+/*
+ * Statistics about cycling activities.
+ */
+func (this *activityStatisticsStruct) Cycling() CyclingActivity {
+	c := &this.cycling
+	return c
+}
+
+/*
+ * Statistics about other activities.
+ */
+func (this *activityStatisticsStruct) Other() OtherActivity {
+	o := &this.other
+	return o
+}
+
+/*
+ * Statistics about running activities.
+ */
+func (this *activityStatisticsStruct) Running() RunningActivity {
+	r := &this.running
+	return r
 }
 
 /*
@@ -1416,6 +1597,140 @@ func (this *activitiesStruct) Revision() uint64 {
 	rev := this.revision
 	this.mutex.RUnlock()
 	return rev
+}
+
+/*
+ * Create statistics about all activities.
+ */
+func (this *activitiesStruct) Statistics() ActivityStatistics {
+	runningDurationSum := time.Duration(0)
+	runningDistanceKMSum := createUnsignedFixed(1)
+	runningStepCountSum := uint64(0)
+	runningEnergyKJSum := uint64(0)
+	cyclingDurationSum := time.Duration(0)
+	cyclingDistanceKMSum := createUnsignedFixed(1)
+	cyclingEnergyKJSum := uint64(0)
+	otherEnergyKJSum := uint64(0)
+	this.mutex.RLock()
+	groups := this.groups
+
+	/*
+	 * Iterate over all activity groups and calculate sums.
+	 */
+	for _, g := range groups {
+		running := g.running
+		runningDuration := running.duration
+		runningDurationSumOld := runningDurationSum
+		runningDurationSum += runningDuration
+
+		/*
+		 * Prevent overflow.
+		 */
+		if runningDurationSum < runningDurationSumOld {
+			runningDurationSum = math.MaxInt64
+		}
+
+		runningDistanceKM := running.distanceKM
+		runningDistanceKMSum, _ = runningDistanceKMSum.add(runningDistanceKM)
+		runningStepCount := running.stepCount
+		runningStepCountSumOld := runningStepCountSum
+		runningStepCountSum += runningStepCount
+
+		/*
+		 * Prevent overflow.
+		 */
+		if runningStepCountSum < runningStepCountSumOld {
+			runningStepCountSum = math.MaxUint64
+		}
+
+		runningEnergyKJ := running.energyKJ
+		runningEnergyKJSumOld := runningEnergyKJSum
+		runningEnergyKJSum += runningEnergyKJ
+
+		/*
+		 * Prevent overflow.
+		 */
+		if runningEnergyKJSum < runningEnergyKJSumOld {
+			runningEnergyKJSum = math.MaxUint64
+		}
+
+		cycling := g.cycling
+		cyclingDuration := cycling.duration
+		cyclingDurationSumOld := cyclingDurationSum
+		cyclingDurationSum += cyclingDuration
+
+		/*
+		 * Prevent overflow.
+		 */
+		if cyclingDurationSum < cyclingDurationSumOld {
+			cyclingDurationSum = math.MaxInt64
+		}
+
+		cyclingDistanceKM := cycling.distanceKM
+		cyclingDistanceKMSum, _ = cyclingDistanceKMSum.add(cyclingDistanceKM)
+		cyclingEnergyKJ := cycling.energyKJ
+		cyclingEnergyKJSumOld := cyclingEnergyKJSum
+		cyclingEnergyKJSum += cyclingEnergyKJ
+
+		/*
+		 * Prevent overflow.
+		 */
+		if cyclingEnergyKJSum < cyclingEnergyKJSumOld {
+			cyclingEnergyKJSum = math.MaxUint64
+		}
+
+		other := g.other
+		otherEnergyKJ := other.energyKJ
+		otherEnergyKJSumOld := otherEnergyKJSum
+		otherEnergyKJSum += otherEnergyKJ
+
+		/*
+		 * Prevent overflow.
+		 */
+		if otherEnergyKJSum < otherEnergyKJSumOld {
+			otherEnergyKJSum = math.MaxUint64
+		}
+
+	}
+
+	this.mutex.RUnlock()
+
+	/*
+	 * Create cumulative running activity.
+	 */
+	runningActivity := runningActivityStruct{
+		duration:   runningDurationSum,
+		distanceKM: runningDistanceKMSum,
+		stepCount:  runningStepCountSum,
+		energyKJ:   runningEnergyKJSum,
+	}
+
+	/*
+	 * Create cumulative cycling activity.
+	 */
+	cyclingActivity := cyclingActivityStruct{
+		duration:   cyclingDurationSum,
+		distanceKM: cyclingDistanceKMSum,
+		energyKJ:   cyclingEnergyKJSum,
+	}
+
+	/*
+	 * Create cumulative other activity.
+	 */
+	otherActivity := otherActivityStruct{
+		energyKJ: otherEnergyKJSum,
+	}
+
+	/*
+	 * Create activity statistics.
+	 */
+	stats := activityStatisticsStruct{
+		running: runningActivity,
+		cycling: cyclingActivity,
+		other:   otherActivity,
+	}
+
+	return &stats
 }
 
 /*

@@ -171,6 +171,11 @@
 	width: 80px;
 }
 
+.labelcell
+{
+	text-align: left;
+}
+
 .link
 {
 	color: #aaaaff;
