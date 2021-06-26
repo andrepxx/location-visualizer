@@ -107,7 +107,10 @@ func (this *locationStruct) Optimize() Location {
 func (this *locationStruct) Projected() coordinates.Cartesian {
 	proj := projection.Mercator()
 	geo := this.Coordinates()
-	cart := proj.Forward(geo)
+	geos := []coordinates.Geographic{geo}
+	carts := make([]coordinates.Cartesian, 1)
+	proj.Forward(carts, geos)
+	cart := carts[0]
 	return cart
 }
 
