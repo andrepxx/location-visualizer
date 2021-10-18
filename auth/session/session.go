@@ -318,13 +318,20 @@ func (this *managerStruct) Terminate(token Token) error {
 	t := token.Token()
 	this.mutex.Lock()
 	sid := this.sessionIdFromToken(t)
-	roe, _ := this.refreshOrExpire(sid)
 
 	/*
-	 * Check if session shall be expired.
+	 * Refresh or expire is only applicable if the session exists.
 	 */
-	if roe == SESSION_EXPIRE {
-		this.expire(sid)
+	if sid >= 0 {
+		roe, _ := this.refreshOrExpire(sid)
+
+		/*
+		 * Check if session shall be expired.
+		 */
+		if roe == SESSION_EXPIRE {
+			this.expire(sid)
+		}
+
 	}
 
 	sid = this.sessionIdFromToken(t)
