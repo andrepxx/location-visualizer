@@ -17,6 +17,7 @@ import (
 	"github.com/andrepxx/location-visualizer/webserver"
 	"github.com/andrepxx/sydney/color"
 	"github.com/andrepxx/sydney/coordinates"
+	"github.com/andrepxx/sydney/projection"
 	"github.com/andrepxx/sydney/scene"
 	"image/png"
 	"io/ioutil"
@@ -1655,16 +1656,6 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			spreadIn := request.Params["spread"]
 			spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
 			spread := uint8(spread64)
-			halfWidth := 0.5 * zoomFac
-			xresFloat := float64(xres)
-			yresFloat := float64(yres)
-			aspectRatio := yresFloat / xresFloat
-			halfHeight := aspectRatio * halfWidth
-			minX := xpos - halfWidth
-			maxX := xpos + halfWidth
-			minY := ypos - halfHeight
-			maxY := ypos + halfHeight
-			scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
 			filteredData := this.data
 			minTimeIsZero := minTime.IsZero()
 			maxTimeIsZero := maxTime.IsZero()
@@ -1678,16 +1669,29 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			}
 
 			numDataPoints := len(filteredData)
-			projectedData := make([]coordinates.Cartesian, numDataPoints)
+			filteredLocations := make([]coordinates.Geographic, numDataPoints)
 
 			/*
-			 * Obtain projected data points.
+			 * Extract coordinates from filtered data.
 			 */
 			for i, elem := range filteredData {
-				projectedData[i] = elem.Projected()
+				filteredLocations[i] = elem.Coordinates()
 			}
 
-			scn.Aggregate(projectedData)
+			projectedLocations := make([]coordinates.Cartesian, numDataPoints)
+			mercator := projection.Mercator()
+			mercator.Forward(projectedLocations, filteredLocations)
+			halfWidth := 0.5 * zoomFac
+			xresFloat := float64(xres)
+			yresFloat := float64(yres)
+			aspectRatio := yresFloat / xresFloat
+			halfHeight := aspectRatio * halfWidth
+			minX := xpos - halfWidth
+			maxX := xpos + halfWidth
+			minY := ypos - halfHeight
+			maxY := ypos + halfHeight
+			scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
+			scn.Aggregate(projectedLocations)
 			scn.Spread(spread)
 			mapping := color.DefaultMapping()
 
@@ -2423,7 +2427,7 @@ func (this *controllerStruct) initializeGeoData() error {
 			data := make([]geo.Location, numLocs)
 
 			/*
-			 * Iterate over the locations and project them.
+			 * Iterate over the locations and optimize them.
 			 */
 			for i := 0; i < numLocs; i++ {
 				loc, err := dataSet.LocationAt(i)
@@ -2432,7 +2436,7 @@ func (this *controllerStruct) initializeGeoData() error {
 				 * Verify that location could be obtained.
 				 */
 				if err == nil {
-					data[i] = loc.Optimize()
+					data[i] = loc
 				}
 
 			}

@@ -1,6 +1,6 @@
 {
 	"ActivityDB": "data/activitydb.json",
-	"GeoData": "data/Standortverlauf.json",
+	"GeoData": "data/Records.json",
 
 	"Limits": {
 		"MaxAxis": 8192,

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/andrepxx/sydney/coordinates"
-	"github.com/andrepxx/sydney/projection"
 	"math"
 	"strconv"
+	"time"
 )
 
 /*
@@ -21,8 +21,6 @@ const (
  */
 type Location interface {
 	Coordinates() coordinates.Geographic
-	Optimize() Location
-	Projected() coordinates.Cartesian
 	Timestamp() uint64
 }
 
@@ -30,9 +28,10 @@ type Location interface {
  * Data structure representing a GeoJSON location.
  */
 type locationStruct struct {
-	LatitudeE7  int32  `json:"latitudeE7"`
-	LongitudeE7 int32  `json:"longitudeE7"`
-	TimestampMs string `json:"timestampMs"`
+	LatitudeE7   int32  `json:"latitudeE7"`
+	LongitudeE7  int32  `json:"longitudeE7"`
+	TimestampMs  string `json:"timestampMs"`
+	TimestampISO string `json:"timestamp"`
 }
 
 /*
@@ -40,11 +39,9 @@ type locationStruct struct {
  * access.
  */
 type optimizedLocationStruct struct {
+	timestampMs uint64
 	latitude    float64
 	longitude   float64
-	timestampMs uint64
-	x           float64
-	y           float64
 }
 
 /*
@@ -79,39 +76,21 @@ func (this *locationStruct) Coordinates() coordinates.Geographic {
  * Returns a location optimized for faster access.
  */
 func (this *locationStruct) Optimize() Location {
-	geo := this.Coordinates()
-	lng := geo.Longitude()
-	lat := geo.Latitude()
+	coords := this.Coordinates()
+	lng := coords.Longitude()
+	lat := coords.Latitude()
 	ts := this.Timestamp()
-	cart := this.Projected()
-	x := cart.X()
-	y := cart.Y()
 
 	/*
 	 * The optimized location structure.
 	 */
 	loc := optimizedLocationStruct{
+		timestampMs: ts,
 		latitude:    lat,
 		longitude:   lng,
-		timestampMs: ts,
-		x:           x,
-		y:           y,
 	}
 
 	return &loc
-}
-
-/*
- * Returns the Mercator projected coordinates of this location.
- */
-func (this *locationStruct) Projected() coordinates.Cartesian {
-	proj := projection.Mercator()
-	geo := this.Coordinates()
-	geos := []coordinates.Geographic{geo}
-	carts := make([]coordinates.Cartesian, 1)
-	proj.Forward(carts, geos)
-	cart := carts[0]
-	return cart
 }
 
 /*
@@ -120,7 +99,34 @@ func (this *locationStruct) Projected() coordinates.Cartesian {
  */
 func (this *locationStruct) Timestamp() uint64 {
 	timestampMs := this.TimestampMs
-	timestamp, _ := strconv.ParseUint(timestampMs, 10, 64)
+	timestampISO := this.TimestampISO
+	timestamp := uint64(0)
+
+	/*
+	 * The timestamp format was changed around the end of 2021 / beginning
+	 * of 2022.
+	 *
+	 * We try to support both so that we can parse old and new exports.
+	 */
+	if timestampMs != "" {
+		timestamp, _ = strconv.ParseUint(timestampMs, 10, 64)
+	} else if timestampISO != "" {
+		layout := time.RFC3339Nano
+		location := time.UTC
+		parsedTime, err := time.ParseInLocation(layout, timestampISO, location)
+
+		/*
+		 * ParseInLocation does not specify the result on error.
+		 */
+		if err != nil {
+			timestamp = 0
+		} else {
+			unixMs := parsedTime.UnixMilli()
+			timestamp = uint64(unixMs)
+		}
+
+	}
+
 	return timestamp
 }
 
@@ -140,16 +146,6 @@ func (this *optimizedLocationStruct) Coordinates() coordinates.Geographic {
  */
 func (this *optimizedLocationStruct) Optimize() Location {
 	return this
-}
-
-/*
- * Returns the Mercator projected coordinates of this location.
- */
-func (this *optimizedLocationStruct) Projected() coordinates.Cartesian {
-	x := this.x
-	y := this.y
-	coords := coordinates.CreateCartesian(x, y)
-	return coords
 }
 
 /*
@@ -194,8 +190,8 @@ func (this *geoJSONStruct) LocationCount() int {
  * Create GeoJSON structure from byte slice.
  */
 func FromBytes(data []byte) (GeoJSON, error) {
-	geo := &geoJSONStruct{}
-	err := json.Unmarshal(data, geo)
+	geoj := &geoJSONStruct{}
+	err := json.Unmarshal(data, geoj)
 
 	/*
 	 * Check if an error occured during unmarshalling.
@@ -204,7 +200,7 @@ func FromBytes(data []byte) (GeoJSON, error) {
 		msg := err.Error()
 		return nil, fmt.Errorf("Error occured during unmarshalling: %s", msg)
 	} else {
-		return geo, nil
+		return geoj, nil
 	}
 
 }

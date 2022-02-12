@@ -315,8 +315,8 @@ func (this *osmSourceStruct) transformColor(in color.NRGBA, scale float64) color
 	gInvFloat := 1.0 - gFloat
 	bInvFloat := 1.0 - bFloat
 	lumaFloat := (0.22 * rInvFloat) + (0.72 * gInvFloat) + (0.06 * bInvFloat)
-	lumaFloatHalved := scale * lumaFloat
-	lumaFloatByte := math.Round(lumaFloatHalved * 255.0)
+	lumaFloatScaled := scale * lumaFloat
+	lumaFloatByte := math.Round(lumaFloatScaled * 255.0)
 	lumaByte := uint8(lumaFloatByte)
 
 	/*

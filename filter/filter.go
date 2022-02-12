@@ -153,23 +153,9 @@ func (this *timeFilterStruct) Evaluate(loc geo.Location) bool {
  * Apply a filter to a set of geographical locations to narrow it down.
  */
 func Apply(flt Filter, locs []geo.Location) []geo.Location {
-	matches := Evaluate(flt, locs)
-	numMatches := 0
-
-	/*
-	 * Count number of matches.
-	 */
-	for _, match := range matches {
-
-		/*
-		 * Increment match counter on match.
-		 */
-		if match {
-			numMatches++
-		}
-
-	}
-
+	numLocs := len(locs)
+	matches := make([]bool, numLocs)
+	numMatches := Evaluate(flt, locs, matches)
 	filtered := make([]geo.Location, numMatches)
 	idx := 0
 
@@ -195,9 +181,9 @@ func Apply(flt Filter, locs []geo.Location) []geo.Location {
 /*
  * Evaluate whether a set of geographical locations matches filter criteria.
  */
-func Evaluate(flt Filter, locs []geo.Location) []bool {
-	numLocs := len(locs)
-	matches := make([]bool, numLocs)
+func Evaluate(flt Filter, locs []geo.Location, result []bool) int {
+	numResults := len(result)
+	numMatches := 0
 
 	/*
 	 * A nil filter never matches anything.
@@ -208,13 +194,28 @@ func Evaluate(flt Filter, locs []geo.Location) []bool {
 		 * Iterate over the locations and evaluate filter.
 		 */
 		for i, loc := range locs {
-			match := flt.Evaluate(loc)
-			matches[i] = match
+
+			/*
+			 * Prevent out-of-bounds error.
+			 */
+			if i < numResults {
+				currentResult := flt.Evaluate(loc)
+
+				/*
+				 * Increment on match.
+				 */
+				if currentResult {
+					numMatches++
+				}
+
+				result[i] = currentResult
+			}
+
 		}
 
 	}
 
-	return matches
+	return numMatches
 }
 
 /*

@@ -18,7 +18,7 @@ make
 
 This will create an RSA key pair for the TLS connection between the user-interface and the actual data processing backend (`make keys`) and then build the software for your system (`make`). The resulting executable is called `locviz`.
 
-Put your location data JSON file under `data/Standortverlauf.json` or adjust the path to the data file in `config/config.json`.
+Put your location data JSON file under `data/Records.json` or adjust the path to the data file in `config/config.json`.
 
 Next, create a user, set a password and add permissions to fetch tiles and render data overlays.
 
