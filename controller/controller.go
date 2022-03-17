@@ -20,7 +20,6 @@ import (
 	"github.com/andrepxx/sydney/projection"
 	"github.com/andrepxx/sydney/scene"
 	"image/png"
-	"io/ioutil"
 	"math"
 	"os"
 	"runtime"
@@ -1879,7 +1878,7 @@ func (this *controllerStruct) syncActivityDB() error {
 		path := this.activityDBPath
 		this.activitiesWriteLock.Lock()
 		mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_ACTIVITYDB)
-		err := ioutil.WriteFile(path, buf, mode)
+		err := os.WriteFile(path, buf, mode)
 		this.activitiesWriteLock.Unlock()
 
 		/*
@@ -1912,7 +1911,7 @@ func (this *controllerStruct) syncUserDB() error {
 	} else {
 		path := this.userDBPath
 		mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_USERDB)
-		err := ioutil.WriteFile(path, buf, mode)
+		err := os.WriteFile(path, buf, mode)
 
 		/*
 		 * Check if something went wrong
@@ -2286,7 +2285,7 @@ func (this *controllerStruct) runServer() {
 func (this *controllerStruct) initializeActivities() error {
 	config := this.config
 	activityDBPath := config.ActivityDB
-	contentActivityDB, err := ioutil.ReadFile(activityDBPath)
+	contentActivityDB, err := os.ReadFile(activityDBPath)
 
 	/*
 	 * Check if file could be read.
@@ -2318,7 +2317,7 @@ func (this *controllerStruct) initializeActivities() error {
 func (this *controllerStruct) initializeUserDB() error {
 	config := this.config
 	userDBPath := config.UserDB
-	contentUserDB, err := ioutil.ReadFile(userDBPath)
+	contentUserDB, err := os.ReadFile(userDBPath)
 
 	/*
 	 * Check if file could be read.
@@ -2406,7 +2405,7 @@ func (this *controllerStruct) initializeUserDB() error {
 func (this *controllerStruct) initializeGeoData() error {
 	config := this.config
 	geoDataPath := config.GeoData
-	contentGeo, err := ioutil.ReadFile(geoDataPath)
+	contentGeo, err := os.ReadFile(geoDataPath)
 
 	/*
 	 * Check if file could be read.
@@ -2475,7 +2474,7 @@ func (this *controllerStruct) initializeTileSource() {
  * Initialize the controller.
  */
 func (this *controllerStruct) initialize() error {
-	content, err := ioutil.ReadFile(CONFIG_PATH)
+	content, err := os.ReadFile(CONFIG_PATH)
 
 	/*
 	 * Check if file could be read.
