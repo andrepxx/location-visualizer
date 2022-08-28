@@ -18,6 +18,7 @@
 	"WebServer": {
 		"Name": "location-visualizer/1.0.0",
 		"Port": "8080",
+		"TLSDisabled": false,
 		"TLSPort": "8443",
 		"TLSPrivateKey": "keys/private.pem",
 		"TLSPublicKey": "keys/public.pem",
@@ -44,7 +45,7 @@
 			"HTTP": {
 				"Header": 5,
 				"Read": 10,
-				"Write": 5,
+				"Write": 30,
 				"Idle": 60
 			},
 

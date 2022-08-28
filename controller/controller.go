@@ -2237,8 +2237,16 @@ func (this *controllerStruct) runServer() {
 	} else {
 		requests := server.RegisterCgi("/cgi-bin/locviz")
 		server.Run()
-		tlsPort := serverCfg.TLSPort
-		fmt.Printf("Web interface ready: https://localhost:%s/\n", tlsPort)
+		protocol := "https"
+		port := serverCfg.TLSPort
+		tlsDisabled := serverCfg.TLSDisabled
+
+		if tlsDisabled {
+			protocol = "http"
+			port = serverCfg.Port
+		}
+
+		fmt.Printf("Web interface ready: %s://localhost:%s/\n", protocol, port)
 
 		/*
 		 * A worker processing HTTP requests.
