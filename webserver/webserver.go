@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	REQUEST_SIZE = 1 << 20
+	MAX_REQUEST_SIZE_MEMORY = 1 << 20
+	MAX_REQUEST_SIZE_TOTAL  = 1 << 30
 )
 
 /*
@@ -33,8 +34,10 @@ type HttpRequest struct {
  * Exchange format for HTTP responses.
  */
 type HttpResponse struct {
-	Header map[string]string
-	Body   []byte
+	Header                map[string]string
+	Body                  []byte
+	ContentReadCloser     io.ReadCloser
+	ContentReadSeekCloser io.ReadSeekCloser
 }
 
 /*
@@ -116,7 +119,7 @@ func (this *webServerStruct) setDefaultHeaders(writer http.ResponseWriter) {
  */
 func (this *webServerStruct) limitRequestSize(writer http.ResponseWriter, request *http.Request) {
 	requestBody := request.Body
-	limitedBody := http.MaxBytesReader(writer, requestBody, REQUEST_SIZE)
+	limitedBody := http.MaxBytesReader(writer, requestBody, MAX_REQUEST_SIZE_TOTAL)
 	request.Body = limitedBody
 }
 
@@ -125,7 +128,7 @@ func (this *webServerStruct) limitRequestSize(writer http.ResponseWriter, reques
  */
 func (this *webServerStruct) cgiHandler(writer http.ResponseWriter, request *http.Request) {
 	this.limitRequestSize(writer, request)
-	request.ParseMultipartForm(REQUEST_SIZE)
+	request.ParseMultipartForm(MAX_REQUEST_SIZE_MEMORY)
 	protocol := request.Proto
 	method := request.Method
 	url := request.URL
@@ -233,7 +236,20 @@ func (this *webServerStruct) cgiHandler(writer http.ResponseWriter, request *htt
 	}
 
 	body := response.Body
-	writer.Write(body)
+	contentReadCloser := response.ContentReadCloser
+	contentReadSeekCloser := response.ContentReadSeekCloser
+
+	if body != nil {
+		writer.Write(body)
+	} else if contentReadSeekCloser != nil {
+		modTime := time.Time{}
+		http.ServeContent(writer, request, "", modTime, contentReadSeekCloser)
+		contentReadSeekCloser.Close()
+	} else if contentReadCloser != nil {
+		io.Copy(writer, contentReadCloser)
+		contentReadCloser.Close()
+	}
+
 }
 
 /*

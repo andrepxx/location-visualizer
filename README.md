@@ -1,12 +1,16 @@
 # location-visualizer
 
-This software visualizes your location history, which you can obtain from Google Takeout, and displays it as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
+This software allows you perform fitness / activity and location tracking, as well as visualization of that data, on your own infrastructure.
 
-It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc. The longer-term goal of this project is to enable users to perform fitness and location tracking, together with the related data analysis, on their own infrastructure.
+Data can be imported from GeoJSON files, for example from your location history, which you can obtain from Google Takeout, and stored in a local database.
+
+The software displays the location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
+
+It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc.
 
 ## Building the software
 
-To download and build the software from source for your system, run the following commands in a shell (assuming that `~/go` is your `$GOPATH`).
+To download and build the software from source for your system, run the following commands in a shell.
 
 ```
 cd ~/go/src/
@@ -18,9 +22,9 @@ make
 
 This will create an RSA key pair for the TLS connection between the user-interface and the actual data processing backend (`make keys`) and then build the software for your system (`make`). The resulting executable is called `locviz`.
 
-Put your location data JSON file under `data/Records.json` or adjust the path to the data file in `config/config.json`.
+Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json` and user account data is stored in `data/userdb.json`. All these paths can be adjusted in `config/config.json`.
 
-Next, create a user, set a password and add permissions to fetch tiles and render data overlays.
+To use the software, create a user, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
 ```
 ./locviz create-user root
@@ -29,9 +33,12 @@ Next, create a user, set a password and add permissions to fetch tiles and rende
 ./locviz add-permission root render
 ./locviz add-permission root activity-read
 ./locviz add-permission root activity-write
+./locviz add-permission root geodb-read
+./locviz add-permission root geodb-write
+./locviz add-permission root geodb-download
 ```
 
-Finally, run the executable.
+Finally, run the server.
 
 ```
 ./locviz
@@ -81,3 +88,12 @@ Since the application will be unresponsive unless all map data required to displ
 
 If you want to pre-fetch zoom levels beyond 8, you will have to additionally specify the `-hard` option in order to confirm that you are aware that you are placing a significant load on OSM infrastructure, that the pre-fetch will take a long time and will use a lot of disk space (perhaps even more than you might have available on your system, potentially rendering it unstable).
 
+## Uploading geo data
+
+To upload geo data to the database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the GeoJSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+
+## Clearing the database
+
+To clear the database, you will have to terminate the application and delete the database file storing the geo data. (This will by default reside under `data/locations.geodb`.) An empty database will be created on next startup of the application.
+
+There is currently no way to clear the database from within the web interface. This serves to prevent accidental deletion of data. In the future, we plan to offer clearing the database on the web interface as well, and put in other safeguards to prevent accidental deletion of data.

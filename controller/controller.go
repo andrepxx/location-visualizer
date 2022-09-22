@@ -10,7 +10,9 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/session"
 	"github.com/andrepxx/location-visualizer/auth/user"
 	"github.com/andrepxx/location-visualizer/filter"
-	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/geo/geodb"
+	"github.com/andrepxx/location-visualizer/geo/geojson"
+	"github.com/andrepxx/location-visualizer/geo/geoutil"
 	"github.com/andrepxx/location-visualizer/meta"
 	lsync "github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
@@ -20,6 +22,7 @@ import (
 	"github.com/andrepxx/sydney/projection"
 	"github.com/andrepxx/sydney/scene"
 	"image/png"
+	"io"
 	"math"
 	"os"
 	"runtime"
@@ -32,9 +35,13 @@ import (
  * Constants for the controller.
  */
 const (
+	ARCHIVE_TIME_STAMP                 = "20060102-150405"
 	CONFIG_PATH                        = "config/config.json"
+	LOCATION_BLOCK_SIZE                = 8192
 	PERMISSIONS_ACTIVITYDB os.FileMode = 0644
 	PERMISSIONS_USERDB     os.FileMode = 0644
+	PERMISSIONS_LOCATIONDB os.FileMode = 0644
+	TIMESTAMP_FORMAT                   = "2006-01-02T15:04:05.000Z07:00"
 )
 
 /*
@@ -129,6 +136,28 @@ type webActivitiesStruct struct {
 }
 
 /*
+ * Web representation of statistics about a data set.
+ */
+type webDatasetStatsStruct struct {
+	LocationCount     uint32
+	Ordered           bool
+	OrderedStrict     bool
+	TimestampEarliest string
+	TimestampLatest   string
+}
+
+/*
+ * Web representation of a migration report.
+ */
+type webMigrationReportStruct struct {
+	Status   webResponseStruct
+	Before   webDatasetStatsStruct
+	Source   webDatasetStatsStruct
+	Imported webDatasetStatsStruct
+	After    webDatasetStatsStruct
+}
+
+/*
  * Limits for concurrent requests.
  */
 type limitsStruct struct {
@@ -143,8 +172,8 @@ type limitsStruct struct {
  */
 type configStruct struct {
 	ActivityDB    string
-	GeoData       string
 	Limits        limitsStruct
+	LocationDB    string
 	MapServer     string
 	MapCache      string
 	SessionExpiry string
@@ -162,7 +191,7 @@ type controllerStruct struct {
 	activitiesWriteLock sync.Mutex
 	activityDBPath      string
 	config              configStruct
-	data                []geo.Location
+	locationDB          geodb.Database
 	tileSource          tile.Source
 	userDBPath          string
 	userManager         user.Manager
@@ -650,6 +679,155 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 }
 
 /*
+ * Download the contents of the GeoDB location database.
+ */
+func (this *controllerStruct) downloadGeoDBContentHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	format := request.Params["format"]
+	permA, errA := this.checkPermission(token, "geodb-read")
+	permB, errB := this.checkPermission(token, "geodb-download")
+
+	/*
+	 * Check permissions.
+	 */
+	if errA != nil {
+		msg := errA.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if errB != nil {
+		msg := errB.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !permA || !permB {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		customMsgBuf := bytes.NewBufferString("Database not accessible.")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create default HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		db := this.locationDB
+
+		/*
+		 * Make sure database exists.
+		 */
+		if db != nil {
+
+			switch format {
+			case "binary":
+				contentProvider := db.SerializeBinary()
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.geodb", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/octet-stream",
+					},
+
+					ContentReadSeekCloser: contentProvider,
+				}
+
+			case "csv":
+				contentProvider := db.SerializeCSV()
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.csv", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "text/csv",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
+			default:
+				msg := fmt.Sprintf("Unknown format: '%s'", format)
+				msgBuf := bytes.NewBufferString(msg)
+				msgBytes := msgBuf.Bytes()
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+					Header: map[string]string{"Content-type": contentType},
+					Body:   msgBytes,
+				}
+
+			}
+
+		}
+
+		return response
+	}
+
+}
+
+/*
  * Retrieve all activity information from database.
  */
 func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest) webserver.HttpResponse {
@@ -852,6 +1030,106 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		}
 
 		mimeType, buffer := this.createJSON(webActivities)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": mimeType},
+			Body:   buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Obtain statistics from the GeoDB location database.
+ */
+func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "geodb-read")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		datasetStats := webDatasetStatsStruct{}
+		gu := geoutil.Create()
+		db := this.locationDB
+		stats, err := gu.GeoDBStats(db)
+
+		/*
+		 * Make sure that no error occured.
+		 */
+		if err == nil {
+			locationCount := stats.LocationCount()
+			ordered := stats.Ordered()
+			orderedStrict := stats.OrderedStrict()
+			timestampEarliest := stats.TimestampEarliest()
+			timestampLatest := stats.TimestampLatest()
+			timestampEarliestString := ""
+			timestampLatestString := ""
+
+			/*
+			 * Check if timestamps are defined.
+			 */
+			if timestampEarliest <= timestampLatest {
+				timestampEarliestTime := gu.MillisecondsToTime(timestampEarliest)
+				timestampEarliestString = timestampEarliestTime.Format(TIMESTAMP_FORMAT)
+				timestampLatestTime := gu.MillisecondsToTime(timestampLatest)
+				timestampLatestString = timestampLatestTime.Format(TIMESTAMP_FORMAT)
+			}
+
+			/*
+			 * Create dataset statistics.
+			 */
+			datasetStats = webDatasetStatsStruct{
+				LocationCount:     locationCount,
+				Ordered:           ordered,
+				OrderedStrict:     orderedStrict,
+				TimestampEarliest: timestampEarliestString,
+				TimestampLatest:   timestampLatestString,
+			}
+
+		}
+
+		mimeType, buffer := this.createJSON(datasetStats)
 
 		/*
 		 * Create HTTP response.
@@ -1150,6 +1428,423 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		return response
 	}
 
+}
+
+/*
+ * Import location data in GeoJSON format.
+ */
+func (this *controllerStruct) importGeoJSONHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	migrationReport := webMigrationReportStruct{}
+	perm, err := this.checkPermission(token, "geodb-write")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		reason := fmt.Sprintf("Failed to check permission: %s", msg)
+
+		/*
+		 * Indicate failure.
+		 */
+		status := webResponseStruct{
+			Success: false,
+			Reason:  reason,
+		}
+
+		migrationReport.Status = status
+	} else if !perm {
+
+		/*
+		 * Indicate failure.
+		 */
+		status := webResponseStruct{
+			Success: false,
+			Reason:  "Forbidden!",
+		}
+
+		migrationReport.Status = status
+	} else {
+		files := request.Files["file"]
+
+		/*
+		 * Make sure that files are not nil.
+		 */
+		if files == nil {
+
+			/*
+			 * Indicate failure.
+			 */
+			status := webResponseStruct{
+				Success: false,
+				Reason:  "Field 'file' not defined as a multipart field.",
+			}
+
+			migrationReport.Status = status
+		} else {
+			numFiles := len(files)
+
+			/*
+			 * Make sure that exactly one file is sent in request.
+			 */
+			if numFiles == 0 {
+
+				/*
+				 * Indicate failure.
+				 */
+				status := webResponseStruct{
+					Success: false,
+					Reason:  "No file sent in request.",
+				}
+
+				migrationReport.Status = status
+			} else if numFiles != 1 {
+
+				/*
+				 * Indicate failure.
+				 */
+				status := webResponseStruct{
+					Success: false,
+					Reason:  "Multiple files sent in request.",
+				}
+
+				migrationReport.Status = status
+			} else {
+				target := this.locationDB
+				file := files[0]
+				data, err := io.ReadAll(file)
+
+				/*
+				 * Check if source file could be successfully read.
+				 */
+				if err != nil {
+
+					/*
+					 * Indicate failure.
+					 */
+					status := webResponseStruct{
+						Success: false,
+						Reason:  "Failed to read source file.",
+					}
+
+					migrationReport.Status = status
+				} else {
+					source, err := geojson.FromBytes(data)
+
+					/*
+					 * Check if source file could be successfully parsed.
+					 */
+					if err != nil {
+
+						/*
+						 * Indicate failure.
+						 */
+						status := webResponseStruct{
+							Success: false,
+							Reason:  "Failed to parse source file.",
+						}
+
+						migrationReport.Status = status
+					} else {
+						importStrategy := int(geoutil.IMPORT_NONE)
+						importStrategyValid := false
+						strategy := request.Params["strategy"]
+
+						/*
+						 * Decide on import strategy.
+						 */
+						switch strategy {
+						case "all":
+							importStrategy = int(geoutil.IMPORT_ALL)
+							importStrategyValid = true
+						case "newer":
+							importStrategy = int(geoutil.IMPORT_NEWER)
+							importStrategyValid = true
+						case "none":
+							importStrategy = int(geoutil.IMPORT_NONE)
+							importStrategyValid = true
+						default:
+							importStrategyValid = false
+						}
+
+						sortString := request.Params["sort"]
+						sortBool := false
+						errSort := error(nil)
+
+						/*
+						 * Only try to parse parameter if string is not empty.
+						 */
+						if sortString != "" {
+							sortBool, errSort = strconv.ParseBool(sortString)
+						}
+
+						/*
+						 * Check if import strategy is valid.
+						 */
+						if !importStrategyValid {
+							reason := fmt.Sprintf("Invalid import strategy: '%s'", strategy)
+
+							/*
+							 * Indicate failure.
+							 */
+							status := webResponseStruct{
+								Success: false,
+								Reason:  reason,
+							}
+
+							migrationReport.Status = status
+						} else if errSort != nil {
+							reason := fmt.Sprintf("Invalid value for 'sort' parameter: '%s'", sortString)
+
+							/*
+							 * Indicate failure.
+							 */
+							status := webResponseStruct{
+								Success: false,
+								Reason:  reason,
+							}
+
+							migrationReport.Status = status
+						} else {
+							gu := geoutil.Create()
+							report, errMigrate := gu.Migrate(target, source, importStrategy)
+							reportBefore := report.Before()
+							reportBeforeLocationCount := reportBefore.LocationCount()
+							reportBeforeOrdered := reportBefore.Ordered()
+							reportBeforeOrderedStrict := reportBefore.OrderedStrict()
+							reportBeforeTimestampEarliest := reportBefore.TimestampEarliest()
+							reportBeforeTimestampEarliestTime := gu.MillisecondsToTime(reportBeforeTimestampEarliest)
+							reportBeforeTimestampEarliestString := reportBeforeTimestampEarliestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportBeforeTimestampEarliest == math.MaxUint64 {
+								reportBeforeTimestampEarliestString = ""
+							}
+
+							reportBeforeTimestampLatest := reportBefore.TimestampLatest()
+							reportBeforeTimestampLatestTime := gu.MillisecondsToTime(reportBeforeTimestampLatest)
+							reportBeforeTimestampLatestString := reportBeforeTimestampLatestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportBeforeTimestampLatest == 0 {
+								reportBeforeTimestampLatestString = ""
+							}
+
+							/*
+							 * Create statistics for GeoDB state before data migration.
+							 */
+							webStatsBefore := webDatasetStatsStruct{
+								LocationCount:     reportBeforeLocationCount,
+								Ordered:           reportBeforeOrdered,
+								OrderedStrict:     reportBeforeOrderedStrict,
+								TimestampEarliest: reportBeforeTimestampEarliestString,
+								TimestampLatest:   reportBeforeTimestampLatestString,
+							}
+
+							reportSource := report.Source()
+							reportSourceLocationCount := reportSource.LocationCount()
+							reportSourceOrdered := reportSource.Ordered()
+							reportSourceOrderedStrict := reportSource.OrderedStrict()
+							reportSourceTimestampEarliest := reportSource.TimestampEarliest()
+							reportSourceTimestampEarliestTime := gu.MillisecondsToTime(reportSourceTimestampEarliest)
+							reportSourceTimestampEarliestString := reportSourceTimestampEarliestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportSourceTimestampEarliest == math.MaxUint64 {
+								reportSourceTimestampEarliestString = ""
+							}
+
+							reportSourceTimestampLatest := reportSource.TimestampLatest()
+							reportSourceTimestampLatestTime := gu.MillisecondsToTime(reportSourceTimestampLatest)
+							reportSourceTimestampLatestString := reportSourceTimestampLatestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportSourceTimestampLatest == 0 {
+								reportSourceTimestampLatestString = ""
+							}
+
+							/*
+							 * Create statistics for GeoJSON data provided as source.
+							 */
+							webStatsSource := webDatasetStatsStruct{
+								LocationCount:     reportSourceLocationCount,
+								Ordered:           reportSourceOrdered,
+								OrderedStrict:     reportSourceOrderedStrict,
+								TimestampEarliest: reportSourceTimestampEarliestString,
+								TimestampLatest:   reportSourceTimestampLatestString,
+							}
+
+							reportImported := report.Imported()
+							reportImportedLocationCount := reportImported.LocationCount()
+							reportImportedOrdered := reportImported.Ordered()
+							reportImportedOrderedStrict := reportImported.OrderedStrict()
+							reportImportedTimestampEarliest := reportImported.TimestampEarliest()
+							reportImportedTimestampEarliestTime := gu.MillisecondsToTime(reportImportedTimestampEarliest)
+							reportImportedTimestampEarliestString := reportImportedTimestampEarliestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportImportedTimestampEarliest == math.MaxUint64 {
+								reportImportedTimestampEarliestString = ""
+							}
+
+							reportImportedTimestampLatest := reportImported.TimestampLatest()
+							reportImportedTimestampLatestTime := gu.MillisecondsToTime(reportImportedTimestampLatest)
+							reportImportedTimestampLatestString := reportImportedTimestampLatestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportImportedTimestampLatest == 0 {
+								reportImportedTimestampLatestString = ""
+							}
+
+							/*
+							 * Create statistics for GeoJSON data actually imported.
+							 */
+							webStatsImported := webDatasetStatsStruct{
+								LocationCount:     reportImportedLocationCount,
+								Ordered:           reportImportedOrdered,
+								OrderedStrict:     reportImportedOrderedStrict,
+								TimestampEarliest: reportImportedTimestampEarliestString,
+								TimestampLatest:   reportImportedTimestampLatestString,
+							}
+
+							reportAfter := report.After()
+							reportAfterLocationCount := reportAfter.LocationCount()
+							reportAfterOrdered := reportAfter.Ordered()
+							reportAfterOrderedStrict := reportAfter.OrderedStrict()
+							reportAfterTimestampEarliest := reportAfter.TimestampEarliest()
+							reportAfterTimestampEarliestTime := gu.MillisecondsToTime(reportAfterTimestampEarliest)
+							reportAfterTimestampEarliestString := reportAfterTimestampEarliestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportAfterTimestampEarliest == math.MaxUint64 {
+								reportAfterTimestampEarliestString = ""
+							}
+
+							reportAfterTimestampLatest := reportAfter.TimestampLatest()
+							reportAfterTimestampLatestTime := gu.MillisecondsToTime(reportAfterTimestampLatest)
+							reportAfterTimestampLatestString := reportAfterTimestampLatestTime.Format(TIMESTAMP_FORMAT)
+
+							/*
+							 * Strip default value from report.
+							 */
+							if reportAfterTimestampLatest == 0 {
+								reportAfterTimestampLatestString = ""
+							}
+
+							/*
+							 * Create statistics for GeoDB state after data migration.
+							 */
+							webStatsAfter := webDatasetStatsStruct{
+								LocationCount:     reportAfterLocationCount,
+								Ordered:           reportAfterOrdered,
+								OrderedStrict:     reportAfterOrderedStrict,
+								TimestampEarliest: reportAfterTimestampEarliestString,
+								TimestampLatest:   reportAfterTimestampLatestString,
+							}
+
+							/*
+							 * Create migration report.
+							 */
+							migrationReport = webMigrationReportStruct{
+								Before:   webStatsBefore,
+								Source:   webStatsSource,
+								Imported: webStatsImported,
+								After:    webStatsAfter,
+							}
+
+							/*
+							 * Check if error happened during migration.
+							 */
+							if errMigrate != nil {
+								msg := errMigrate.Error()
+
+								/*
+								 * Indicate failure.
+								 */
+								status := webResponseStruct{
+									Success: false,
+									Reason:  msg,
+								}
+
+								migrationReport.Status = status
+							} else {
+								errSort := error(nil)
+
+								/*
+								 * Sort database after migration if requested.
+								 */
+								if sortBool {
+									errSort = target.Sort()
+								}
+
+								/*
+								 * Check if error occured during sorting.
+								 */
+								if errSort != nil {
+									msg := errSort.Error()
+
+									/*
+									 * Indicate failure.
+									 */
+									status := webResponseStruct{
+										Success: false,
+										Reason:  msg,
+									}
+
+									migrationReport.Status = status
+								} else {
+
+									/*
+									 * Indicate success.
+									 */
+									status := webResponseStruct{
+										Success: true,
+										Reason:  "",
+									}
+
+									migrationReport.Status = status
+								}
+
+							}
+
+						}
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+	mimeType, buffer := this.createJSON(migrationReport)
+
+	/*
+	 * Create HTTP response.
+	 */
+	response := webserver.HttpResponse{
+		Header: map[string]string{"Content-type": mimeType},
+		Body:   buffer,
+	}
+
+	return response
 }
 
 /*
@@ -1655,31 +2350,25 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			spreadIn := request.Params["spread"]
 			spread64, _ := strconv.ParseUint(spreadIn, 10, 8)
 			spread := uint8(spread64)
-			filteredData := this.data
+			flt := filter.Filter(nil)
 			minTimeIsZero := minTime.IsZero()
 			maxTimeIsZero := maxTime.IsZero()
 
 			/*
-			 * Apply filter if at least one of the limits is set.
+			 * Create filter if at least one of the limits is set.
 			 */
 			if !minTimeIsZero || !maxTimeIsZero {
-				flt := filter.Time(minTime, maxTime)
-				filteredData = filter.Apply(flt, filteredData)
+				flt = filter.Time(minTime, maxTime)
 			}
 
-			numDataPoints := len(filteredData)
-			filteredLocations := make([]coordinates.Geographic, numDataPoints)
-
-			/*
-			 * Extract coordinates from filtered data.
-			 */
-			for i, elem := range filteredData {
-				filteredLocations[i] = elem.Coordinates()
-			}
-
-			projectedLocations := make([]coordinates.Cartesian, numDataPoints)
 			mercator := projection.Mercator()
-			mercator.Forward(projectedLocations, filteredLocations)
+			locationDB := this.locationDB
+			numDataPoints := locationDB.LocationCount()
+			offset := uint32(0)
+			dataRead := make([]geodb.Location, LOCATION_BLOCK_SIZE)
+			dataFiltered := make([]geodb.Location, LOCATION_BLOCK_SIZE)
+			locationsGeographic := make([]coordinates.Geographic, LOCATION_BLOCK_SIZE)
+			locationsProjected := make([]coordinates.Cartesian, LOCATION_BLOCK_SIZE)
 			halfWidth := 0.5 * zoomFac
 			xresFloat := float64(xres)
 			yresFloat := float64(yres)
@@ -1690,7 +2379,53 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			minY := ypos - halfHeight
 			maxY := ypos + halfHeight
 			scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
-			scn.Aggregate(projectedLocations)
+			gu := geoutil.Create()
+
+			/*
+			 * Check if there is still data to read.
+			 */
+			for offset < numDataPoints {
+				numLocationsRead, errRead := locationDB.ReadLocations(offset, dataRead)
+
+				/*
+				 * Log database read errors.
+				 */
+				if errRead != nil {
+					msg := errRead.Error()
+					fmt.Printf("Error reading from GeoDB database while rendering: %s\n", msg)
+				}
+
+				currentDataRead := dataRead[0:numLocationsRead]
+				numLocationsFiltered := filter.Apply(flt, currentDataRead, dataFiltered)
+				currentDataFiltered := dataFiltered[0:numLocationsFiltered]
+
+				/*
+				 * Render filtered data points.
+				 */
+				for i, elem := range currentDataFiltered {
+					latitudeE7 := elem.LatitudeE7
+					latitude := gu.DegreesE7ToRadians(latitudeE7)
+					longitudeE7 := elem.LongitudeE7
+					longitude := gu.DegreesE7ToRadians(longitudeE7)
+					locationsGeographic[i] = coordinates.CreateGeographic(longitude, latitude)
+				}
+
+				currentLocationsGeographic := locationsGeographic[0:numLocationsFiltered]
+				currentLocationsProjected := locationsProjected[0:numLocationsFiltered]
+				errProject := mercator.Forward(currentLocationsProjected, currentLocationsGeographic)
+
+				/*
+				 * Log projection errors.
+				 */
+				if errProject != nil {
+					msg := errProject.Error()
+					fmt.Printf("Error projecting data points while rendering: %s\n", msg)
+				}
+
+				scn.Aggregate(currentLocationsProjected)
+				offset += numLocationsRead
+			}
+
 			scn.Spread(spread)
 			mapping := color.DefaultMapping()
 
@@ -1836,8 +2571,12 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.authRequestHandler(request)
 	case "auth-response":
 		response = this.authResponseHandler(request)
+	case "download-geodb-content":
+		response = this.downloadGeoDBContentHandler(request)
 	case "get-activities":
 		response = this.getActivitiesHandler(request)
+	case "get-geodb-stats":
+		response = this.getGeoDBStatsHandler(request)
 	case "get-tile":
 		sem := this.semTile
 		this.acquire(sem)
@@ -1845,6 +2584,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		this.release(sem)
 	case "import-activity-csv":
 		response = this.importActivityCsvHandler(request)
+	case "import-geojson":
+		response = this.importGeoJSONHandler(request)
 	case "remove-activity":
 		response = this.removeActivityHandler(request)
 	case "replace-activity":
@@ -2408,50 +3149,33 @@ func (this *controllerStruct) initializeUserDB() error {
 }
 
 /*
- * Initialize geographical data.
+ * Initialize geographical database with location data.
  */
-func (this *controllerStruct) initializeGeoData() error {
+func (this *controllerStruct) initializeLocationData() error {
 	config := this.config
-	geoDataPath := config.GeoData
-	contentGeo, err := os.ReadFile(geoDataPath)
+	locationDBPath := config.LocationDB
+	mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_USERDB)
+	fd, err := os.OpenFile(locationDBPath, os.O_RDWR|os.O_CREATE, mode)
 
 	/*
-	 * Check if file could be read.
+	 * Check if file could be opened.
 	 */
 	if err != nil {
-		return fmt.Errorf("Failed to read geo data file '%s'.", geoDataPath)
+		return fmt.Errorf("Failed to open location database file '%s'.", locationDBPath)
 	} else {
-		dataSet, err := geo.FromBytes(contentGeo)
+		db, err := geodb.Create(fd)
 
 		/*
-		 * Check if geo data could be decoded.
+		 * Check if database could be accessed.
 		 */
 		if err != nil {
 			msg := err.Error()
-			return fmt.Errorf("Failed to decode geo data file '%s': %s", geoDataPath, msg)
+			return fmt.Errorf("Failed to access location database: %s", msg)
 		} else {
-			numLocs := dataSet.LocationCount()
-			data := make([]geo.Location, numLocs)
-
-			/*
-			 * Iterate over the locations and optimize them.
-			 */
-			for i := 0; i < numLocs; i++ {
-				loc, err := dataSet.LocationAt(i)
-
-				/*
-				 * Verify that location could be obtained.
-				 */
-				if err == nil {
-					data[i] = loc
-				}
-
-			}
-
-			this.data = data
-			return nil
+			this.locationDB = db
 		}
 
+		return nil
 	}
 
 }
@@ -2557,14 +3281,14 @@ func (this *controllerStruct) Operate(args []string) {
 		 * If no arguments are passed, run the server, otherwise interpret them.
 		 */
 		if numArgs == 0 {
-			err = this.initializeGeoData()
+			err = this.initializeLocationData()
 
 			/*
-			 * Check if geo data could be loaded.
+			 * Check if location data could be loaded.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Error loading geo data: %s\n", msg)
+				fmt.Printf("Error loading location data: %s\n", msg)
 			}
 
 			this.initializeTileSource()

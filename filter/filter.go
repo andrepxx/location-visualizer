@@ -2,7 +2,7 @@ package filter
 
 import (
 	"fmt"
-	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/geo/geodb"
 	"regexp"
 	"strings"
 	"time"
@@ -18,7 +18,7 @@ const (
  * A filter for location data.
  */
 type Filter interface {
-	Evaluate(geo.Location) bool
+	Evaluate(loc *geodb.Location) bool
 }
 
 /*
@@ -108,7 +108,7 @@ func fromSloppyTime(in string) (string, error) {
 /*
  * Evaluate whether a geographical location matches a filter criteria.
  */
-func (this *timeFilterStruct) Evaluate(loc geo.Location) bool {
+func (this *timeFilterStruct) Evaluate(loc *geodb.Location) bool {
 
 	/*
 	 * Nil locations never match a filter.
@@ -116,7 +116,7 @@ func (this *timeFilterStruct) Evaluate(loc geo.Location) bool {
 	if loc == nil {
 		return false
 	} else {
-		ts := loc.Timestamp()
+		ts := loc.Timestamp
 		tsSeconds := ts / MILLISECONDS_PER_SECOND
 		tsSecondsUnix := int64(tsSeconds)
 		tsNanos := (ts % MILLISECONDS_PER_SECOND) * NANOSECONDS_PER_MILLISECOND
@@ -152,70 +152,72 @@ func (this *timeFilterStruct) Evaluate(loc geo.Location) bool {
 /*
  * Apply a filter to a set of geographical locations to narrow it down.
  */
-func Apply(flt Filter, locs []geo.Location) []geo.Location {
-	numLocs := len(locs)
-	matches := make([]bool, numLocs)
-	numMatches := Evaluate(flt, locs, matches)
-	filtered := make([]geo.Location, numMatches)
+func Apply(flt Filter, in []geodb.Location, out []geodb.Location) int {
+	numIn := len(in)
+	matches := make([]bool, numIn)
+	Evaluate(flt, in, matches)
+	numOut := len(out)
 	idx := 0
 
 	/*
 	 * Copy matches over.
 	 */
 	for i, match := range matches {
+		hasSpace := idx < numOut
 
 		/*
-		 * Increment match counter on match.
+		 * Copy to output on match.
 		 */
-		if match {
-			loc := locs[i]
-			filtered[idx] = loc
+		if match && hasSpace {
+			loc := in[i]
+			out[idx] = loc
 			idx++
 		}
 
 	}
 
-	return filtered
+	return idx
 }
 
 /*
  * Evaluate whether a set of geographical locations matches filter criteria.
  */
-func Evaluate(flt Filter, locs []geo.Location, result []bool) int {
-	numResults := len(result)
-	numMatches := 0
+func Evaluate(flt Filter, locs []geodb.Location, result []bool) {
 
 	/*
-	 * A nil filter never matches anything.
+	 * A nil filter always matches everything.
 	 */
-	if flt != nil {
+	if flt == nil {
 
 		/*
-		 * Iterate over the locations and evaluate filter.
+		 * Clear result.
 		 */
-		for i, loc := range locs {
+		for i := range result {
+			result[i] = true
+		}
+
+	} else {
+		numLocs := len(locs)
+
+		/*
+		 * Produce results by evaluating filter.
+		 */
+		for i := range result {
+			match := false
 
 			/*
 			 * Prevent out-of-bounds error.
 			 */
-			if i < numResults {
-				currentResult := flt.Evaluate(loc)
-
-				/*
-				 * Increment on match.
-				 */
-				if currentResult {
-					numMatches++
-				}
-
-				result[i] = currentResult
+			if i < numLocs {
+				loc := &locs[i]
+				match = flt.Evaluate(loc)
 			}
 
+			result[i] = match
 		}
 
 	}
 
-	return numMatches
 }
 
 /*

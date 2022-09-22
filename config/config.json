@@ -1,6 +1,5 @@
 {
 	"ActivityDB": "data/activitydb.json",
-	"GeoData": "data/Records.json",
 
 	"Limits": {
 		"MaxAxis": 8192,
@@ -9,6 +8,7 @@
 		"MaxTileRequests": 128
 	},
 
+	"LocationDB": "data/locations.geodb",
 	"MapServer": "",
 	"MapCache": "data/tile/osm-${z}-${x}-${y}.png",
 	"SessionExpiry": "2h",
@@ -16,7 +16,7 @@
 	"UserDB": "data/userdb.json",
 
 	"WebServer": {
-		"Name": "location-visualizer/1.0.0",
+		"Name": "location-visualizer/1.1.0",
 		"Port": "8080",
 		"TLSDisabled": false,
 		"TLSPort": "8443",

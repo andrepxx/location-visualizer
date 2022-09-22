@@ -1,9 +1,8 @@
-package geo
+package geojson
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/andrepxx/sydney/coordinates"
 	"math"
 	"strconv"
 	"time"
@@ -20,7 +19,8 @@ const (
  * A location in GeoJSON representation.
  */
 type Location interface {
-	Coordinates() coordinates.Geographic
+	Latitude() int32
+	Longitude() int32
 	Timestamp() uint64
 }
 
@@ -35,19 +35,9 @@ type locationStruct struct {
 }
 
 /*
- * Data structure representing a location optimized for faster
- * access.
- */
-type optimizedLocationStruct struct {
-	timestampMs uint64
-	latitude    float64
-	longitude   float64
-}
-
-/*
  * Top-level GeoJSON element.
  */
-type GeoJSON interface {
+type Database interface {
 	LocationAt(idx int) (Location, error)
 	LocationCount() int
 }
@@ -55,42 +45,24 @@ type GeoJSON interface {
 /*
  * Data structure representing the top-level GeoJSON element.
  */
-type geoJSONStruct struct {
+type databaseStruct struct {
 	Locations []locationStruct `json:"locations"`
 }
 
 /*
- * Returns the geographic coordinates of this location.
- * By convention, these are in radians.
+ * Returns the latitude of this location.
  */
-func (this *locationStruct) Coordinates() coordinates.Geographic {
-	longitudeE7 := this.LongitudeE7
-	longitude := (DEGREES_TO_RADIANS * 1e-7) * float64(longitudeE7)
+func (this *locationStruct) Latitude() int32 {
 	latitudeE7 := this.LatitudeE7
-	latitude := (DEGREES_TO_RADIANS * 1e-7) * float64(latitudeE7)
-	coords := coordinates.CreateGeographic(longitude, latitude)
-	return coords
+	return latitudeE7
 }
 
 /*
- * Returns a location optimized for faster access.
+ * Returns the longitude of this location.
  */
-func (this *locationStruct) Optimize() Location {
-	coords := this.Coordinates()
-	lng := coords.Longitude()
-	lat := coords.Latitude()
-	ts := this.Timestamp()
-
-	/*
-	 * The optimized location structure.
-	 */
-	loc := optimizedLocationStruct{
-		timestampMs: ts,
-		latitude:    lat,
-		longitude:   lng,
-	}
-
-	return &loc
+func (this *locationStruct) Longitude() int32 {
+	longitudeE7 := this.LongitudeE7
+	return longitudeE7
 }
 
 /*
@@ -131,36 +103,9 @@ func (this *locationStruct) Timestamp() uint64 {
 }
 
 /*
- * Returns the geographic coordinates of this location.
- * By convention, these are in radians.
+ * The location stored at the given index in this database.
  */
-func (this *optimizedLocationStruct) Coordinates() coordinates.Geographic {
-	longitude := this.longitude
-	latitude := this.latitude
-	coords := coordinates.CreateGeographic(longitude, latitude)
-	return coords
-}
-
-/*
- * Returns a location optimized for faster access.
- */
-func (this *optimizedLocationStruct) Optimize() Location {
-	return this
-}
-
-/*
- * Returns the timestamp (in milliseconds since the Epoch) when
- * this GPS location was recorded.
- */
-func (this *optimizedLocationStruct) Timestamp() uint64 {
-	timestampMs := this.timestampMs
-	return timestampMs
-}
-
-/*
- * The location stored at the given index in this GeoJSON structure.
- */
-func (this *geoJSONStruct) LocationAt(idx int) (Location, error) {
+func (this *databaseStruct) LocationAt(idx int) (Location, error) {
 	locs := this.Locations
 	numLocs := len(locs)
 
@@ -178,20 +123,20 @@ func (this *geoJSONStruct) LocationAt(idx int) (Location, error) {
 }
 
 /*
- * The number of locations stored in this GeoJSON structure.
+ * The number of locations stored in this database.
  */
-func (this *geoJSONStruct) LocationCount() int {
+func (this *databaseStruct) LocationCount() int {
 	locs := this.Locations
 	numLocs := len(locs)
 	return numLocs
 }
 
 /*
- * Create GeoJSON structure from byte slice.
+ * Create GeoJSON database from byte slice.
  */
-func FromBytes(data []byte) (GeoJSON, error) {
-	geoj := &geoJSONStruct{}
-	err := json.Unmarshal(data, geoj)
+func FromBytes(data []byte) (Database, error) {
+	db := &databaseStruct{}
+	err := json.Unmarshal(data, db)
 
 	/*
 	 * Check if an error occured during unmarshalling.
@@ -200,7 +145,7 @@ func FromBytes(data []byte) (GeoJSON, error) {
 		msg := err.Error()
 		return nil, fmt.Errorf("Error occured during unmarshalling: %s", msg)
 	} else {
-		return geoj, nil
+		return db, nil
 	}
 
 }

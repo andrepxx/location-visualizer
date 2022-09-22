@@ -482,6 +482,15 @@ function UI() {
 	const self = this;
 
 	/*
+	 * This is used to prevent the default action from occuring.
+	 */
+	this.absorbEvent = function(e) {
+		e.stopPropagation();
+		e.preventDefault();
+		return false;
+	};
+
+	/*
 	 * Creates a generic UI element container with a label.
 	 */
 	this.createElement = function(labelCaption, labelWidth) {
@@ -622,9 +631,9 @@ function UI() {
 		const body = document.createElement('tbody');
 		const activities = response.Activities;
 		const numActivities = activities.length;
-		var allRemoveLinks = [];
-		var allYesNoLinks = [];
-		var currentYearAndMonth = '';
+		let allRemoveLinks = [];
+		let allYesNoLinks = [];
+		let currentYearAndMonth = '';
 
 		/*
 		 * Iterate over all activities.
@@ -878,7 +887,7 @@ function UI() {
 				/*
 				 * Show all remove links.
 				 */
-				for (var i = 0; i < allRemoveLinks.length; i++) {
+				for (let i = 0; i < allRemoveLinks.length; i++) {
 					const link = allRemoveLinks[i];
 					link.style.display = 'inline-block';
 				}
@@ -886,7 +895,7 @@ function UI() {
 				/*
 				 * Hide all yes / no links.
 				 */
-				for (var i = 0; i < allYesNoLinks.length; i++) {
+				for (let i = 0; i < allYesNoLinks.length; i++) {
 					const link = allYesNoLinks[i];
 					link.style.display = 'none';
 				}
@@ -1127,7 +1136,7 @@ function UI() {
 			 * This is called when the server returns a response.
 			 */
 			const callback = function(content) {
-				const response = JSON.parse(content);
+				const response = helper.parseJSON(content);
 				const success = response.Success;
 
 				/*
@@ -1310,7 +1319,7 @@ function UI() {
 			 * This is called when the server returns a response.
 			 */
 			const callback = function(content) {
-				const response = JSON.parse(content);
+				const response = helper.parseJSON(content);
 				const success = response.Success;
 
 				/*
@@ -1379,7 +1388,7 @@ function UI() {
 			 * This is called when the server returns a response.
 			 */
 			const callback = function(content) {
-				const response = JSON.parse(content);
+				const response = helper.parseJSON(content);
 				const success = response.Success;
 
 				/*
@@ -1412,6 +1421,307 @@ function UI() {
 
 		buttonsDiv.appendChild(buttonCancel);
 		innerDiv.appendChild(buttonsDiv);
+		div.style.display = 'block';
+	};
+
+	/*
+	 * This is called when the user drops a geo data file into the upload area.
+	 */
+	this.uploadGeoData = function(e) {
+		e.stopPropagation();
+		e.preventDefault();
+		const transfer = e.dataTransfer;
+		const files = transfer.files;
+		const numFiles = files.length;
+
+		/*
+		 * Check if there is a file.
+		 */
+		if (numFiles > 0) {
+			const file = files[0];
+			const importStrategyField = document.getElementById('geodb_import_strategy_field');
+			const importStrategyValue = importStrategyField.value;
+			const importSortField = document.getElementById('geodb_sort_field');
+			const importSortValue = importSortField.value;
+
+			/*
+			 * This gets called when the server returns a response.
+			 */
+			let responseHandler = function(response) {
+				ui.displayGeoDBImportStats(response);
+			};
+
+			const url = globals.cgi;
+			const data = new FormData();
+			data.append('cgi', 'import-geojson');
+			data.append('strategy', importStrategyValue);
+			data.append('sort', importSortValue);
+			const cvs = document.getElementById('map_canvas');
+			const token = storage.get(cvs, 'token');
+			data.append('token', token);
+			data.append('file', file);
+			ajax.request('POST', url, data, null, responseHandler, true);
+		}
+
+		return false;
+	};
+
+	/*
+	 * Parse GeoDB import stats and display them.
+	 */
+	this.displayGeoDBImportStats = function(content) {
+		const response = helper.parseJSON(content);
+		const contentDiv = document.getElementById('geodbdialog_content');
+		helper.clearElement(contentDiv);
+		const tableDiv = document.createElement('div');
+		const status = response.Status;
+		const success = status.Success;
+
+		/*
+		 * Only render table if import was successful.
+		 */
+		if (success === true) {
+			const table = document.createElement('table');
+			table.className = 'geodbtable';
+			const body = document.createElement('tbody');
+			const columnNames = ['Before', 'Source', 'Imported', 'After'];
+			const rowNames = ['LocationCount', 'Ordered', 'OrderedStrict', 'TimestampEarliest', 'TimestampLatest'];
+			const rowLabels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
+			const headerRow = document.createElement('tr');
+			headerRow.className = 'geodbtablerow';
+			const emptyHeaderCell = document.createElement('td');
+			emptyHeaderCell.className = 'geodbtablecell tablehead';
+			headerRow.appendChild(emptyHeaderCell);
+
+			/*
+			 * Fill header row.
+			 */
+			for (let i = 0; i < columnNames.length; i++) {
+				const headerCell = document.createElement('td');
+				headerCell.className = 'geodbtablecell tablehead';
+				const headerCellLabel = columnNames[i];
+				const headerCellNode = document.createTextNode(headerCellLabel);
+				headerCell.appendChild(headerCellNode);
+				headerRow.appendChild(headerCell);
+			}
+
+			body.appendChild(headerRow);
+
+			/*
+			 * Fill data rows.
+			 */
+			for (let i = 0; i < rowNames.length; i++) {
+				const dataRow = document.createElement('tr');
+				dataRow.className = 'geodbtablerow';
+				const rowName = rowNames[i];
+				const rowLabel = rowLabels[i];
+				const rowLabelCell = document.createElement('td');
+				rowLabelCell.className = 'geodbtablecell tablehead';
+				const rowLabelNode = document.createTextNode(rowLabel);
+				rowLabelCell.appendChild(rowLabelNode);
+				dataRow.appendChild(rowLabelCell)
+
+				/*
+				 * Fill data columns.
+				 */
+				for (let j = 0; j < columnNames.length; j++) {
+					const dataCell = document.createElement('td');
+					dataCell.className = 'geodbtablecell rightalign';
+					const columnName = columnNames[j];
+					const dataCellContent = response[columnName][rowName];
+					const dataCellContentString = dataCellContent.toString();
+					const dataCellNode = document.createTextNode(dataCellContentString);
+					dataCell.appendChild(dataCellNode);
+					dataRow.appendChild(dataCell);
+				}
+
+				body.appendChild(dataRow);
+			}
+
+			table.appendChild(body);
+			tableDiv.appendChild(table);
+		}
+
+		contentDiv.appendChild(tableDiv);
+		const buttonDiv = document.createElement('div');
+		const buttonBack = document.createElement('button');
+		buttonBack.className = 'button';
+		const buttonBackCaption = document.createTextNode('Back');
+		buttonBack.appendChild(buttonBackCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Back' button.
+		 */
+		buttonBack.onclick = function(e) {
+			div.style.display = 'none';
+			handler.showGeoDB();
+		};
+
+		buttonDiv.appendChild(buttonBack);
+		contentDiv.appendChild(buttonDiv);
+		const div = document.getElementById('geodbdialog');
+		div.style.display = 'block';
+	}
+
+	/*
+	 * Parse GeoDB stats and display them as a table inside a div element.
+	 */
+	this.displayGeoDBStats = function(div, response) {
+		const cgi = globals.cgi;
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgiDownloadGeoDBContent = 'download-geodb-content';
+		helper.clearElement(div);
+		const table = document.createElement('table');
+		table.className = 'geodbtable';
+		const body = document.createElement('tbody');
+		const labels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
+		const locationCount = response.LocationCount;
+		const locationCountString = locationCount.toString();
+		const ordered = response.Ordered;
+		const orderedString = ordered.toString();
+		const orderedStrict = response.OrderedStrict;
+		const orderedStrictString = orderedStrict.toString();
+		const timestampEarliest = response.TimestampEarliest;
+		const timestampEarliestString = timestampEarliest.toString();
+		const timestampLatest = response.TimestampLatest;
+		const timestampLatestString = timestampLatest.toString();
+		const values = [locationCountString, orderedString, orderedStrictString, timestampEarliestString, timestampLatestString];
+
+		/*
+		 * Iterate over all labels and values and add them to table.
+		 */
+		for (let i = 0; i < values.length; i++) {
+			const row = document.createElement('tr');
+			row.className = 'geodbtablerow';
+			const labelDiv = document.createElement('td');
+			labelDiv.className = 'geodbtablecell';
+			const label = labels[i];
+			const labelNode = document.createTextNode(label);
+			labelDiv.appendChild(labelNode);
+			row.appendChild(labelDiv);
+			const valueDiv = document.createElement('td');
+			valueDiv.className = 'geodbtablecell rightalign';
+			const value = values[i];
+			const valueNode = document.createTextNode(value);
+			valueDiv.appendChild(valueNode);
+			row.appendChild(valueDiv);
+			body.appendChild(row);
+		}
+
+		table.appendChild(body);
+		div.appendChild(table);
+		const spacerDivA = document.createElement('div');
+		spacerDivA.className = 'vspace';
+		div.appendChild(spacerDivA);
+		const downloadLinksDiv = document.createElement('div');
+		const downloadLinkBinaryDiv = document.createElement('div');
+		const downloadLinkBinary = document.createElement('a');
+		downloadLinkBinary.className = 'link';
+		const requestDownloadBinary = new Request();
+		requestDownloadBinary.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadBinary.append('format', 'binary');
+		requestDownloadBinary.append('token', token);
+		const requestDownloadBinaryData = requestDownloadBinary.getData();
+		const downloadLinkBinaryHref = document.createAttribute('href');
+		downloadLinkBinaryHref.value = cgi + '?' + requestDownloadBinaryData;
+		downloadLinkBinary.setAttributeNode(downloadLinkBinaryHref);
+		const downloadLinkBinaryNode = document.createTextNode('Download binary (*.geodb)');
+		downloadLinkBinary.appendChild(downloadLinkBinaryNode);
+		downloadLinkBinaryDiv.appendChild(downloadLinkBinary);
+		downloadLinksDiv.appendChild(downloadLinkBinaryDiv);
+		const downloadLinkCSVDiv = document.createElement('div');
+		const downloadLinkCSV = document.createElement('a');
+		downloadLinkCSV.className = 'link';
+		const requestDownloadCSV = new Request();
+		requestDownloadCSV.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadCSV.append('format', 'csv');
+		requestDownloadCSV.append('token', token);
+		const requestDownloadCSVData = requestDownloadCSV.getData();
+		const downloadLinkCSVHref = document.createAttribute('href');
+		downloadLinkCSVHref.value = cgi + '?' + requestDownloadCSVData;
+		downloadLinkCSV.setAttributeNode(downloadLinkCSVHref);
+		const downloadLinkCSVNode = document.createTextNode('Download CSV (*.csv)');
+		downloadLinkCSV.appendChild(downloadLinkCSVNode);
+		downloadLinkCSVDiv.appendChild(downloadLinkCSV);
+		downloadLinksDiv.appendChild(downloadLinkCSVDiv);
+		div.appendChild(downloadLinksDiv);
+		const spacerDivB = document.createElement('div');
+		spacerDivB.className = 'vspace';
+		div.appendChild(spacerDivB);
+		const importPropertiesDiv = document.createElement('div');
+		const importPropertiesDescriptionDiv = document.createElement('div');
+		const importPropertiesDescriptionNode = document.createTextNode('Drop GeoJSON file to import location data into geographical database.');
+		importPropertiesDescriptionDiv.appendChild(importPropertiesDescriptionNode);
+		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
+		const importStrategyElem = this.createElement('Import strategy', '180px');
+		const importStrategyValues = ['all', 'newer', 'none'];
+		const importStrategyDefault = importStrategyValues[1];
+		const fieldImportStrategy = document.createElement('select');
+
+		/*
+		 * Add supported values for import strategy.
+		 */
+		for (let i = 0; i < importStrategyValues.length; i++) {
+			const v = importStrategyValues[i];
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(v);
+			option.appendChild(optionNode);
+			fieldImportStrategy.appendChild(option);
+		}
+
+		fieldImportStrategy.className = 'textfield';
+		fieldImportStrategy.setAttribute('id', 'geodb_import_strategy_field');
+		fieldImportStrategy.value = importStrategyDefault;
+		importStrategyElem.appendChild(fieldImportStrategy);
+		importPropertiesDiv.appendChild(importStrategyElem);
+		const sortElem = this.createElement('Sort', '180px');
+		const sortValues = ['true', 'false'];
+		const sortDefault = sortValues[0];
+		const fieldSort = document.createElement('select');
+
+		/*
+		 * Add supported values for sorting.
+		 */
+		for (let i = 0; i < sortValues.length; i++) {
+			const v = sortValues[i];
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(v);
+			option.appendChild(optionNode);
+			fieldSort.appendChild(option);
+		}
+
+		fieldSort.className = 'textfield';
+		fieldSort.setAttribute('id', 'geodb_sort_field');
+		fieldSort.value = sortDefault;
+		sortElem.appendChild(fieldSort);
+		importPropertiesDiv.appendChild(sortElem);
+		div.appendChild(importPropertiesDiv);
+		const spacerDivC = document.createElement('div');
+		spacerDivB.className = 'vspace';
+		div.appendChild(spacerDivC);
+		const buttonDiv = document.createElement('div');
+		const buttonBack = document.createElement('button');
+		buttonBack.className = 'button';
+		const buttonBackCaption = document.createTextNode('Back');
+		buttonBack.appendChild(buttonBackCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Back' button.
+		 */
+		buttonBack.onclick = function(e) {
+			div.style.display = 'none';
+		};
+
+		buttonDiv.appendChild(buttonBack);
+		div.appendChild(buttonDiv);
+		div.addEventListener('dragend', this.absorbEvent);
+		div.addEventListener('dragenter', this.absorbEvent);
+		div.addEventListener('dragleave', this.absorbEvent);
+		div.addEventListener('dragover', this.absorbEvent);
+		div.addEventListener('drop', this.uploadGeoData);
 		div.style.display = 'block';
 	};
 
@@ -1497,7 +1807,7 @@ function UI() {
 
 		elemColorMapping.appendChild(fieldColorMapping);
 		sidebar.appendChild(elemColorMapping);
-		const elemButtons = this.createElement('', null);
+		const elemButtonsA = this.createElement('', null);
 		const buttonApply = document.createElement('button');
 		buttonApply.className = 'button';
 		const buttonApplyCaption = document.createTextNode('Apply');
@@ -1521,7 +1831,7 @@ function UI() {
 			handler.refresh();
 		};
 
-		elemButtons.appendChild(buttonApply);
+		elemButtonsA.appendChild(buttonApply);
 		const buttonHide = document.createElement('button');
 		buttonHide.className = 'button next';
 		const buttonHideCaption = document.createTextNode('Hide');
@@ -1535,7 +1845,7 @@ function UI() {
 			opener.style.display = 'block';
 		};
 
-		elemButtons.appendChild(buttonHide);
+		elemButtonsA.appendChild(buttonHide);
 		const buttonActivities = document.createElement('button');
 		buttonActivities.className = 'button next';
 		const buttonActivitiesCaption = document.createTextNode('Activities');
@@ -1548,7 +1858,7 @@ function UI() {
 			handler.showActivities();
 		};
 
-		elemButtons.appendChild(buttonActivities);
+		elemButtonsA.appendChild(buttonActivities);
 		const buttonLogout = document.createElement('button');
 		buttonLogout.className = 'button buttonred nextgap';
 		const buttonLogoutCaption = document.createTextNode('Logout');
@@ -1558,11 +1868,51 @@ function UI() {
 		 * This is called when the user clicks on the 'Logout' button.
 		 */
 		buttonLogout.onclick = function(e) {
+			sidebar.style.display = 'none';
+			opener.style.display = 'block';
 			handler.logout();
 		};
 
-		elemButtons.appendChild(buttonLogout);
-		sidebar.appendChild(elemButtons);
+		elemButtonsA.appendChild(buttonLogout);
+		sidebar.appendChild(elemButtonsA);
+		const elemButtonsB = this.createElement('');
+		const buttonGeoDB = document.createElement('button');
+		buttonGeoDB.className = 'button';
+		const buttonGeoDBCaption = document.createTextNode('GeoDB');
+		buttonGeoDB.appendChild(buttonGeoDBCaption);
+
+		/*
+		 * This is called when the user clicks on the 'GeoDB' button.
+		 */
+		buttonGeoDB.onclick = function(e) {
+			handler.showGeoDB();
+		};
+
+		elemButtonsB.appendChild(buttonGeoDB);
+		const buttonFullscreen = document.createElement('button');
+		buttonFullscreen.className = 'button next';
+		const buttonFullscreenCaption = document.createTextNode('Fullscreen');
+		buttonFullscreen.appendChild(buttonFullscreenCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Fullscreen' button.
+		 */
+		buttonFullscreen.onclick = function(e) {
+
+			/*
+			 * If we are in fullscreen mode, leave it, otherwise enter it.
+			 */
+			if (window.matchMedia('(display-mode: fullscreen)').matches) {
+			    	document.exitFullscreen();
+			} else {
+				const elem = document.documentElement;
+				elem.requestFullscreen();
+	 		}
+
+		};
+
+		elemButtonsB.appendChild(buttonFullscreen);
+		sidebar.appendChild(elemButtonsB);
 		const elemSpacerA = document.createElement('div');
 		elemSpacerA.className = 'vspace';
 		sidebar.appendChild(elemSpacerA);
@@ -1676,7 +2026,7 @@ function UI() {
 			 * This is called when the server sends a challenge.
 			 */
 			const callbackChallenge = function(content) {
-				const challenge = JSON.parse(content);
+				const challenge = helper.parseJSON(content);
 				const challengeSuccess = challenge.Success;
 
 				/*
@@ -1720,7 +2070,7 @@ function UI() {
 					 * This is called when the server sends a session token.
 					 */
 					const callbackToken = function(content) {
-						const token = JSON.parse(content);
+						const token = helper.parseJSON(content);
 						const tokenSuccess = token.Success;
 
 						/*
@@ -2131,13 +2481,15 @@ function UI() {
 			rq.append('token', token);
 		}
 
-		const cgi = globals.cgi;
-		const data = rq.getData();
 		const cvs = document.getElementById('map_canvas');
 		const idRequest = storage.get(cvs, 'imageRequestId');
 		const currentRequestId = idRequest + 1;
 		storage.put(cvs, 'imageRequestId', currentRequestId);
+		const currentRequestIdString = currentRequestId.toString();
+		rq.append('rqid', currentRequestIdString);
 		storage.put(cvs, 'osmTiles', []);
+		const cgi = globals.cgi;
+		const data = rq.getData();
 
 		/*
 		 * This is called when the server sends data.
@@ -2661,9 +3013,34 @@ function Handler() {
 		 * This is called when the server returns activities.
 		 */
 		const callback = function(content) {
-			const response = JSON.parse(content);
+			const response = helper.parseJSON(content);
 			const div = document.getElementById('activities');
 			ui.displayActivities(div, response);
+		};
+
+		ajax.request('POST', cgi, data, mime, callback, false);
+	};
+
+	/*
+	 * This is called when the user clicks on the 'GeoDB' button.
+	 */
+	this.showGeoDB = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'get-geodb-stats');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
+
+		/*
+		 * This is called when the server returns activities.
+		 */
+		const callback = function(content) {
+			const response = helper.parseJSON(content);
+			const div = document.getElementById('geodb');
+			ui.displayGeoDBStats(div, response);
 		};
 
 		ajax.request('POST', cgi, data, mime, callback, false);
@@ -2686,7 +3063,7 @@ function Handler() {
 		 * This is called when the server confirms the logout.
 		 */
 		const callback = function(content) {
-			const response = JSON.parse(content);
+			const response = helper.parseJSON(content);
 			const success = response.Success;
 
 			/*
@@ -2695,6 +3072,7 @@ function Handler() {
 			if (success === true) {
 				storage.put(cvs, 'token', null);
 				ui.showLogin();
+				self.refresh();
 			}
 
 		};
