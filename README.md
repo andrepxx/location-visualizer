@@ -1,6 +1,6 @@
 # location-visualizer
 
-This software allows you perform fitness / activity and location tracking, as well as visualization of that data, on your own infrastructure.
+This software allows you to perform fitness / activity and location tracking, as well as visualization of that data, on your own infrastructure.
 
 Data can be imported from GeoJSON files, for example from your location history, which you can obtain from Google Takeout, and stored in a local database.
 
