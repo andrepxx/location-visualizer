@@ -670,9 +670,11 @@ func (this *databaseBinarySerializerStruct) Read(buf []byte) (int, error) {
 					bufToZero[i] = 0
 				}
 
+				offset += bytesRead64
 				result = bytesRead
 			}
 
+			this.offset = offset
 		}
 
 	}
