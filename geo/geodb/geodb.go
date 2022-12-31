@@ -27,6 +27,26 @@ const (
 )
 
 /*
+ * States for JSON serializer.
+ */
+const (
+	JSON_STREAM_HEADER = iota
+	JSON_STREAM_ENTRIES
+	JSON_STREAM_TRAILER
+	JSON_STREAM_EOF
+	JSON_STREAM_ERROR
+)
+
+/*
+ * Indentation direction.
+ */
+const (
+	JSON_INDENT_IN   = 1
+	JSON_INDENT_NONE = 0
+	JSON_INDENT_OUT  = -1
+)
+
+/*
  * A geographic location stored in the geo database.
  */
 type Location struct {
@@ -45,6 +65,7 @@ type Database interface {
 	ReadLocations(offset uint32, target []Location) (uint32, error)
 	SerializeBinary() io.ReadSeekCloser
 	SerializeCSV() io.ReadCloser
+	SerializeJSON(pretty bool) io.ReadCloser
 	Sort() error
 }
 
@@ -107,6 +128,19 @@ type databaseCsvSerializerStruct struct {
 	entryId    uint32
 	lineBuffer *strings.Builder
 	lineOffset int
+}
+
+/*
+ * Data structure for serializing the database into GeoJSON format.
+ */
+type databaseJsonSerializerStruct struct {
+	mutex   sync.Mutex
+	buffer  *strings.Builder
+	db      *databaseStruct
+	entryId uint32
+	indent  uint16
+	pretty  bool
+	state   int
 }
 
 /*
@@ -489,6 +523,35 @@ func (this *databaseStruct) SerializeCSV() io.ReadCloser {
 		csvWriter:  w,
 		db:         this,
 		lineBuffer: buf,
+	}
+
+	return &s
+}
+
+/*
+ * Locks the database for read access and provides a ReadCloser granting
+ * sequential access to the database in JSON format.
+ *
+ * JSON data will be generated on-the-fly while reading from the provided
+ * ReadCloser.
+ *
+ * - When pretty == true, data will be pretty-printed for human consumption.
+ * - When pretty == false, data will be compact for machine consumption.
+ *
+ * Closing the returned ReadCloser yields the lock on the database.
+ */
+func (this *databaseStruct) SerializeJSON(pretty bool) io.ReadCloser {
+	this.mutex.RLock()
+	buf := &strings.Builder{}
+
+	/*
+	 * Create database JSON serializer.
+	 */
+	s := databaseJsonSerializerStruct{
+		buffer: buf,
+		db:     this,
+		pretty: pretty,
+		state:  JSON_STREAM_HEADER,
 	}
 
 	return &s
@@ -910,8 +973,7 @@ func (this *databaseCsvSerializerStruct) Read(buf []byte) (int, error) {
 							err = binary.Read(rd, endianness, &entry)
 
 							/*
-							 * Check if database entry
-							 * could be deserialized.
+							 * Check if database entry could be deserialized.
 							 */
 							if err != nil {
 								errResult = fmt.Errorf("Error deserializing entry at offset: 0x%016x", offsetBytes)
@@ -976,6 +1038,469 @@ func (this *databaseCsvSerializerStruct) Read(buf []byte) (int, error) {
  * This will yield the read lock on the underlying database.
  */
 func (this *databaseCsvSerializerStruct) Close() error {
+	result := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is already closed.
+	 */
+	if db == nil {
+		result = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		db.mutex.RUnlock()
+		this.db = nil
+	}
+
+	this.mutex.Unlock()
+	return result
+}
+
+/*
+ * Begin a JSON list.
+ */
+func (this *databaseJsonSerializerStruct) beginList() {
+	buffer := this.buffer
+	buffer.WriteRune('[')
+	this.startLine(JSON_INDENT_IN)
+}
+
+/*
+ * Begin a JSON object.
+ */
+func (this *databaseJsonSerializerStruct) beginObject() {
+	buffer := this.buffer
+	buffer.WriteRune('{')
+	this.startLine(JSON_INDENT_IN)
+}
+
+/*
+ * Change the indentation depth.
+ */
+func (this *databaseJsonSerializerStruct) changeIndent(direction int) {
+	indent := this.indent
+
+	/*
+	 * Decide on the indentation direction.
+	 */
+	switch direction {
+	case JSON_INDENT_IN:
+
+		/*
+		 * Increase indent, preventing overflow.
+		 */
+		if indent < math.MaxUint16 {
+			indent++
+		}
+
+	case JSON_INDENT_OUT:
+
+		/*
+		 * Decrease indent, preventing underflow.
+		 */
+		if indent > 0 {
+			indent--
+		}
+
+	default:
+		// Do nothing.
+	}
+
+	this.indent = indent
+}
+
+/*
+ * End a JSON list.
+ */
+func (this *databaseJsonSerializerStruct) endList() {
+	this.startLine(JSON_INDENT_OUT)
+	buffer := this.buffer
+	buffer.WriteRune(']')
+}
+
+/*
+ * End a JSON object.
+ */
+func (this *databaseJsonSerializerStruct) endObject() {
+	this.startLine(JSON_INDENT_OUT)
+	buffer := this.buffer
+	buffer.WriteRune('}')
+}
+
+/*
+ * Format timestamp as string value.
+ */
+func (this *databaseJsonSerializerStruct) formatTimestamp(timestamp uint64) string {
+	timestampSigned := int64(timestamp)
+	t := time.UnixMilli(timestampSigned)
+	utcTime := t.UTC()
+	result := utcTime.Format(time.RFC3339Nano)
+	return result
+}
+
+/*
+ * Generate more JSON data.
+ */
+func (this *databaseJsonSerializerStruct) generateJSON() error {
+	state := this.state
+	errResult := error(nil)
+
+	switch state {
+	case JSON_STREAM_HEADER:
+		this.beginObject()
+		this.generateJSONForObjectKey("locations")
+		this.beginList()
+		state = JSON_STREAM_ENTRIES
+	case JSON_STREAM_ENTRIES:
+		err := this.generateJSONForNextEntry()
+
+		/*
+		 * Check for errors during serialization.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error generating entry: %s", msg)
+			state = JSON_STREAM_ERROR
+		} else {
+			moreAvailable := this.hasMoreEntries()
+
+			/*
+			 * If there are more entries to be serialized, write
+			 * separator, otherwise transition to serializing the
+			 * trailer.
+			 */
+			if moreAvailable {
+				this.nextItem()
+			} else {
+				state = JSON_STREAM_TRAILER
+			}
+
+		}
+
+	case JSON_STREAM_TRAILER:
+		this.endList()
+		this.endObject()
+		state = JSON_STREAM_EOF
+	case JSON_STREAM_EOF:
+		errResult = io.EOF
+	default:
+		errResult = fmt.Errorf("%s", "Error during JSON serialization.")
+	}
+
+	this.state = state
+	return errResult
+}
+
+/*
+ * Generate JSON data for a key-value-pair.
+ */
+func (this *databaseJsonSerializerStruct) generateJSONForKeyValuePair(key string, value string, valueAsStringLiteral bool) {
+	buffer := this.buffer
+	this.generateJSONForObjectKey(key)
+	valueLiteral := value
+
+	/*
+	 * Optionally, encode value as string literal.
+	 */
+	if valueAsStringLiteral {
+		valueLiteral = this.toStringLiteral(value)
+	}
+
+	buffer.WriteString(valueLiteral)
+}
+
+/*
+ * Generate JSON data for object key.
+ */
+func (this *databaseJsonSerializerStruct) generateJSONForObjectKey(key string) {
+	pretty := this.pretty
+	buffer := this.buffer
+	keyLiteral := this.toStringLiteral(key)
+	buffer.WriteString(keyLiteral)
+	buffer.WriteRune(':')
+
+	/*
+	 * When pretty-printing, emit space after object key.
+	 */
+	if pretty {
+		buffer.WriteRune(' ')
+	}
+
+}
+
+/*
+ * Generate JSON data for next entry in geographical database.
+ */
+func (this *databaseJsonSerializerStruct) generateJSONForNextEntry() error {
+	errResult := error(nil)
+	moreAvailable := this.hasMoreEntries()
+
+	/*
+	 * Check if more entries are available.
+	 */
+	if moreAvailable {
+		db := this.db
+		entryId := this.entryId
+		entry := databaseEntryStruct{}
+		fd := db.fd
+		endianness := binary.BigEndian
+		offset := uint64(entryId)
+		offsetBytes := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * offset)
+		offsetBytesSigned := int64(offsetBytes)
+		bufRead := make([]byte, SIZE_DATABASE_ENTRY)
+		numBytesRead, err := fd.ReadAt(bufRead, offsetBytesSigned)
+
+		/*
+		 * If we read less bytes than expected, zero out part of the
+		 * buffer.
+		 */
+		if numBytesRead < SIZE_DATABASE_ENTRY {
+			zero := bufRead[numBytesRead:SIZE_DATABASE_ENTRY]
+
+			/*
+			 * Zero the unused part of the buffer.
+			 */
+			for i := range zero {
+				zero[i] = 0
+			}
+
+		}
+
+		/*
+		 * Check for read error.
+		 */
+		if err != nil {
+			errResult = fmt.Errorf("Error reading from offset: 0x%016x", offsetBytes)
+		} else {
+			rd := bytes.NewReader(bufRead)
+			err = binary.Read(rd, endianness, &entry)
+
+			/*
+			 * Check if database entry could be deserialized.
+			 */
+			if err != nil {
+				errResult = fmt.Errorf("Error deserializing entry at offset: 0x%016x", offsetBytes)
+			} else {
+				timestampMSB := entry.TimestampMSB
+				timestampMSB64 := uint64(timestampMSB)
+				timestampLSB := entry.TimestampLSB
+				timestampLSB64 := uint64(timestampLSB)
+				timestamp := (timestampMSB64 << 32) | timestampLSB64
+				latitudeE7 := entry.LatitudeE7
+				longitudeE7 := entry.LongitudeE7
+				timestampString := this.formatTimestamp(timestamp)
+				timestampMsString := fmt.Sprintf("%d", timestamp)
+				latitudeE7String := fmt.Sprintf("%d", latitudeE7)
+				longitudeE7String := fmt.Sprintf("%d", longitudeE7)
+				this.beginObject()
+				this.generateJSONForKeyValuePair("timestamp", timestampString, true)
+				this.nextItem()
+				this.generateJSONForKeyValuePair("timestampMs", timestampMsString, true)
+				this.nextItem()
+				this.generateJSONForKeyValuePair("latitudeE7", latitudeE7String, false)
+				this.nextItem()
+				this.generateJSONForKeyValuePair("longitudeE7", longitudeE7String, false)
+				this.endObject()
+			}
+		}
+
+		entryId++
+		this.entryId = entryId
+	}
+
+	return errResult
+}
+
+/*
+ * Returns whether there are more entries in the database to be serialized.
+ */
+func (this *databaseJsonSerializerStruct) hasMoreEntries() bool {
+	db := this.db
+	entryId := this.entryId
+	locationCount := db.locationCount
+	result := entryId < locationCount
+	return result
+}
+
+/*
+ * Returns whether this byte is an ASCII control character.
+ */
+func (this *databaseJsonSerializerStruct) isControlCharacter(value rune) bool {
+	result := (value < 0x20) || (value == 0x7f)
+	return result
+}
+
+/*
+ * Starts a new item, either in a list or an object.
+ */
+func (this *databaseJsonSerializerStruct) nextItem() {
+	buffer := this.buffer
+	buffer.WriteRune(',')
+	pretty := this.pretty
+
+	/*
+	 * For pretty-printing, start new line for each item.
+	 */
+	if pretty {
+		this.startLine(JSON_INDENT_NONE)
+	}
+
+}
+
+/*
+ * Begins a new line, including indentation.
+ */
+func (this *databaseJsonSerializerStruct) startLine(indentationDirection int) {
+	pretty := this.pretty
+
+	/*
+	 * Only do this when pretty-printing JSON.
+	 */
+	if pretty {
+		this.changeIndent(indentationDirection)
+		indent := this.indent
+		indentByte := uint8(indent)
+
+		/*
+		 * Limit indentation depth.
+		 */
+		if indent > math.MaxUint8 {
+			indentByte = math.MaxUint8
+		}
+
+		buffer := this.buffer
+		buffer.WriteRune('\n')
+
+		/*
+		 * Write indentation.
+		 */
+		for i := uint8(0); i < indentByte; i++ {
+			buffer.WriteRune('\t')
+		}
+
+	}
+
+}
+
+/*
+ * Convert a string value into a JSON string literal.
+ */
+func (this *databaseJsonSerializerStruct) toStringLiteral(value string) string {
+	buf := strings.Builder{}
+	buf.WriteRune('"')
+
+	/*
+	 * Iterate over the input string.
+	 */
+	for _, c := range value {
+
+		/*
+		 * Perform action depending on character.
+		 */
+		switch c {
+		case '\\':
+			buf.WriteString("\\\\")
+		case '"':
+			buf.WriteString("\\\"")
+		case '\n':
+			buf.WriteString("\\n")
+		case '\r':
+			buf.WriteString("\\r")
+		case '\t':
+			buf.WriteString("\\t")
+		default:
+			isControl := this.isControlCharacter(c)
+
+			/*
+			 * Escape control character.
+			 */
+			if isControl {
+				uc := uint16(c)
+				fmt.Fprintf(&buf, "\\u%04x", uc)
+			} else {
+				buf.WriteRune(c)
+			}
+
+		}
+
+	}
+
+	buf.WriteRune('"')
+	result := buf.String()
+	return result
+}
+
+/*
+ * Implements the Read function from io.ReadCloser.
+ */
+func (this *databaseJsonSerializerStruct) Read(buf []byte) (int, error) {
+	numBytesRead := 0
+	errResult := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is already closed.
+	 */
+	if db == nil {
+		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		buffer := this.buffer
+		numBytesAvailable := buffer.Len()
+		numBytesToRead := len(buf)
+		err := error(nil)
+
+		/*
+		 * Generate JSON until enough data is available or error occurs.
+		 */
+		for (numBytesAvailable < numBytesToRead) && (err == nil) {
+			err = this.generateJSON()
+			numBytesAvailable = buffer.Len()
+		}
+
+		/*
+		 * Check if error occured.
+		 */
+		if err != nil {
+			errResult = err
+		}
+
+		bufferContent := buffer.String()
+		bufferBytes := []byte(bufferContent)
+		buffer.Reset()
+		numBytesAvailable = len(bufferBytes)
+		numBytesRead = numBytesToRead
+
+		/*
+		 * If there are fewer bytes available, then this is the limit.
+		 */
+		if numBytesAvailable < numBytesRead {
+			numBytesRead = numBytesAvailable
+		}
+
+		bufferToCopy := bufferBytes[0:numBytesRead]
+		copy(buf, bufferToCopy)
+
+		/*
+		 * If there are leftover bytes, we need to keep them.
+		 */
+		if numBytesAvailable > numBytesRead {
+			bufferToKeep := bufferBytes[numBytesRead:numBytesAvailable]
+			buffer.Write(bufferToKeep)
+		}
+
+		this.mutex.Unlock()
+	}
+
+	return numBytesRead, errResult
+}
+
+/*
+ * Implements the Close function from io.ReadCloser.
+ *
+ * This will yield the read lock on the underlying database.
+ */
+func (this *databaseJsonSerializerStruct) Close() error {
 	result := error(nil)
 	this.mutex.Lock()
 	db := this.db

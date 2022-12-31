@@ -805,6 +805,27 @@ func (this *controllerStruct) downloadGeoDBContentHandler(request webserver.Http
 					ContentReadCloser: contentProvider,
 				}
 
+			case "json", "json-pretty":
+				pretty := format == "json-pretty"
+				contentProvider := db.SerializeJSON(pretty)
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.json", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/json; charset=utf-8",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
 			default:
 				msg := fmt.Sprintf("Unknown format: '%s'", format)
 				msgBuf := bytes.NewBufferString(msg)
