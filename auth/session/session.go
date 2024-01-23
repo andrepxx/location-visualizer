@@ -4,10 +4,11 @@ import (
 	"crypto/sha512"
 	"crypto/subtle"
 	"fmt"
-	"github.com/andrepxx/location-visualizer/auth/user"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/andrepxx/location-visualizer/auth/user"
 )
 
 /*

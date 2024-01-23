@@ -6,21 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/andrepxx/location-visualizer/auth/rand"
-	"github.com/andrepxx/location-visualizer/auth/session"
-	"github.com/andrepxx/location-visualizer/auth/user"
-	"github.com/andrepxx/location-visualizer/filter"
-	"github.com/andrepxx/location-visualizer/geo/geodb"
-	"github.com/andrepxx/location-visualizer/geo/geojson"
-	"github.com/andrepxx/location-visualizer/geo/geoutil"
-	"github.com/andrepxx/location-visualizer/meta"
-	lsync "github.com/andrepxx/location-visualizer/sync"
-	"github.com/andrepxx/location-visualizer/tile"
-	"github.com/andrepxx/location-visualizer/webserver"
-	"github.com/andrepxx/sydney/color"
-	"github.com/andrepxx/sydney/coordinates"
-	"github.com/andrepxx/sydney/projection"
-	"github.com/andrepxx/sydney/scene"
 	"image/png"
 	"io"
 	"math"
@@ -29,6 +14,24 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/andrepxx/location-visualizer/auth/rand"
+	"github.com/andrepxx/location-visualizer/auth/session"
+	"github.com/andrepxx/location-visualizer/auth/user"
+	"github.com/andrepxx/location-visualizer/filter"
+	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/geo/geodb"
+	"github.com/andrepxx/location-visualizer/geo/geojson"
+	"github.com/andrepxx/location-visualizer/geo/geoutil"
+	"github.com/andrepxx/location-visualizer/geo/gpx"
+	"github.com/andrepxx/location-visualizer/meta"
+	lsync "github.com/andrepxx/location-visualizer/sync"
+	"github.com/andrepxx/location-visualizer/tile"
+	"github.com/andrepxx/location-visualizer/webserver"
+	"github.com/andrepxx/sydney/color"
+	"github.com/andrepxx/sydney/coordinates"
+	"github.com/andrepxx/sydney/projection"
+	"github.com/andrepxx/sydney/scene"
 )
 
 /*
@@ -805,6 +808,27 @@ func (this *controllerStruct) downloadGeoDBContentHandler(request webserver.Http
 					ContentReadCloser: contentProvider,
 				}
 
+			case "gpx", "gpx-pretty":
+				pretty := format == "gpx-pretty"
+				contentProvider := db.SerializeXML(pretty)
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.gpx", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/gpx+xml",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
 			case "json", "json-pretty":
 				pretty := format == "json-pretty"
 				contentProvider := db.SerializeJSON(pretty)
@@ -1452,9 +1476,9 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 }
 
 /*
- * Import location data in GeoJSON format.
+ * Import location data in GeoJSON or GPX format.
  */
-func (this *controllerStruct) importGeoJSONHandler(request webserver.HttpRequest) webserver.HttpResponse {
+func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	migrationReport := webMigrationReportStruct{}
 	perm, err := this.checkPermission(token, "geodb-write")
@@ -1551,7 +1575,16 @@ func (this *controllerStruct) importGeoJSONHandler(request webserver.HttpRequest
 
 					migrationReport.Status = status
 				} else {
-					source, err := geojson.FromBytes(data)
+					source, err := geo.Database(nil), fmt.Errorf("%s", "No source file or invalid format.")
+
+					format := request.Params["format"]
+
+					switch format {
+					case "gpx":
+						source, err = gpx.FromBytes(data)
+					case "json":
+						source, err = geojson.FromBytes(data)
+					}
 
 					/*
 					 * Check if source file could be successfully parsed.
@@ -2605,8 +2638,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		this.release(sem)
 	case "import-activity-csv":
 		response = this.importActivityCsvHandler(request)
-	case "import-geojson":
-		response = this.importGeoJSONHandler(request)
+	case "import-geodata":
+		response = this.importGeoDataHandler(request)
 	case "remove-activity":
 		response = this.removeActivityHandler(request)
 	case "replace-activity":

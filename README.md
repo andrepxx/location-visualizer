@@ -2,11 +2,15 @@
 
 This software allows you to perform fitness / activity and location tracking, as well as visualization of that data, on your own infrastructure.
 
-Data can be imported from GeoJSON files, for example from your location history, which you can obtain from Google Takeout, and stored in a local database.
+Data can be imported from GeoJSON files, for example from your location history, which you can obtain from Google Takeout, and stored in a local database, which uses the OpenGeoDB binary file format for efficient storage and access of geographic features.
 
-The software displays the location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
+Starting with v1.3.0, data can also be imported from GPX files, which are usually created by dedicated GPS devices or dedicated GPS tracking apps. This is also in response to Google announcing its new version of the Timeline feature, for which location history data will be kept on the device itself instead of being stored in the cloud. It is unclear whether the export of location data will still be possible with the new system and in what format this data would be. In addition, this also makes *location-visualizer* interoperable with a wide range of GPS devices and related software, most of which can handle files in GPX format.
+
+The software displays the aggregated location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
 It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc.
+
+In addition, the software also allows export of the aggregated location data as OpenGeoDB, CSV, GeoJSON, and, as of v1.3.0, also GPX files.
 
 ## Building the software
 

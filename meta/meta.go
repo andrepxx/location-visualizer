@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/andrepxx/location-visualizer/filter"
 	"math"
 	"regexp"
 	"sort"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/andrepxx/location-visualizer/filter"
 )
 
 /*

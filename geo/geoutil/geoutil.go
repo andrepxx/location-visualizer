@@ -2,10 +2,11 @@ package geoutil
 
 import (
 	"fmt"
-	"github.com/andrepxx/location-visualizer/geo/geodb"
-	"github.com/andrepxx/location-visualizer/geo/geojson"
 	"math"
 	"time"
+
+	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/geo/geodb"
 )
 
 const (
@@ -46,8 +47,8 @@ type MigrationReport interface {
 type Util interface {
 	DegreesE7ToRadians(degreesE7 int32) float64
 	GeoDBStats(db geodb.Database) (DatasetStats, error)
-	GeoJSONStats(db geojson.Database) (DatasetStats, error)
-	Migrate(dst geodb.Database, src geojson.Database, importStrategy int) (MigrationReport, error)
+	GeoJSONOrGPXStats(db geo.Database) (DatasetStats, error)
+	Migrate(dst geodb.Database, src geo.Database, importStrategy int) (MigrationReport, error)
 	MillisecondsToTime(ms uint64) time.Time
 }
 
@@ -248,7 +249,7 @@ func (this *utilStruct) geoDBStats(db geodb.Database) (datasetStatsStruct, error
 /*
  * Internal function to create statistics from a GeoJSON database.
  */
-func (this *utilStruct) geoJSONStats(db geojson.Database) (datasetStatsStruct, error) {
+func (this *utilStruct) geoJSONOrGPXStats(db geo.Database) (datasetStatsStruct, error) {
 
 	/*
 	 * Query database if it is non-nil.
@@ -364,10 +365,10 @@ func (this *utilStruct) GeoDBStats(db geodb.Database) (DatasetStats, error) {
 }
 
 /*
- * Create statistics from a GeoJSON database.
+ * Create statistics from a GeoJSON or GPX database.
  */
-func (this *utilStruct) GeoJSONStats(db geojson.Database) (DatasetStats, error) {
-	stats, err := this.geoJSONStats(db)
+func (this *utilStruct) GeoJSONOrGPXStats(db geo.Database) (DatasetStats, error) {
+	stats, err := this.geoJSONOrGPXStats(db)
 
 	/*
 	 * Return nil stats if error occured.
@@ -381,13 +382,13 @@ func (this *utilStruct) GeoJSONStats(db geojson.Database) (DatasetStats, error) 
 }
 
 /*
- * Migrate data from a GeoJSON database to a GeoDB database.
+ * Migrate data from a GeoJSON / GPX database to a GeoDB database.
  */
-func (this *utilStruct) Migrate(dst geodb.Database, src geojson.Database, importStrategy int) (MigrationReport, error) {
+func (this *utilStruct) Migrate(dst geodb.Database, src geo.Database, importStrategy int) (MigrationReport, error) {
 	errResult := error(nil)
 	statsImported := datasetStatsStruct{}
 	statsBefore, errBefore := this.geoDBStats(dst)
-	statsSource, errSource := this.geoJSONStats(src)
+	statsSource, errSource := this.geoJSONOrGPXStats(src)
 
 	/*
 	 * Check if GeoDB and GeoJSON databases could be accessed.

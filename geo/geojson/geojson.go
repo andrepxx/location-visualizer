@@ -3,26 +3,11 @@ package geojson
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
-)
 
-/*
- * Mathematical constants.
- */
-const (
-	DEGREES_TO_RADIANS = math.Pi / 180.0
+	"github.com/andrepxx/location-visualizer/geo"
 )
-
-/*
- * A location in GeoJSON representation.
- */
-type Location interface {
-	Latitude() int32
-	Longitude() int32
-	Timestamp() uint64
-}
 
 /*
  * Data structure representing a GeoJSON location.
@@ -32,14 +17,6 @@ type locationStruct struct {
 	LongitudeE7  int32  `json:"longitudeE7"`
 	TimestampMs  string `json:"timestampMs"`
 	TimestampISO string `json:"timestamp"`
-}
-
-/*
- * Top-level GeoJSON element.
- */
-type Database interface {
-	LocationAt(idx int) (Location, error)
-	LocationCount() int
 }
 
 /*
@@ -105,7 +82,7 @@ func (this *locationStruct) Timestamp() uint64 {
 /*
  * The location stored at the given index in this database.
  */
-func (this *databaseStruct) LocationAt(idx int) (Location, error) {
+func (this *databaseStruct) LocationAt(idx int) (geo.Location, error) {
 	locs := this.Locations
 	numLocs := len(locs)
 
@@ -134,7 +111,7 @@ func (this *databaseStruct) LocationCount() int {
 /*
  * Create GeoJSON database from byte slice.
  */
-func FromBytes(data []byte) (Database, error) {
+func FromBytes(data []byte) (geo.Database, error) {
 	db := &databaseStruct{}
 	err := json.Unmarshal(data, db)
 

@@ -1015,6 +1015,7 @@ function UI() {
 		buttonDiv.appendChild(buttonBack);
 		div.appendChild(buttonDiv);
 		div.style.display = 'block';
+		div.focus();
 	};
 
 	/*
@@ -1169,6 +1170,7 @@ function UI() {
 
 		innerDiv.appendChild(buttonCancel);
 		div.style.display = 'block';
+		fieldBegin.focus();
 	};
 
 	/*
@@ -1352,6 +1354,7 @@ function UI() {
 
 		innerDiv.appendChild(buttonCancel);
 		div.style.display = 'block';
+		fieldBegin.focus();
 	};
 
 	/*
@@ -1422,6 +1425,7 @@ function UI() {
 		buttonsDiv.appendChild(buttonCancel);
 		innerDiv.appendChild(buttonsDiv);
 		div.style.display = 'block';
+		importArea.focus();
 	};
 
 	/*
@@ -1439,6 +1443,8 @@ function UI() {
 		 */
 		if (numFiles > 0) {
 			const file = files[0];
+			const importFormatField = document.getElementById('geodb_import_format_field');
+			const importFormatValue = importFormatField.value;
 			const importStrategyField = document.getElementById('geodb_import_strategy_field');
 			const importStrategyValue = importStrategyField.value;
 			const importSortField = document.getElementById('geodb_sort_field');
@@ -1453,7 +1459,8 @@ function UI() {
 
 			const url = globals.cgi;
 			const data = new FormData();
-			data.append('cgi', 'import-geojson');
+			data.append('cgi', 'import-geodata');
+			data.append('format', importFormatValue);
 			data.append('strategy', importStrategyValue);
 			data.append('sort', importSortValue);
 			const cvs = document.getElementById('map_canvas');
@@ -1561,6 +1568,7 @@ function UI() {
 		contentDiv.appendChild(buttonDiv);
 		const div = document.getElementById('geodbdialog');
 		div.style.display = 'block';
+		buttonBack.focus();
 	}
 
 	/*
@@ -1645,6 +1653,36 @@ function UI() {
 		downloadLinkCSV.appendChild(downloadLinkCSVNode);
 		downloadLinkCSVDiv.appendChild(downloadLinkCSV);
 		downloadLinksDiv.appendChild(downloadLinkCSVDiv);
+		const downloadLinkGPXDiv = document.createElement('div');
+		const downloadLinkGPX = document.createElement('a');
+		downloadLinkGPX.className = 'link';
+		const requestDownloadGPX = new Request();
+		requestDownloadGPX.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadGPX.append('format', 'gpx');
+		requestDownloadGPX.append('token', token);
+		const requestDownloadGPXData = requestDownloadGPX.getData();
+		const downloadLinkGPXHref = document.createAttribute('href');
+		downloadLinkGPXHref.value = cgi + '?' + requestDownloadGPXData;
+		downloadLinkGPX.setAttributeNode(downloadLinkGPXHref);
+		const downloadLinkGPXNode = document.createTextNode('Download compact GPX (*.gpx)');
+		downloadLinkGPX.appendChild(downloadLinkGPXNode);
+		downloadLinkGPXDiv.appendChild(downloadLinkGPX);
+		downloadLinksDiv.appendChild(downloadLinkGPXDiv);
+		const downloadLinkGPXPrettyDiv = document.createElement('div');
+		const downloadLinkGPXPretty = document.createElement('a');
+		downloadLinkGPXPretty.className = 'link';
+		const requestDownloadGPXPretty = new Request();
+		requestDownloadGPXPretty.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadGPXPretty.append('format', 'gpx-pretty');
+		requestDownloadGPXPretty.append('token', token);
+		const requestDownloadGPXPrettyData = requestDownloadGPXPretty.getData();
+		const downloadLinkGPXPrettyHref = document.createAttribute('href');
+		downloadLinkGPXPrettyHref.value = cgi + '?' + requestDownloadGPXPrettyData;
+		downloadLinkGPXPretty.setAttributeNode(downloadLinkGPXPrettyHref);
+		const downloadLinkGPXPrettyNode = document.createTextNode('Download pretty-printed GPX (*.gpx)');
+		downloadLinkGPXPretty.appendChild(downloadLinkGPXPrettyNode);
+		downloadLinkGPXPrettyDiv.appendChild(downloadLinkGPXPretty);
+		downloadLinksDiv.appendChild(downloadLinkGPXPrettyDiv);
 		const downloadLinkJSONDiv = document.createElement('div');
 		const downloadLinkJSON = document.createElement('a');
 		downloadLinkJSON.className = 'link';
@@ -1681,9 +1719,33 @@ function UI() {
 		div.appendChild(spacerDivB);
 		const importPropertiesDiv = document.createElement('div');
 		const importPropertiesDescriptionDiv = document.createElement('div');
-		const importPropertiesDescriptionNode = document.createTextNode('Drop GeoJSON file to import location data into geographical database.');
+		const importPropertiesDescriptionNode = document.createTextNode('Drop GPX or GeoJSON file to import location data into geographical database.');
 		importPropertiesDescriptionDiv.appendChild(importPropertiesDescriptionNode);
 		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
+		const importFormatElem = this.createElement('Format', '180px');
+		const importFormatLabels = ['GPS Exchange (*.gpx)', 'GeoJSON (*.json)'];
+		const importFormatValues = ['gpx', 'json'];
+		const importFormatDefault = importFormatValues[1];
+		const fieldImportFormat = document.createElement('select');
+
+		/*
+		 * Add supported values for import format.
+		 */
+		for (let i = 0; i < importFormatValues.length; i++) {
+			const l = importFormatLabels[i];
+			const v = importFormatValues[i];
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(l);
+			option.appendChild(optionNode);
+			fieldImportFormat.appendChild(option);
+		}
+
+		fieldImportFormat.className = 'textfield';
+		fieldImportFormat.setAttribute('id', 'geodb_import_format_field');
+		fieldImportFormat.value = importFormatDefault;
+		importFormatElem.appendChild(fieldImportFormat);
+		importPropertiesDiv.appendChild(importFormatElem);
 		const importStrategyElem = this.createElement('Import strategy', '180px');
 		const importStrategyValues = ['all', 'newer', 'none'];
 		const importStrategyDefault = importStrategyValues[1];
@@ -1753,6 +1815,7 @@ function UI() {
 		div.addEventListener('dragover', this.absorbEvent);
 		div.addEventListener('drop', this.uploadGeoData);
 		div.style.display = 'block';
+		fieldImportFormat.focus();
 	};
 
 	/*
@@ -2038,6 +2101,36 @@ function UI() {
 		buttonLogin.className = 'button';
 		const buttonLoginCaption = document.createTextNode('Login');
 		buttonLogin.appendChild(buttonLoginCaption);
+		elemButtons.appendChild(buttonLogin);
+		loginContent.appendChild(elemButtons);
+
+		/*
+		 * This is called when the user types in the user name field.
+		 */
+		fieldUser.onkeyup = function(e) {
+
+			/*
+			 * On Enter, advance to password field.
+			 */
+			if (e.key === 'Enter') {
+				fieldPassword.focus();
+			}
+
+		}
+
+		/*
+		 * This is called when the user types in the password field.
+		 */
+		fieldPassword.onkeyup = function(e) {
+
+			/*
+			 * On Enter, perform login sequence.
+			 */
+			if (e.key === 'Enter') {
+				buttonLogin.click();
+			}
+
+		}
 
 		/*
 		 * This is called when the user clicks on the 'Login' button.
@@ -2122,8 +2215,6 @@ function UI() {
 			ajax.request('POST', cgi, dataChallenge, mime, callbackChallenge, false);
 		};
 
-		elemButtons.appendChild(buttonLogin);
-		loginContent.appendChild(elemButtons);
 	};
 
 	/*
@@ -2132,6 +2223,7 @@ function UI() {
 	this.showLogin = function() {
 		const loginDiv = document.getElementById('login');
 		loginDiv.style.display = 'block';
+		loginDiv.focus();
 	};
 
 	/*

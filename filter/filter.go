@@ -2,10 +2,11 @@ package filter
 
 import (
 	"fmt"
-	"github.com/andrepxx/location-visualizer/geo/geodb"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/andrepxx/location-visualizer/geo/geodb"
 )
 
 const (

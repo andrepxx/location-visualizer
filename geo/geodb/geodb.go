@@ -47,6 +47,26 @@ const (
 )
 
 /*
+ * States for XML serializer.
+ */
+const (
+	XML_STREAM_HEADER = iota
+	XML_STREAM_ENTRIES
+	XML_STREAM_TRAILER
+	XML_STREAM_EOF
+	XML_STREAM_ERROR
+)
+
+/*
+ * Indentation direction.
+ */
+const (
+	XML_INDENT_IN   = 1
+	XML_INDENT_NONE = 0
+	XML_INDENT_OUT  = -1
+)
+
+/*
  * A geographic location stored in the geo database.
  */
 type Location struct {
@@ -66,6 +86,7 @@ type Database interface {
 	SerializeBinary() io.ReadSeekCloser
 	SerializeCSV() io.ReadCloser
 	SerializeJSON(pretty bool) io.ReadCloser
+	SerializeXML(pretty bool) io.ReadCloser
 	Sort() error
 }
 
@@ -134,6 +155,27 @@ type databaseCsvSerializerStruct struct {
  * Data structure for serializing the database into GeoJSON format.
  */
 type databaseJsonSerializerStruct struct {
+	mutex   sync.Mutex
+	buffer  *strings.Builder
+	db      *databaseStruct
+	entryId uint32
+	indent  uint16
+	pretty  bool
+	state   int
+}
+
+/*
+ * Data structure representing a key-value pair.
+ */
+type keyValuePairStruct struct {
+	key   string
+	value string
+}
+
+/*
+ * Data structure for serializing the database into GPX format.
+ */
+type databaseXmlSerializerStruct struct {
 	mutex   sync.Mutex
 	buffer  *strings.Builder
 	db      *databaseStruct
@@ -558,6 +600,35 @@ func (this *databaseStruct) SerializeJSON(pretty bool) io.ReadCloser {
 }
 
 /*
+ * Locks the database for read access and provides a ReadCloser granting
+ * sequential access to the database in XML format.
+ *
+ * XML data will be generated on-the-fly while reading from the provided
+ * ReadCloser.
+ *
+ * - When pretty == true, data will be pretty-printed for human consumption.
+ * - When pretty == false, data will be compact for machine consumption.
+ *
+ * Closing the returned ReadCloser yields the lock on the database.
+ */
+func (this *databaseStruct) SerializeXML(pretty bool) io.ReadCloser {
+	this.mutex.RLock()
+	buf := &strings.Builder{}
+
+	/*
+	 * Create database XML serializer.
+	 */
+	s := databaseXmlSerializerStruct{
+		buffer: buf,
+		db:     this,
+		pretty: pretty,
+		state:  XML_STREAM_HEADER,
+	}
+
+	return &s
+}
+
+/*
  * Sorts entries in the database by (ascending) time stamp using a stable
  * sorting algorithm.
  *
@@ -807,13 +878,13 @@ func (this *databaseCsvSerializerStruct) formatTimestamp(timestamp uint64) strin
  */
 func (this *databaseCsvSerializerStruct) formatLatitude(latitudeE7 int32) string {
 	result := "<INVALID>"
-	buf := fmt.Sprintf("%+08d", latitudeE7)
+	buf := fmt.Sprintf("%+09d", latitudeE7)
 	bufSize := len(buf)
 
 	/*
 	 * Check that buffer has sufficient size.
 	 */
-	if bufSize >= 8 {
+	if bufSize >= 9 {
 		sign := buf[0]
 		direction := '?'
 
@@ -848,13 +919,13 @@ func (this *databaseCsvSerializerStruct) formatLatitude(latitudeE7 int32) string
  */
 func (this *databaseCsvSerializerStruct) formatLongitude(longitudeE7 int32) string {
 	result := "<INVALID>"
-	buf := fmt.Sprintf("%+08d", longitudeE7)
+	buf := fmt.Sprintf("%+09d", longitudeE7)
 	bufSize := len(buf)
 
 	/*
 	 * Check that buffer has sufficient size.
 	 */
-	if bufSize >= 8 {
+	if bufSize >= 9 {
 		sign := buf[0]
 		direction := '?'
 
@@ -1522,6 +1593,447 @@ func (this *databaseJsonSerializerStruct) Close() error {
 }
 
 /*
+ * Change the indentation depth.
+ */
+func (this *databaseXmlSerializerStruct) changeIndent(direction int) {
+	indent := this.indent
+
+	/*
+	 * Decide on the indentation direction.
+	 */
+	switch direction {
+	case XML_INDENT_IN:
+
+		/*
+		 * Increase indent, preventing overflow.
+		 */
+		if indent < math.MaxUint16 {
+			indent++
+		}
+
+	case XML_INDENT_OUT:
+
+		/*
+		 * Decrease indent, preventing underflow.
+		 */
+		if indent > 0 {
+			indent--
+		}
+
+	default:
+		// Do nothing.
+	}
+
+	this.indent = indent
+}
+
+/*
+ * Begins a new line, including indentation.
+ */
+func (this *databaseXmlSerializerStruct) startLine(indentationDirection int) {
+	pretty := this.pretty
+
+	/*
+	 * Only do this when pretty-printing XML.
+	 */
+	if pretty {
+		this.changeIndent(indentationDirection)
+		indent := this.indent
+		indentByte := uint8(indent)
+
+		/*
+		 * Limit indentation depth.
+		 */
+		if indent > math.MaxUint8 {
+			indentByte = math.MaxUint8
+		}
+
+		buffer := this.buffer
+		buffer.WriteRune('\n')
+
+		/*
+		 * Write indentation.
+		 */
+		for i := uint8(0); i < indentByte; i++ {
+			buffer.WriteRune('\t')
+		}
+
+	}
+
+}
+
+/*
+ * Write XML declaration.
+ */
+func (this *databaseXmlSerializerStruct) generateXMLDeclaration() {
+	buffer := this.buffer
+	buffer.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+	this.startLine(XML_INDENT_NONE)
+}
+
+/*
+ * Generate an opening tag, which will include inner tags.
+ */
+func (this *databaseXmlSerializerStruct) generateOpeningTag(name string, attributes ...keyValuePairStruct) {
+	buffer := this.buffer
+	buffer.WriteRune('<')
+	buffer.WriteString(name)
+
+	/*
+	 * Serialize key-value pairs.
+	 */
+	for _, kv := range attributes {
+		key := kv.key
+		value := kv.value
+		buffer.WriteRune(' ')
+		buffer.WriteString(key)
+		buffer.WriteString("=\"")
+		buffer.WriteString(value)
+		buffer.WriteRune('"')
+	}
+
+	buffer.WriteRune('>')
+	this.startLine(XML_INDENT_IN)
+}
+
+/*
+ * Generate a closing tag.
+ */
+func (this *databaseXmlSerializerStruct) generateClosingTag(name string) {
+	this.startLine(XML_INDENT_OUT)
+	buffer := this.buffer
+	buffer.WriteString("</")
+	buffer.WriteString(name)
+	buffer.WriteRune('>')
+}
+
+/*
+ * Generate a tag pair with a value text.
+ */
+func (this *databaseXmlSerializerStruct) generateTagPairWithValueText(name string, vt string) {
+	buffer := this.buffer
+	buffer.WriteRune('<')
+	buffer.WriteString(name)
+	buffer.WriteRune('>')
+	buffer.WriteString(vt)
+	buffer.WriteString("</")
+	buffer.WriteString(name)
+	buffer.WriteRune('>')
+}
+
+/*
+ * Format fixed-point value with E7 exponent as string.
+ */
+func (this *databaseXmlSerializerStruct) formatFixedE7(valueE7 int32) string {
+	result := "<INVALID>"
+	buf := fmt.Sprintf("%+09d", valueE7)
+	bufSize := len(buf)
+
+	/*
+	 * Check that buffer has sufficient size.
+	 */
+	if bufSize >= 9 {
+		sign := buf[0]
+		negative := sign == byte('-')
+		posDecimalPoint := bufSize - 7
+		leftOfPoint := buf[1:posDecimalPoint]
+		rightOfPoint := buf[posDecimalPoint:bufSize]
+		outputSize := bufSize + 1
+
+		/*
+		 * Negative number needs one byte more for the sign.
+		 */
+		if negative {
+			outputSize++
+		}
+
+		builder := strings.Builder{}
+		builder.Grow(outputSize)
+
+		/*
+		 * If number is negative, start with unary minus.
+		 */
+		if negative {
+			builder.WriteRune('-')
+		}
+
+		builder.WriteString(leftOfPoint)
+		builder.WriteRune('.')
+		builder.WriteString(rightOfPoint)
+		result = builder.String()
+	}
+
+	return result
+}
+
+/*
+ * Format timestamp as string value.
+ */
+func (this *databaseXmlSerializerStruct) formatTimestamp(timestamp uint64) string {
+	timestampSigned := int64(timestamp)
+	t := time.UnixMilli(timestampSigned)
+	utcTime := t.UTC()
+	result := utcTime.Format(time.RFC3339Nano)
+	return result
+}
+
+/*
+ * Generate XML data for next entry in geographical database.
+ */
+func (this *databaseXmlSerializerStruct) generateXMLForNextEntry() error {
+	errResult := error(nil)
+	moreAvailable := this.hasMoreEntries()
+
+	/*
+	 * Check if more entries are available.
+	 */
+	if moreAvailable {
+		db := this.db
+		entryId := this.entryId
+		entry := databaseEntryStruct{}
+		fd := db.fd
+		endianness := binary.BigEndian
+		offset := uint64(entryId)
+		offsetBytes := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * offset)
+		offsetBytesSigned := int64(offsetBytes)
+		bufRead := make([]byte, SIZE_DATABASE_ENTRY)
+		numBytesRead, err := fd.ReadAt(bufRead, offsetBytesSigned)
+
+		/*
+		 * If we read less bytes than expected, zero out part of the
+		 * buffer.
+		 */
+		if numBytesRead < SIZE_DATABASE_ENTRY {
+			zero := bufRead[numBytesRead:SIZE_DATABASE_ENTRY]
+
+			/*
+			 * Zero the unused part of the buffer.
+			 */
+			for i := range zero {
+				zero[i] = 0
+			}
+
+		}
+
+		/*
+		 * Check for read error.
+		 */
+		if err != nil {
+			errResult = fmt.Errorf("Error reading from offset: 0x%016x", offsetBytes)
+		} else {
+			rd := bytes.NewReader(bufRead)
+			err = binary.Read(rd, endianness, &entry)
+
+			/*
+			 * Check if database entry could be deserialized.
+			 */
+			if err != nil {
+				errResult = fmt.Errorf("Error deserializing entry at offset: 0x%016x", offsetBytes)
+			} else {
+				timestampMSB := entry.TimestampMSB
+				timestampMSB64 := uint64(timestampMSB)
+				timestampLSB := entry.TimestampLSB
+				timestampLSB64 := uint64(timestampLSB)
+				timestamp := (timestampMSB64 << 32) | timestampLSB64
+				latitudeE7 := entry.LatitudeE7
+				longitudeE7 := entry.LongitudeE7
+				timestampString := this.formatTimestamp(timestamp)
+				latitudeString := this.formatFixedE7(latitudeE7)
+				longitudeString := this.formatFixedE7(longitudeE7)
+
+				/*
+				 * Create latitude attribute.
+				 */
+				attrLatitude := keyValuePairStruct{
+					key:   "lat",
+					value: latitudeString,
+				}
+
+				/*
+				 * Create longitude attribute.
+				 */
+				attrLongitude := keyValuePairStruct{
+					key:   "lon",
+					value: longitudeString,
+				}
+
+				this.generateOpeningTag("trkpt", attrLatitude, attrLongitude)
+				this.generateTagPairWithValueText("time", timestampString)
+				this.generateClosingTag("trkpt")
+			}
+		}
+
+		entryId++
+		this.entryId = entryId
+	}
+
+	return errResult
+}
+
+/*
+ * Returns whether there are more entries in the database to be serialized.
+ */
+func (this *databaseXmlSerializerStruct) hasMoreEntries() bool {
+	db := this.db
+	entryId := this.entryId
+	locationCount := db.locationCount
+	result := entryId < locationCount
+	return result
+}
+
+/*
+ * Generate more XML data.
+ */
+func (this *databaseXmlSerializerStruct) generateXML() error {
+	state := this.state
+	errResult := error(nil)
+
+	switch state {
+	case XML_STREAM_HEADER:
+		this.generateXMLDeclaration()
+
+		/*
+		 * Create attribute for GPX version.
+		 */
+		attrVersion := keyValuePairStruct{
+			key:   "version",
+			value: "1.1",
+		}
+
+		this.generateOpeningTag("gpx", attrVersion)
+		this.generateOpeningTag("trk")
+		this.generateOpeningTag("trkseg")
+		state = XML_STREAM_ENTRIES
+	case XML_STREAM_ENTRIES:
+		err := this.generateXMLForNextEntry()
+
+		/*
+		 * Check for errors during serialization.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error generating entry: %s", msg)
+			state = JSON_STREAM_ERROR
+		} else {
+			moreAvailable := this.hasMoreEntries()
+
+			/*
+			 * If there are more entries to be serialized, create new line,
+			 * otherwise transition to serializing the trailer.
+			 */
+			if moreAvailable {
+				this.startLine(XML_INDENT_NONE)
+			} else {
+				state = XML_STREAM_TRAILER
+			}
+
+		}
+
+	case XML_STREAM_TRAILER:
+		this.generateClosingTag("trkseg")
+		this.generateClosingTag("trk")
+		this.generateClosingTag("gpx")
+		state = XML_STREAM_EOF
+	case XML_STREAM_EOF:
+		errResult = io.EOF
+	default:
+		errResult = fmt.Errorf("%s", "Error during XML serialization.")
+	}
+
+	this.state = state
+	return errResult
+}
+
+/*
+ * Implements the Read function from io.ReadCloser.
+ */
+func (this *databaseXmlSerializerStruct) Read(buf []byte) (int, error) {
+	numBytesRead := 0
+	errResult := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is already closed.
+	 */
+	if db == nil {
+		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		buffer := this.buffer
+		numBytesAvailable := buffer.Len()
+		numBytesToRead := len(buf)
+		err := error(nil)
+
+		/*
+		 * Generate XML until enough data is available or error occurs.
+		 */
+		for (numBytesAvailable < numBytesToRead) && (err == nil) {
+			err = this.generateXML()
+			numBytesAvailable = buffer.Len()
+		}
+
+		/*
+		 * Check if error occured.
+		 */
+		if err != nil {
+			errResult = err
+		}
+
+		bufferContent := buffer.String()
+		bufferBytes := []byte(bufferContent)
+		buffer.Reset()
+		numBytesAvailable = len(bufferBytes)
+		numBytesRead = numBytesToRead
+
+		/*
+		 * If there are fewer bytes available, then this is the limit.
+		 */
+		if numBytesAvailable < numBytesRead {
+			numBytesRead = numBytesAvailable
+		}
+
+		bufferToCopy := bufferBytes[0:numBytesRead]
+		copy(buf, bufferToCopy)
+
+		/*
+		 * If there are leftover bytes, we need to keep them.
+		 */
+		if numBytesAvailable > numBytesRead {
+			bufferToKeep := bufferBytes[numBytesRead:numBytesAvailable]
+			buffer.Write(bufferToKeep)
+		}
+
+		this.mutex.Unlock()
+	}
+
+	return numBytesRead, errResult
+}
+
+/*
+ * Implements the Close function from io.ReadCloser.
+ *
+ * This will yield the read lock on the underlying database.
+ */
+func (this *databaseXmlSerializerStruct) Close() error {
+	result := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is already closed.
+	 */
+	if db == nil {
+		result = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		db.mutex.RUnlock()
+		this.db = nil
+	}
+
+	this.mutex.Unlock()
+	return result
+}
+
+/*
  * Returns the number of elements in the database sorted by this sorter.
  *
  * This method is required for implementation of sort.Interface.
@@ -1691,7 +2203,7 @@ func (this *databaseSorterStruct) Swap(i int, j int) {
 				 * Make sure that we wrote both values.
 				 */
 				if ((errI != nil) || (numBytesI != SIZE_DATABASE_ENTRY)) || ((errJ != nil) || (numBytesJ != SIZE_DATABASE_ENTRY)) {
-					msg := fmt.Sprintf("Error writing to offsets 0x%016x and 0x%016x! The geo database might have become corrupted.")
+					msg := fmt.Sprintf("Error writing to offsets 0x%016x and 0x%016x! The geo database might have become corrupted.", offsetI, offsetJ)
 					panic(msg)
 				}
 
@@ -1844,9 +2356,9 @@ func prepareStorage(fd Storage) (int64, error) {
 					 */
 					if err != nil {
 						reason := err.Error()
-						errResult = fmt.Errorf("%s", "Failed to restore file pointer: %s", reason)
+						errResult = fmt.Errorf("Failed to restore file pointer: %s", reason)
 					} else if posRestored != posStored {
-						errResult = fmt.Errorf("%s", "Failed to restore file pointer: Tried to restore to %d, but ended up at %d.", posStored, posRestored)
+						errResult = fmt.Errorf("Failed to restore file pointer: Tried to restore to %d, but ended up at %d.", posStored, posRestored)
 					}
 
 				}
