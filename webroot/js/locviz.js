@@ -1010,6 +1010,7 @@ function UI() {
 		 */
 		buttonBack.onclick = function(e) {
 			div.style.display = 'none';
+			helper.clearElement(div);
 		};
 
 		buttonDiv.appendChild(buttonBack);
@@ -1561,6 +1562,7 @@ function UI() {
 		 */
 		buttonBack.onclick = function(e) {
 			div.style.display = 'none';
+			helper.clearElement(contentDiv);
 			handler.showGeoDB();
 		};
 
@@ -1623,21 +1625,21 @@ function UI() {
 		spacerDivA.className = 'vspace';
 		div.appendChild(spacerDivA);
 		const downloadLinksDiv = document.createElement('div');
-		const downloadLinkBinaryDiv = document.createElement('div');
-		const downloadLinkBinary = document.createElement('a');
-		downloadLinkBinary.className = 'link';
-		const requestDownloadBinary = new Request();
-		requestDownloadBinary.append('cgi', cgiDownloadGeoDBContent);
-		requestDownloadBinary.append('format', 'binary');
-		requestDownloadBinary.append('token', token);
-		const requestDownloadBinaryData = requestDownloadBinary.getData();
-		const downloadLinkBinaryHref = document.createAttribute('href');
-		downloadLinkBinaryHref.value = cgi + '?' + requestDownloadBinaryData;
-		downloadLinkBinary.setAttributeNode(downloadLinkBinaryHref);
-		const downloadLinkBinaryNode = document.createTextNode('Download binary (*.geodb)');
-		downloadLinkBinary.appendChild(downloadLinkBinaryNode);
-		downloadLinkBinaryDiv.appendChild(downloadLinkBinary);
-		downloadLinksDiv.appendChild(downloadLinkBinaryDiv);
+		const downloadLinkOpenGeoDBDiv = document.createElement('div');
+		const downloadLinkOpenGeoDB = document.createElement('a');
+		downloadLinkOpenGeoDB.className = 'link';
+		const requestDownloadOpenGeoDB = new Request();
+		requestDownloadOpenGeoDB.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadOpenGeoDB.append('format', 'binary');
+		requestDownloadOpenGeoDB.append('token', token);
+		const requestDownloadOpenGeoDBData = requestDownloadOpenGeoDB.getData();
+		const downloadLinkOpenGeoDBHref = document.createAttribute('href');
+		downloadLinkOpenGeoDBHref.value = cgi + '?' + requestDownloadOpenGeoDBData;
+		downloadLinkOpenGeoDB.setAttributeNode(downloadLinkOpenGeoDBHref);
+		const downloadLinkOpenGeoDBNode = document.createTextNode('Download OpenGeoDB (*.geodb)');
+		downloadLinkOpenGeoDB.appendChild(downloadLinkOpenGeoDBNode);
+		downloadLinkOpenGeoDBDiv.appendChild(downloadLinkOpenGeoDB);
+		downloadLinksDiv.appendChild(downloadLinkOpenGeoDBDiv);
 		const downloadLinkCSVDiv = document.createElement('div');
 		const downloadLinkCSV = document.createElement('a');
 		downloadLinkCSV.className = 'link';
@@ -1719,11 +1721,11 @@ function UI() {
 		div.appendChild(spacerDivB);
 		const importPropertiesDiv = document.createElement('div');
 		const importPropertiesDescriptionDiv = document.createElement('div');
-		const importPropertiesDescriptionNode = document.createTextNode('Drop GPX or GeoJSON file to import location data into geographical database.');
+		const importPropertiesDescriptionNode = document.createTextNode('Drop GPX or JSON file to import location data into geographical database.');
 		importPropertiesDescriptionDiv.appendChild(importPropertiesDescriptionNode);
 		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
 		const importFormatElem = this.createElement('Format', '180px');
-		const importFormatLabels = ['GPS Exchange (*.gpx)', 'GeoJSON (*.json)'];
+		const importFormatLabels = ['GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
 		const importFormatValues = ['gpx', 'json'];
 		const importFormatDefault = importFormatValues[1];
 		const fieldImportFormat = document.createElement('select');
@@ -1845,13 +1847,24 @@ function UI() {
 		const fieldMapIntensity = document.createElement('select');
 
 		/*
-		 * Add values of supported spread factors.
+		 * Add values of supported map intensities.
 		 */
-		for (let i = 0; i <= 10; i++) {
+		for (let i = -1; i <= 10; i++) {
 			const v = i.toString();
 			const option = document.createElement('option');
 			option.setAttribute('value', v);
-			const optionNode = document.createTextNode(v);
+			let text = '(original)';
+
+			/*
+			 * For all but first entry, take percentage value as text.
+			 */
+			if (i >= 0) {
+				const percentage = i * 10;
+				const percentageString = percentage.toString();
+				text = percentageString + ' %';
+			}
+
+			const optionNode = document.createTextNode(text);
 			option.appendChild(optionNode);
 			fieldMapIntensity.appendChild(option);
 		}
@@ -2215,6 +2228,7 @@ function UI() {
 			ajax.request('POST', cgi, dataChallenge, mime, callbackChallenge, false);
 		};
 
+		fieldUser.focus();
 	};
 
 	/*
@@ -2331,7 +2345,6 @@ function UI() {
 		const x = tileDescriptor.osmX;
 		const y = tileDescriptor.osmY;
 		const z = tileDescriptor.osmZoom;
-		const colorScale = tileDescriptor.colorScale;
 		const rq = new Request();
 		rq.append('cgi', 'get-tile');
 		const xString = x.toString();
@@ -2340,8 +2353,6 @@ function UI() {
 		rq.append('y', yString);
 		const zString = z.toString();
 		rq.append('z', zString);
-		const colorScaleString = colorScale.toString();
-		rq.append('colorscale', colorScaleString);
 
 		/*
 		 * Use session token.
@@ -2364,6 +2375,56 @@ function UI() {
 	};
 
 	/*
+	 * Scale colors of an image and return as OffscreenCanvas.
+	 */
+	this.processTile = function(img, colorScale) {
+		const width = img.width;
+		const height = img.height;
+		const scale = 0.1 * colorScale;
+		const cvs = new OffscreenCanvas(width, height);
+		const ctx = cvs.getContext('2d');
+		ctx.drawImage(img, 0, 0);
+		const imageData = ctx.getImageData(0, 0, width, height);
+		const buffer = imageData.data;
+		const bufferSize = buffer.length;
+		const numPixels = bufferSize / 4;
+
+		/*
+		 * Only do this for non-negative color scales.
+		 */
+		if (colorScale >= 0) {
+			const scale = 0.1 * colorScale;
+
+			/*
+			 * Transform to black-and-white image and scale.
+			 */
+			for (let i = 0; i < numPixels; i++) {
+				const offset = i * 4;
+				const redByte = buffer[offset];
+				const greenByte = buffer[offset + 1];
+				const blueByte = buffer[offset + 2];
+				const redFloat = redByte / 255.0;
+				const greenFloat = greenByte / 255.0;
+				const blueFloat = blueByte / 255.0;
+				const redInvFloat = 1.0 - redFloat;
+				const greenInvFloat = 1.0 - greenFloat;
+				const blueInvFloat = 1.0 - blueFloat;
+				const lumaFloat = (0.22 * redInvFloat) + (0.72 * greenInvFloat) + (0.06 * blueInvFloat);
+				const lumaFloatScaled = scale * lumaFloat;
+				const lumaByte = Math.round(lumaFloatScaled * 255.0)
+				buffer[offset] = lumaByte;
+				buffer[offset + 1] = lumaByte;
+				buffer[offset + 2] = lumaByte;
+				buffer[offset + 3] = 255;
+			}
+
+		}
+
+		ctx.putImageData(imageData, 0, 0);
+		return cvs;
+	}
+
+	/*
 	 * Draws a tile on the map canvas.
 	 */
 	this.drawTile = function(tileDescriptor) {
@@ -2373,6 +2434,8 @@ function UI() {
 		 * Check if current tile has image data attached.
 		 */
 		if (img !== null) {
+			const colorScale = tileDescriptor.colorScale;
+			const tile = this.processTile(img, colorScale);
 			const cvs = document.getElementById('map_canvas');
 			const xres = cvs.scrollWidth;
 			const yres = cvs.scrollHeight;
@@ -2398,7 +2461,7 @@ function UI() {
 			const destWidth = xres * ((tileMaxX - tileMinX) * zoomFac);
 			const destHeight = xres * ((tileMaxY - tileMinY) * zoomFac);
 			const ctx = cvs.getContext('2d');
-			ctx.drawImage(img, destX, destY, destWidth, destHeight);
+			ctx.drawImage(tile, destX, destY, destWidth, destHeight);
 		}
 
 	};

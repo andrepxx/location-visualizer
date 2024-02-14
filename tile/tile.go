@@ -1,12 +1,11 @@
 package tile
 
 import (
+	"bytes"
 	"fmt"
 	"image"
-	"image/color"
 	"image/png"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -37,15 +36,15 @@ type TileId interface {
  * A map tile.
  */
 type Tile interface {
+	Data() io.ReadSeeker
 	Id() TileId
-	Image() *image.NRGBA
 }
 
 /*
  * A source for map tiles.
  */
 type Source interface {
-	Get(zoom uint8, x uint32, y uint32, colorScale float64) (Tile, error)
+	Get(zoom uint8, x uint32, y uint32) (Tile, error)
 	Prefetch(level uint8)
 }
 
@@ -71,8 +70,8 @@ type osmTileIdStruct struct {
  * A tile from an OpenStreetMaps server.
  */
 type osmTileStruct struct {
-	imageData *image.NRGBA
-	tileId    osmTileIdStruct
+	data   *bytes.Reader
+	tileId osmTileIdStruct
 }
 
 /*
@@ -100,19 +99,19 @@ func (this *osmTileIdStruct) Zoom() uint8 {
 }
 
 /*
+ * Returns the image data from this map tile.
+ */
+func (this *osmTileStruct) Data() io.ReadSeeker {
+	data := this.data
+	return data
+}
+
+/*
  * Returns the ID of this map tile.
  */
 func (this *osmTileStruct) Id() TileId {
 	id := this.tileId
 	return &id
-}
-
-/*
- * Returns the image data from this map tile.
- */
-func (this *osmTileStruct) Image() *image.NRGBA {
-	img := this.imageData
-	return img
 }
 
 /*
@@ -145,15 +144,27 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 	 * Check if tile ID and file path template are valid.
 	 */
 	if templateFile == "" || x > maxId || y > maxId {
+		buf := &bytes.Buffer{}
 		rect := image.Rect(0, 0, TILE_SIZE, TILE_SIZE)
 		img := image.NewNRGBA(rect)
+
+		/*
+		 * Create a PNG encoder.
+		 */
+		encoder := png.Encoder{
+			CompressionLevel: png.BestCompression,
+		}
+
+		encoder.Encode(buf, img)
+		content := buf.Bytes()
+		r := bytes.NewReader(content)
 
 		/*
 		 * Create OSM tile.
 		 */
 		t := osmTileStruct{
-			imageData: img,
-			tileId:    id,
+			data:   r,
+			tileId: id,
 		}
 
 		return &t
@@ -162,43 +173,19 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 		pathFile := this.tilePath(templateFile, zoom, x, y)
 		this.mutex.RLock()
 		fd, err := os.Open(pathFile)
-		rect := image.ZR
-		img := image.NewNRGBA(rect)
+		content := []byte{}
 
 		/*
 		 * Check if file exists.
 		 */
 		if err == nil {
-			imgPng, err := png.Decode(fd)
+			buf, err := io.ReadAll(fd)
 
 			/*
-			 * Check if image was decoded from file.
+			 * Check if image was loaded from file.
 			 */
 			if err == nil {
-				rect = imgPng.Bounds()
-				img = image.NewNRGBA(rect)
-				rectMin := rect.Min
-				minX := rectMin.X
-				minY := rectMin.Y
-				rectMax := rect.Max
-				maxX := rectMax.X
-				maxY := rectMax.Y
-
-				/*
-				 * Read image line by line.
-				 */
-				for y := minY; y < maxY; y++ {
-
-					/*
-					 * Read line pixel by pixel.
-					 */
-					for x := minX; x < maxX; x++ {
-						c := imgPng.At(x, y)
-						img.Set(x, y, c)
-					}
-
-				}
-
+				content = buf
 				readFromFile = true
 			}
 
@@ -243,36 +230,14 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 						 */
 						if err == nil {
 							r := io.TeeReader(body, fd)
-							imgPng, err := png.Decode(r)
+							buf, err := io.ReadAll(r)
 
 							/*
-							 * Check if image was decoded from response.
+							 * Check if image was loaded from file.
 							 */
 							if err == nil {
-								rect = imgPng.Bounds()
-								img = image.NewNRGBA(rect)
-								rectMin := rect.Min
-								minX := rectMin.X
-								minY := rectMin.Y
-								rectMax := rect.Max
-								maxX := rectMax.X
-								maxY := rectMax.Y
-
-								/*
-								 * Read image line by line.
-								 */
-								for y := minY; y < maxY; y++ {
-
-									/*
-									 * Read line pixel by pixel.
-									 */
-									for x := minX; x < maxX; x++ {
-										c := imgPng.At(x, y)
-										img.Set(x, y, c)
-									}
-
-								}
-
+								content = buf
+								readFromFile = true
 							}
 
 							fd.Close()
@@ -288,12 +253,14 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 
 		}
 
+		r := bytes.NewReader(content)
+
 		/*
 		 * Create OSM tile.
 		 */
 		t := osmTileStruct{
-			imageData: img,
-			tileId:    id,
+			data:   r,
+			tileId: id,
 		}
 
 		return &t
@@ -302,40 +269,9 @@ func (this *osmSourceStruct) getTile(id osmTileIdStruct) *osmTileStruct {
 }
 
 /*
- * Perform color transformation on OSM data.
- */
-func (this *osmSourceStruct) transformColor(in color.NRGBA, scale float64) color.NRGBA {
-	r := in.R
-	g := in.G
-	b := in.B
-	rFloat := float64(r) / 255.0
-	gFloat := float64(g) / 255.0
-	bFloat := float64(b) / 255.0
-	rInvFloat := 1.0 - rFloat
-	gInvFloat := 1.0 - gFloat
-	bInvFloat := 1.0 - bFloat
-	lumaFloat := (0.22 * rInvFloat) + (0.72 * gInvFloat) + (0.06 * bInvFloat)
-	lumaFloatScaled := scale * lumaFloat
-	lumaFloatByte := math.Round(lumaFloatScaled * 255.0)
-	lumaByte := uint8(lumaFloatByte)
-
-	/*
-	 * Create resulting color value.
-	 */
-	c := color.NRGBA{
-		R: lumaByte,
-		G: lumaByte,
-		B: lumaByte,
-		A: 255,
-	}
-
-	return c
-}
-
-/*
  * Fetches a map tile from OSM or from the cache.
  */
-func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32, colorScale float64) (Tile, error) {
+func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32) (Tile, error) {
 
 	/*
 	 * Check if zoom level is in range.
@@ -357,15 +293,6 @@ func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32, colorScale floa
 		} else {
 
 			/*
-			 * Make sure that color scale is in range.
-			 */
-			if colorScale < 0.0 {
-				colorScale = 0.0
-			} else if colorScale > 1.0 {
-				colorScale = 1.0
-			}
-
-			/*
 			 * Create OSM tile id.
 			 */
 			tileId := osmTileIdStruct{
@@ -374,42 +301,8 @@ func (this *osmSourceStruct) Get(zoom uint8, x uint32, y uint32, colorScale floa
 				y:    y,
 			}
 
-			tileSource := this.getTile(tileId)
-			imgSource := tileSource.imageData
-			rect := imgSource.Bounds()
-			imgTarget := image.NewNRGBA(rect)
-			rectMin := rect.Min
-			minX := rectMin.X
-			minY := rectMin.Y
-			rectMax := rect.Max
-			maxX := rectMax.X
-			maxY := rectMax.Y
-
-			/*
-			 * Read image line by line.
-			 */
-			for y := minY; y < maxY; y++ {
-
-				/*
-				 * Read line pixel by pixel.
-				 */
-				for x := minX; x < maxX; x++ {
-					sourceColor := imgSource.NRGBAAt(x, y)
-					targetColor := this.transformColor(sourceColor, colorScale)
-					imgTarget.Set(x, y, targetColor)
-				}
-
-			}
-
-			/*
-			 * Create OSM tile.
-			 */
-			tileTarget := osmTileStruct{
-				imageData: imgTarget,
-				tileId:    tileId,
-			}
-
-			return &tileTarget, nil
+			t := this.getTile(tileId)
+			return t, nil
 		}
 
 	}

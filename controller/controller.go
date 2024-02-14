@@ -161,6 +161,13 @@ type webMigrationReportStruct struct {
 }
 
 /*
+ * Provides a no-op Close method for an io.ReadSeeker.
+ */
+type readSeekerWithNopCloserStruct struct {
+	io.ReadSeeker
+}
+
+/*
  * Limits for concurrent requests.
  */
 type limitsStruct struct {
@@ -209,6 +216,13 @@ type controllerStruct struct {
 type Controller interface {
 	Operate(args []string)
 	Prefetch(zoomLevel uint8)
+}
+
+/*
+ * Provides a close method that does nothing.
+ */
+func (this *readSeekerWithNopCloserStruct) Close() error {
+	return nil
 }
 
 /*
@@ -1243,19 +1257,8 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		zIn := request.Params["z"]
 		z64, _ := strconv.ParseUint(zIn, 10, 8)
 		z := uint8(z64)
-		colorScaleIn := request.Params["colorscale"]
-		colorScale64, colorScaleErr := strconv.ParseUint(colorScaleIn, 10, 8)
-		colorScaleFloat := 0.5
-
-		/*
-		 * Check if color scale is valid and in range.
-		 */
-		if colorScaleErr == nil && colorScale64 <= 10 {
-			colorScaleFloat = 0.1 * float64(colorScale64)
-		}
-
 		tileSource := this.tileSource
-		t, err := tileSource.Get(z, x, y, colorScaleFloat)
+		t, err := tileSource.Get(z, x, y)
 
 		/*
 		 * Check if tile could be fetched.
@@ -1279,7 +1282,6 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 			return response
 		} else {
-			img := t.Image()
 			id := t.Id()
 			idX := id.X()
 			idY := id.Y()
@@ -1307,52 +1309,24 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 				return response
 			} else {
+				data := t.Data()
 
 				/*
-				 * Create a PNG encoder.
+				 * Wrap data to provide nop Close method.
 				 */
-				encoder := png.Encoder{
-					CompressionLevel: png.BestCompression,
+				rsc := &readSeekerWithNopCloserStruct{
+					data,
 				}
-
-				buf := &bytes.Buffer{}
-				err := encoder.Encode(buf, img)
 
 				/*
-				 * Check if image could be encoded.
+				* Create HTTP response.
 				 */
-				if err != nil {
-					msg := err.Error()
-					customMsg := fmt.Sprintf("Failed to encode image: %s\n", msg)
-					customMsgBuf := bytes.NewBufferString(customMsg)
-					customMsgBytes := customMsgBuf.Bytes()
-					conf := this.config
-					confServer := conf.WebServer
-					contentType := confServer.ErrorMime
-
-					/*
-					 * Create HTTP response.
-					 */
-					response := webserver.HttpResponse{
-						Header: map[string]string{"Content-type": contentType},
-						Body:   customMsgBytes,
-					}
-
-					return response
-				} else {
-					bufBytes := buf.Bytes()
-
-					/*
-					 * Create HTTP response.
-					 */
-					response := webserver.HttpResponse{
-						Header: map[string]string{"Content-type": "image/png"},
-						Body:   bufBytes,
-					}
-
-					return response
+				response := webserver.HttpResponse{
+					Header:                map[string]string{"Content-type": "image/png"},
+					ContentReadSeekCloser: rsc,
 				}
 
+				return response
 			}
 
 		}
