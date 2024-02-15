@@ -152,7 +152,7 @@ function Helper() {
 			/*
 			 * Replace empty string by null.
 			 */
-			if (v == "") {
+			if (v == '') {
 				return null;
 			} else {
 				return v;
@@ -257,6 +257,23 @@ function Helper() {
 		};
 
 		return result;
+	};
+
+	/*
+	 * Decode an image from a data URL.
+	 */
+	this.loadImageAsync = function(data, callback) {
+		const img = new Image();
+
+		/*
+		 * Internal callback invoked when image is decoded.
+		 */
+		const callbackInternal = function(e) {
+			callback(img);
+		};
+
+		img.addEventListener('load', callbackInternal);
+		img.src = data;
 	};
 
 }
@@ -2500,7 +2517,7 @@ function UI() {
 
 		}
 
-		const img = storage.get(cvs, 'lastImage');
+		const img = storage.get(cvs, 'lastOverlay');
 
 		/*
 		 * Check if image overlay has to be drawn.
@@ -2548,7 +2565,7 @@ function UI() {
 	 */
 	this.moveMap = function(xoffs, yoffs) {
 		const cvs = document.getElementById('map_canvas');
-		const img = storage.get(cvs, 'lastImage');
+		const img = storage.get(cvs, 'mapBeforeMove');
 
 		/*
 		 * Load or store x-offset.
@@ -2592,7 +2609,7 @@ function UI() {
 	/*
 	 * Updates the image element with a new view of the map.
 	 */
-	this.updateMap = function(token, xres, yres, xpos, ypos, zoom, mintime, maxtime, useOSMTiles, colorScale, spread, fgColor) {
+	this.updateMap = function(token, xres, yres, xpos, ypos, zoom, mintime, maxtime, colorScale, spread, fgColor) {
 		/* Earth circumference at the equator. */
 		const circ = 40074;
 		const rq = new Request();
@@ -2686,7 +2703,7 @@ function UI() {
 			 * Check if the response is more current than what we display.
 			 */
 			if (idResponse > lastResponse) {
-				storage.put(cvs, 'lastImage', img);
+				storage.put(cvs, 'lastOverlay', img);
 				storage.put(cvs, 'imageResponseId', idResponse);
 				storage.put(cvs, 'imageZoom', zoom);
 				storage.put(cvs, 'offsetX', 0);
@@ -2709,7 +2726,7 @@ function UI() {
 				/*
 				 * Check if we should use OSM tiles.
 				 */
-				if (useOSMTiles & (colorScale !== '0')) {
+				if (colorScale !== '0') {
 					const tileIds = self.calculateTiles(xres, yres, zoom, xpos, ypos, colorScale);
 					storage.put(cvs, 'osmTiles', tileIds);
 
@@ -2756,11 +2773,10 @@ function Handler() {
 		const zoom = storage.get(cvs, 'zoomLevel');
 		const timeMin = storage.get(cvs, 'minTime');
 		const timeMax = storage.get(cvs, 'maxTime');
-		const useOSMTiles = storage.get(cvs, 'useOSMTiles');
 		const colorScale = storage.get(cvs, 'colorScale');
 		const spread = storage.get(cvs, 'spread');
 		const fgColor = storage.get(cvs, 'fgColor');
-		ui.updateMap(token, width, height, posX, posY, zoom, timeMin, timeMax, useOSMTiles, colorScale, spread, fgColor);
+		ui.updateMap(token, width, height, posX, posY, zoom, timeMin, timeMax, colorScale, spread, fgColor);
 	};
 
 	/*
@@ -2840,6 +2856,17 @@ function Handler() {
 	this.touchStart = function(e) {
 		e.preventDefault();
 		const cvs = e.target;
+		storage.put(cvs, 'mapBeforeMove', null);
+		const mapBeforeMove = cvs.toDataURL();
+
+		/*
+		 * Bind image to canvas after it got decoded.
+		 */
+		const callback = function(img) {
+			storage.put(cvs, 'mapBeforeMove', img);
+		};
+
+		helper.loadImageAsync(mapBeforeMove, callback);
 		const touches = e.targetTouches;
 		const numTouches = touches.length;
 		const singleTouch = (numTouches === 1);
@@ -3033,6 +3060,17 @@ function Handler() {
 		 */
 		if (btn === 0) {
 			const cvs = e.target;
+			storage.put(cvs, 'mapBeforeMove', null);
+			const mapBeforeMove = cvs.toDataURL();
+
+			/*
+			 * Bind image to canvas after it got decoded.
+			 */
+			const callback = function(img) {
+				storage.put(cvs, 'mapBeforeMove', img);
+			};
+
+			helper.loadImageAsync(mapBeforeMove, callback);
 			const x = e.offsetX;
 			const y = e.offsetY;
 			storage.put(cvs, 'mouseButton', true);
@@ -3056,6 +3094,7 @@ function Handler() {
 			const cvs = e.target;
 			const x = e.offsetX;
 			const y = e.offsetY;
+			storage.put(cvs, 'mapBeforeMove', null);
 			storage.put(cvs, 'mouseButton', false);
 			const interrupted = storage.get(cvs, 'dragInterrupted');
 
@@ -3119,6 +3158,31 @@ function Handler() {
 		const delta = e.deltaY;
 		const direction = delta > 0 ? 1 : (delta < 0 ? -1 : 0);
 		const cvs = document.getElementById('map_canvas');
+		const zooming = storage.get(cvs, 'zooming');
+
+		/*
+		 * If we're not already zooming, store some state.
+		 */
+		if (zooming !== true) {
+			storage.put(cvs, 'mapBeforeMove', null);
+			const mapBeforeMove = cvs.toDataURL();
+
+			/*
+			 * Bind image to canvas after it got decoded.
+			 *
+			 * This is ugly since it produces a race condition, but
+			 * I don't know how to block the main thread until the
+			 * image gets decoded to make this synchronous.
+			 */
+			const callback = function(img) {
+				storage.put(cvs, 'mapBeforeMove', img);
+				ui.moveMap(null, null);
+			};
+
+			helper.loadImageAsync(mapBeforeMove, callback);
+			storage.put(cvs, 'zooming', true);
+		}
+
 		let zoom = storage.get(cvs, 'zoomLevel');
 		zoom -= direction;
 
@@ -3139,9 +3203,10 @@ function Handler() {
 		storage.put(cvs, 'zoomLevel', zoom);
 
 		/*
-		 * Perform delayed refresh.
+		 * Perform delayed refresh and stop zooming.
 		 */
 		const refresh = function() {
+			storage.put(cvs, 'zooming', false);
 			self.refresh();
 		};
 
@@ -3149,7 +3214,16 @@ function Handler() {
 		window.clearTimeout(timeout);
 		timeout = window.setTimeout(refresh, 250);
 		self._timeoutScroll = timeout;
-		ui.moveMap(null, null);
+
+		/*
+		 * Perform update, if we are already zooming.
+		 *
+		 * The first update is performed asynchronously.
+		 */
+		if (zooming === true) {
+			ui.moveMap(null, null);
+		}
+
 	};
 
 	/*
@@ -3282,10 +3356,11 @@ function Handler() {
 		storage.put(cvs, 'fgColor', null);
 		storage.put(cvs, 'minTime', null);
 		storage.put(cvs, 'maxTime', null);
-		storage.put(cvs, 'useOSMTiles', true);
 		storage.put(cvs, 'imageRequestId', 0);
 		storage.put(cvs, 'imageResponseId', 0);
 		storage.put(cvs, 'imageZoom', 0);
+		storage.put(cvs, 'lastOverlay', null);
+		storage.put(cvs, 'mapBeforeMove', null);
 		storage.put(cvs, 'mouseStartX', 0);
 		storage.put(cvs, 'mouseStartY', 0);
 		storage.put(cvs, 'token', null);
@@ -3297,6 +3372,7 @@ function Handler() {
 		storage.put(cvs, 'offsetX', 0);
 		storage.put(cvs, 'offsetY', 0);
 		storage.put(cvs, 'dragInterrupted', false);
+		storage.put(cvs, 'zooming', false);
 		cvs.addEventListener('mousedown', self.mouseDown);
 		cvs.addEventListener('mouseup', self.mouseUp);
 		cvs.addEventListener('mousemove', self.mouseMove);
