@@ -1,9 +1,11 @@
 package meta
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"sort"
@@ -101,6 +103,7 @@ type Activities interface {
 	Add(info *ActivityInfo) error
 	End(id uint32) (time.Time, error)
 	Export() ([]byte, error)
+	ExportCSV() (io.ReadSeeker, error)
 	Get(id uint32) (ActivityGroup, error)
 	Import(buf []byte) error
 	ImportCSV(data string) error
@@ -976,18 +979,132 @@ func (this *activitiesStruct) Export() ([]byte, error) {
 		infos[idx] = info
 	}
 
+	this.mutex.RUnlock()
 	buf, err := json.MarshalIndent(infos, "", "\t")
 
 	/*
 	 * Check if error occured during serialization.
 	 */
 	if err != nil {
-		this.mutex.RUnlock()
 		msg := err.Error()
 		return nil, fmt.Errorf("Activity data serialization failed: %s", msg)
 	} else {
-		this.mutex.RUnlock()
 		return buf, nil
+	}
+
+}
+
+/*
+ * Serialize activities to CSV structure.
+ */
+func (this *activitiesStruct) ExportCSV() (io.ReadSeeker, error) {
+	buf := bytes.NewBuffer(nil)
+	w := csv.NewWriter(buf)
+	this.mutex.RLock()
+	groups := this.groups
+	numGroups := len(groups)
+	err := error(nil)
+
+	/*
+	 * Iterate over all activity groups.
+	 */
+	for i := int(0); (i < numGroups) && (err == nil); i++ {
+		group := groups[i]
+		begin := group.Begin()
+		beginString := begin.Format(time.RFC3339)
+		weightKGString := group.WeightKG()
+		running := group.Running()
+		runningDurationString := ""
+		runningDistanceKMString := ""
+		runningStepCountString := ""
+		runningEnergyKJString := ""
+		runningZero := running.Zero()
+
+		/*
+		 * Fill in information about running activity, if non-zero.
+		 */
+		if !runningZero {
+			runningDuration := running.Duration()
+			runningDurationString = runningDuration.String()
+			runningDistanceKMString = running.DistanceKM()
+			runningStepCount := running.StepCount()
+			runningStepCountString = fmt.Sprintf("%d", runningStepCount)
+			runningEnergyKJ := running.EnergyKJ()
+			runningEnergyKJString = fmt.Sprintf("%d", runningEnergyKJ)
+		}
+
+		cycling := group.Cycling()
+		cyclingDurationString := ""
+		cyclingDistanceKMString := ""
+		cyclingEnergyKJString := ""
+		cyclingZero := cycling.Zero()
+
+		/*
+		 * Fill in information about cycling activity, if non-zero.
+		 */
+		if !cyclingZero {
+			cyclingDuration := cycling.Duration()
+			cyclingDurationString = cyclingDuration.String()
+			cyclingDistanceKMString = cycling.DistanceKM()
+			cyclingEnergyKJ := cycling.EnergyKJ()
+			cyclingEnergyKJString = fmt.Sprintf("%d", cyclingEnergyKJ)
+		}
+
+		other := group.Other()
+		otherEnergyKJString := ""
+		otherZero := other.Zero()
+
+		/*
+		 * Fill in information about other activities, if non-zero.
+		 */
+		if !otherZero {
+			otherEnergyKJ := other.EnergyKJ()
+			otherEnergyKJString = fmt.Sprintf("%d", otherEnergyKJ)
+		}
+
+		/*
+		 * Create CSV record.
+		 */
+		record := []string{
+			beginString,
+			weightKGString,
+			runningDurationString,
+			runningDistanceKMString,
+			runningStepCountString,
+			runningEnergyKJString,
+			cyclingDurationString,
+			cyclingDistanceKMString,
+			cyclingEnergyKJString,
+			otherEnergyKJString,
+		}
+
+		err = w.Write(record)
+	}
+
+	this.mutex.RUnlock()
+
+	/*
+	 * Check if error occured during serialization.
+	 */
+	if err != nil {
+		msg := err.Error()
+		return nil, fmt.Errorf("Error during serialization: %s", msg)
+	} else {
+		w.Flush()
+		err = w.Error()
+
+		/*
+		 * Check if error occured during flush.
+		 */
+		if err != nil {
+			msg := err.Error()
+			return nil, fmt.Errorf("Error during flush: %s", msg)
+		} else {
+			content := buf.Bytes()
+			r := bytes.NewReader(content)
+			return r, nil
+		}
+
 	}
 
 }

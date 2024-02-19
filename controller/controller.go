@@ -887,6 +887,108 @@ func (this *controllerStruct) downloadGeoDBContentHandler(request webserver.Http
 }
 
 /*
+ * Export activity data as CSV.
+ */
+func (this *controllerStruct) exportActivitiesCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "activity-read")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+		this.activitiesLock.RLock()
+		activities := this.activities
+		rs, err := activities.ExportCSV()
+		this.activitiesLock.RUnlock()
+
+		/*
+		 * Check if error occured during export.
+		 */
+		if err != nil {
+			msg := err.Error()
+
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+				Header: map[string]string{"Content-type": contentType},
+				Body:   []byte(msg),
+			}
+
+			return response
+		} else {
+
+			/*
+			 * Provide dummy close method.
+			 */
+			rsc := &readSeekerWithNopCloserStruct{
+				rs,
+			}
+
+			creationTime := time.Now()
+			timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+			fileName := fmt.Sprintf("activities-%s.csv", timeStamp)
+			disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+
+				Header: map[string]string{
+					"Content-disposition": disposition,
+					"Content-type":        "text/csv",
+				},
+
+				ContentReadSeekCloser: rsc,
+			}
+
+			return response
+		}
+
+	}
+
+}
+
+/*
  * Retrieve all activity information from database.
  */
 func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest) webserver.HttpResponse {
@@ -2601,6 +2703,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.authResponseHandler(request)
 	case "download-geodb-content":
 		response = this.downloadGeoDBContentHandler(request)
+	case "export-activities-csv":
+		response = this.exportActivitiesCsvHandler(request)
 	case "get-activities":
 		response = this.getActivitiesHandler(request)
 	case "get-geodb-stats":
