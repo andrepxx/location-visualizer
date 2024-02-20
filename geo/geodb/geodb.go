@@ -81,6 +81,7 @@ type Location struct {
 type Database interface {
 	Append(loc *Location) error
 	Close()
+	Deduplicate() (uint32, error)
 	LocationCount() uint32
 	ReadLocations(offset uint32, target []Location) (uint32, error)
 	SerializeBinary() io.ReadSeekCloser
@@ -97,6 +98,7 @@ type Database interface {
 type Storage interface {
 	ReadAt(buf []byte, offset int64) (int, error)
 	Seek(offset int64, whence int) (int64, error)
+	Truncate(size int64) error
 	WriteAt(buf []byte, offset int64) (int, error)
 }
 
@@ -340,6 +342,141 @@ func (this *databaseStruct) Close() {
 	this.fd = nil
 	this.locationCount = 0
 	this.mutex.Unlock()
+}
+
+/*
+ * Removes duplicate entries from the database.
+ *
+ * Returns the number of removed entries.
+ *
+ * This implicitly sorts the database.
+ */
+func (this *databaseStruct) Deduplicate() (uint32, error) {
+	this.mutex.Lock()
+	numSkipped := uint32(0)
+	errResult := error(nil)
+	err := this.sort()
+
+	/*
+	 * Check if sorting was successful.
+	 */
+	if err != nil {
+		msg := err.Error()
+		errResult = fmt.Errorf("Error occured during sorting: %s", msg)
+	} else {
+		numEntries := this.locationCount
+		bufCurrentEntries := [][SIZE_DATABASE_ENTRY]byte{}
+		bufCurrentEntry := make([]byte, SIZE_DATABASE_ENTRY)
+		bufPreviousEntry := make([]byte, SIZE_DATABASE_ENTRY)
+		fd := this.fd
+
+		/*
+		 * Read every entry.
+		 */
+		for readIdx := uint32(0); (errResult == nil) && (readIdx < numEntries); readIdx++ {
+			readIdx64 := int64(readIdx)
+			offsetRead := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * readIdx64)
+			n, err := fd.ReadAt(bufCurrentEntry, offsetRead)
+
+			/*
+			 * Check for errors.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Error reading from offset %016x (%d): %s", offsetRead, offsetRead, msg)
+			} else if n != SIZE_DATABASE_ENTRY {
+				errResult = fmt.Errorf("Expected %d bytes reading from offset 0x%016x (%d), but got %d.", SIZE_DATABASE_ENTRY, offsetRead, offsetRead, n)
+			} else {
+				currentTimestamp := bufCurrentEntry[0:SIZE_TIMESTAMP]
+				previousTimestamp := bufPreviousEntry[0:SIZE_TIMESTAMP]
+				timestampsEqual := bytes.Equal(currentTimestamp, previousTimestamp)
+
+				/*
+				 * If timestamps are not equal, clear current entries.
+				 */
+				if !timestampsEqual {
+					bufCurrentEntries = bufCurrentEntries[:0]
+				}
+
+				skipCurrent := false
+
+				/*
+				 * Iterate over all previously seen entries with the same time
+				 * stamp and check if the current entry has already been seen.
+				 */
+				for _, entry := range bufCurrentEntries {
+					entrySlice := entry[:]
+					entryEqual := bytes.Equal(entrySlice, bufCurrentEntry)
+					skipCurrent = skipCurrent || entryEqual
+				}
+
+				/*
+				 * Check if we shall skip the current entry.
+				 */
+				if skipCurrent {
+					numSkipped++
+				} else {
+					entryToBeStored := [SIZE_DATABASE_ENTRY]byte{}
+					entryToBeStoredSlice := entryToBeStored[:]
+					copy(entryToBeStoredSlice, bufCurrentEntry)
+					bufCurrentEntries = append(bufCurrentEntries, entryToBeStored)
+
+					/*
+					 * Check if current entry shall be moved to be preserved
+					 * due to previous entries being skipped.
+					 */
+					if numSkipped > 0 {
+						writeIdx := readIdx - numSkipped
+						writeIdx64 := int64(writeIdx)
+						offsetWrite := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * writeIdx64)
+						n, err := fd.WriteAt(bufCurrentEntry, offsetWrite)
+
+						/*
+						 * Check if write error occured or write was not of
+						 * expected size.
+						 */
+						if err != nil {
+							msg := err.Error()
+							errResult = fmt.Errorf("Error writing to offset %016x (%d): %s", offsetWrite, offsetWrite, msg)
+						} else if n != SIZE_DATABASE_ENTRY {
+							errResult = fmt.Errorf("Expected %d bytes writing to offset 0x%016x (%d), but got %d.", SIZE_DATABASE_ENTRY, offsetWrite, offsetWrite, n)
+						}
+
+					}
+
+				}
+
+				copy(bufPreviousEntry, bufCurrentEntry)
+			}
+
+		}
+
+		/*
+		 * Make sure that we didn't skip more entries than are in the database.
+		 */
+		if numSkipped > numEntries {
+			errResult = fmt.Errorf("Skipped more entries (%d) than there are in the database (%d).", numSkipped, numEntries)
+		} else {
+			numEntries -= numSkipped
+			this.locationCount = numEntries
+			numEntries64 := int64(numEntries)
+			fileSize := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * numEntries64)
+			err := fd.Truncate(fileSize)
+
+			/*
+			 * Check if error occured during truncation.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to truncate file to size 0x%016x (%d): %s", fileSize, fileSize, msg)
+			}
+
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return numSkipped, errResult
 }
 
 /*

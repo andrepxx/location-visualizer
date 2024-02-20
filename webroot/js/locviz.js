@@ -1063,7 +1063,7 @@ function UI() {
 	this.displayActivitiesAddDialog = function() {
 		const div = document.getElementById('activitiesdialog');
 		const innerDiv = document.getElementById('activitiesdialog_content');
-		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const dateFormat = decodeURIComponent('YYYY-MM-DDThh%3Amm%3Ass%C2%B1hh%3Amm');
 		const elemBegin = this.createElement('Begin', '180px');
 		const fieldBegin = document.createElement('input');
 		fieldBegin.className = 'textfield';
@@ -1220,7 +1220,6 @@ function UI() {
 		const activity = activities[idx];
 		const div = document.getElementById('activitiesdialog');
 		const innerDiv = document.getElementById('activitiesdialog_content');
-		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
 		const valueBegin = activity.Begin;
 		const valueBeginString = valueBegin.toString();
 		const elemBegin = this.createElement('Begin', '180px');
@@ -1492,11 +1491,11 @@ function UI() {
 			/*
 			 * This gets called when the server returns a response.
 			 */
-			let responseHandler = function(response) {
+			const responseHandler = function(response) {
 				ui.displayGeoDBImportStats(response);
 			};
 
-			const url = globals.cgi;
+			const cgi = globals.cgi;
 			const data = new FormData();
 			data.append('cgi', 'import-geodata');
 			data.append('format', importFormatValue);
@@ -1506,11 +1505,141 @@ function UI() {
 			const token = storage.get(cvs, 'token');
 			data.append('token', token);
 			data.append('file', file);
-			ajax.request('POST', url, data, null, responseHandler, true);
+			ajax.request('POST', cgi, data, null, responseHandler, true);
 		}
 
 		return false;
 	};
+
+	/*
+	 * Parse GeoDB deduplication stats and display them.
+	 */
+	this.displayGeoDBDeduplicationStats = function(content) {
+		const response = helper.parseJSON(content);
+		const contentDiv = document.getElementById('geodbdialog_content');
+		helper.clearElement(contentDiv);
+		const tableDiv = document.createElement('div');
+		const table = document.createElement('table');
+		table.className = 'geodbtable';
+		const body = document.createElement('tbody');
+		const columnNames = ['Before', 'After'];
+		const rowNames = ['LocationCount', 'Ordered', 'OrderedStrict', 'TimestampEarliest', 'TimestampLatest'];
+		const rowLabels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
+		const headerRow = document.createElement('tr');
+		headerRow.className = 'geodbtablerow';
+		const emptyHeaderCell = document.createElement('td');
+		emptyHeaderCell.className = 'geodbtablecell tablehead';
+		headerRow.appendChild(emptyHeaderCell);
+
+		/*
+		 * Fill header row.
+		 */
+		for (let i = 0; i < columnNames.length; i++) {
+			const headerCell = document.createElement('td');
+			headerCell.className = 'geodbtablecell tablehead';
+			const headerCellLabel = columnNames[i];
+			const headerCellNode = document.createTextNode(headerCellLabel);
+			headerCell.appendChild(headerCellNode);
+			headerRow.appendChild(headerCell);
+		}
+
+		body.appendChild(headerRow);
+
+		/*
+		 * Fill data rows.
+		 */
+		for (let i = 0; i < rowNames.length; i++) {
+			const dataRow = document.createElement('tr');
+			dataRow.className = 'geodbtablerow';
+			const rowName = rowNames[i];
+			const rowLabel = rowLabels[i];
+			const rowLabelCell = document.createElement('td');
+			rowLabelCell.className = 'geodbtablecell tablehead';
+			const rowLabelNode = document.createTextNode(rowLabel);
+			rowLabelCell.appendChild(rowLabelNode);
+			dataRow.appendChild(rowLabelCell)
+
+			/*
+			 * Fill data columns.
+			 */
+			for (let j = 0; j < columnNames.length; j++) {
+				const dataCell = document.createElement('td');
+				dataCell.className = 'geodbtablecell rightalign';
+				const columnName = columnNames[j];
+				const dataCellContent = response[columnName][rowName];
+				const dataCellContentString = dataCellContent.toString();
+				const dataCellNode = document.createTextNode(dataCellContentString);
+				dataCell.appendChild(dataCellNode);
+				dataRow.appendChild(dataCell);
+			}
+
+			body.appendChild(dataRow);
+		}
+
+		table.appendChild(body);
+		tableDiv.appendChild(table);
+		contentDiv.appendChild(tableDiv);
+		const spacerDivA = document.createElement('div');
+		spacerDivA.className = 'vspace';
+		contentDiv.appendChild(spacerDivA);
+		const removedDiv = document.createElement('div');
+		const removedLabelSpan = document.createElement('span');
+		const removedLabelTextNode = document.createTextNode('Removed: ');
+		removedLabelSpan.appendChild(removedLabelTextNode);
+		removedDiv.appendChild(removedLabelSpan);
+		const removedCountSpan = document.createElement('span');
+		const removedCount = response.Removed;
+		const removedCountString = removedCount.toString();
+		const removedCountTextNode = document.createTextNode(removedCountString);
+		removedCountSpan.appendChild(removedCountTextNode);
+		removedDiv.appendChild(removedCountSpan);
+		contentDiv.appendChild(removedDiv);
+		const successDiv = document.createElement('div');
+		const successLabelSpan = document.createElement('span');
+		const successLabelTextNode = document.createTextNode('Success: ');
+		successLabelSpan.appendChild(successLabelTextNode);
+		successDiv.appendChild(successLabelSpan);
+		const status = response.Status;
+		const success = status.Success;
+		let successValue = success.toString();
+
+		/*
+		 * If no success indicated, give reason.
+		 */
+		if (success !== true) {
+			const reason = status.Reason;
+			successValue += ' (' + reason + ')';
+		}
+
+		const successValueSpan = document.createElement('span');
+		const successValueTextNode = document.createTextNode(successValue);
+		successValueSpan.appendChild(successValueTextNode);
+		successDiv.appendChild(successValueSpan);
+		contentDiv.appendChild(successDiv);
+		const spacerDivB = document.createElement('div');
+		spacerDivB.className = 'vspace';
+		contentDiv.appendChild(spacerDivB);
+		const buttonDiv = document.createElement('div');
+		const buttonBack = document.createElement('button');
+		buttonBack.className = 'button';
+		const buttonBackCaption = document.createTextNode('Back');
+		buttonBack.appendChild(buttonBackCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Back' button.
+		 */
+		buttonBack.onclick = function(e) {
+			div.style.display = 'none';
+			helper.clearElement(contentDiv);
+			handler.showGeoDB();
+		};
+
+		buttonDiv.appendChild(buttonBack);
+		contentDiv.appendChild(buttonDiv);
+		const div = document.getElementById('geodbdialog');
+		div.style.display = 'block';
+		buttonBack.focus();
+	}
 
 	/*
 	 * Parse GeoDB import stats and display them.
@@ -1832,11 +1961,80 @@ function UI() {
 		importPropertiesDiv.appendChild(sortElem);
 		div.appendChild(importPropertiesDiv);
 		const spacerDivC = document.createElement('div');
-		spacerDivB.className = 'vspace';
+		spacerDivC.className = 'vspace';
 		div.appendChild(spacerDivC);
+		const actionPropertiesDiv = document.createElement('div');
+		const actionPropertiesDescriptionDiv = document.createElement('div');
+		const actionPropertiesDescriptionNode = document.createTextNode('Select actions to be carried out on geographical database.');
+		actionPropertiesDescriptionDiv.appendChild(actionPropertiesDescriptionNode);
+		actionPropertiesDiv.appendChild(actionPropertiesDescriptionDiv);
+		const actionElem = this.createElement('Action', '180px');
+		const actionValues = ['(none)', 'deduplicate entries'];
+		const actionDefault = actionValues[0];
+		const fieldAction = document.createElement('select');
+
+		/*
+		 * Add supported values for actions.
+		 */
+		for (let i = 0; i < actionValues.length; i++) {
+			const v = actionValues[i];
+			const option = document.createElement('option');
+			option.setAttribute('value', v);
+			const optionNode = document.createTextNode(v);
+			option.appendChild(optionNode);
+			fieldAction.appendChild(option);
+		}
+
+		fieldAction.className = 'textfield';
+		fieldAction.setAttribute('id', 'geodb_action_field');
+		fieldAction.value = actionDefault;
+		actionElem.appendChild(fieldAction);
+		actionPropertiesDiv.appendChild(actionElem);
+		div.appendChild(actionPropertiesDiv);
+		const spacerDivD = document.createElement('div');
+		spacerDivD.className = 'vspace';
+		div.appendChild(spacerDivD);
 		const buttonDiv = document.createElement('div');
+		const buttonRunAction = document.createElement('button');
+		buttonRunAction.className = 'button';
+		const buttonRunActionCaption = document.createTextNode('Run action');
+		buttonRunAction.appendChild(buttonRunActionCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Run action' button.
+		 */
+		buttonRunAction.onclick = function(e) {
+			const actionField = document.getElementById('geodb_action_field');
+			const actionValue = actionField.value;
+
+			/*
+			 * Check if we shall deduplicate entries in geographical database.
+			 */
+			if (actionValue === 'deduplicate entries') {
+				const request = new Request();
+				request.append('cgi', 'deduplicate-geodb-entries');
+				const cvs = document.getElementById('map_canvas');
+				const token = storage.get(cvs, 'token');
+				request.append('token', token);
+				const data = request.getData();
+				const cgi = globals.cgi;
+				const mime = globals.mimeDefault;
+
+				/*
+				 * This gets called when the server returns a response.
+				 */
+				const responseHandler = function(response) {
+					ui.displayGeoDBDeduplicationStats(response);
+				};
+
+				ajax.request('POST', cgi, data, mime, responseHandler, true);
+			}
+
+		};
+
+		buttonDiv.appendChild(buttonRunAction);
 		const buttonBack = document.createElement('button');
-		buttonBack.className = 'button';
+		buttonBack.className = 'button next';
 		const buttonBackCaption = document.createTextNode('Back');
 		buttonBack.appendChild(buttonBackCaption);
 
@@ -1864,7 +2062,7 @@ function UI() {
 	this.initializeSidebar = function() {
 		const sidebar = document.getElementById('right_sidebar');
 		const opener = document.getElementById('right_sidebar_opener');
-		const dateFormat = unescape('YYYY-MM-DDThh:mm:ss%B1hh:mm');
+		const dateFormat = decodeURIComponent('YYYY-MM-DDThh%3Amm%3Ass%C2%B1hh%3Amm');
 		const elemFrom = this.createElement('From', null);
 		const fieldFrom = document.createElement('input');
 		fieldFrom.className = 'textfield';
@@ -2704,6 +2902,7 @@ function UI() {
 			rq.append('token', token);
 		}
 
+		const cgi = globals.cgi;
 		const cvs = document.getElementById('map_canvas');
 		const idRequest = storage.get(cvs, 'imageRequestId');
 		const currentRequestId = idRequest + 1;
@@ -2711,7 +2910,6 @@ function UI() {
 		const currentRequestIdString = currentRequestId.toString();
 		rq.append('rqid', currentRequestIdString);
 		storage.put(cvs, 'osmTiles', []);
-		const cgi = globals.cgi;
 		const data = rq.getData();
 
 		/*

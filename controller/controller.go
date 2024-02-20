@@ -150,6 +150,16 @@ type webDatasetStatsStruct struct {
 }
 
 /*
+ * Web representation of a deduplication report.
+ */
+type webDeduplicationReportStruct struct {
+	Status  webResponseStruct
+	Before  webDatasetStatsStruct
+	After   webDatasetStatsStruct
+	Removed uint32
+}
+
+/*
  * Web representation of a migration report.
  */
 type webMigrationReportStruct struct {
@@ -683,6 +693,203 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 	}
 
 	mimeType, buffer := this.createJSON(responseToken)
+
+	/*
+	 * Create HTTP response.
+	 */
+	response := webserver.HttpResponse{
+		Header: map[string]string{"Content-type": mimeType},
+		Body:   buffer,
+	}
+
+	return response
+}
+
+/*
+ * Remove duplicate entries from GeoDB location database.
+ */
+func (this *controllerStruct) deduplicateGeoDBEntriesHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "geodb-write")
+	report := webDeduplicationReportStruct{}
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		reason := fmt.Sprintf("Failed to check permission: %s\n", msg)
+
+		/*
+		 * Report failure.
+		 */
+		report.Status = webResponseStruct{
+			Success: false,
+			Reason:  reason,
+		}
+
+	} else if !perm {
+		reason := "Forbidden!"
+
+		/*
+		 * Report failure.
+		 */
+		report.Status = webResponseStruct{
+			Success: false,
+			Reason:  reason,
+		}
+
+	} else {
+		db := this.locationDB
+
+		/*
+		 * Make sure database exists.
+		 */
+		if db != nil {
+			gu := geoutil.Create()
+			datasetStatsBefore := webDatasetStatsStruct{}
+			datasetStatsAfter := webDatasetStatsStruct{}
+			statsBefore, err := gu.GeoDBStats(db)
+
+			/*
+			 * Make sure that no error occured.
+			 */
+			if err != nil {
+				msg := err.Error()
+				reason := fmt.Sprintf("Error obtaining database stats: %s", msg)
+
+				/*
+				 * Report failure.
+				 */
+				report.Status = webResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else {
+				locationCountBefore := statsBefore.LocationCount()
+				orderedBefore := statsBefore.Ordered()
+				orderedStrictBefore := statsBefore.OrderedStrict()
+				timestampEarliestBefore := statsBefore.TimestampEarliest()
+				timestampLatestBefore := statsBefore.TimestampLatest()
+				timestampEarliestStringBefore := ""
+				timestampLatestStringBefore := ""
+
+				/*
+				 * Check if timestamps are defined.
+				 */
+				if timestampEarliestBefore <= timestampLatestBefore {
+					timestampEarliestTimeBefore := gu.MillisecondsToTime(timestampEarliestBefore)
+					timestampEarliestStringBefore = timestampEarliestTimeBefore.Format(TIMESTAMP_FORMAT)
+					timestampLatestTimeBefore := gu.MillisecondsToTime(timestampLatestBefore)
+					timestampLatestStringBefore = timestampLatestTimeBefore.Format(TIMESTAMP_FORMAT)
+				}
+
+				/*
+				 * Create dataset statistics.
+				 */
+				datasetStatsBefore = webDatasetStatsStruct{
+					LocationCount:     locationCountBefore,
+					Ordered:           orderedBefore,
+					OrderedStrict:     orderedStrictBefore,
+					TimestampEarliest: timestampEarliestStringBefore,
+					TimestampLatest:   timestampLatestStringBefore,
+				}
+
+				n, err := db.Deduplicate()
+
+				/*
+				 * Make sure that no error occured.
+				 */
+				if err != nil {
+					msg := err.Error()
+					reason := fmt.Sprintf("Error during deduplication: %s", msg)
+
+					/*
+					 * Report failure.
+					 */
+					report.Status = webResponseStruct{
+						Success: false,
+						Reason:  reason,
+					}
+
+				} else {
+					statsAfter, err := gu.GeoDBStats(db)
+
+					/*
+					 * Make sure that no error occured.
+					 */
+					if err != nil {
+						msg := err.Error()
+						reason := fmt.Sprintf("Error obtaining database stats: %s", msg)
+
+						/*
+						 * Report failure.
+						 */
+						report.Status = webResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else {
+						locationCountAfter := statsAfter.LocationCount()
+						orderedAfter := statsAfter.Ordered()
+						orderedStrictAfter := statsAfter.OrderedStrict()
+						timestampEarliestAfter := statsAfter.TimestampEarliest()
+						timestampLatestAfter := statsAfter.TimestampLatest()
+						timestampEarliestStringAfter := ""
+						timestampLatestStringAfter := ""
+
+						/*
+						* Check if timestamps are defined.
+						 */
+						if timestampEarliestAfter <= timestampLatestAfter {
+							timestampEarliestTimeAfter := gu.MillisecondsToTime(timestampEarliestAfter)
+							timestampEarliestStringAfter = timestampEarliestTimeAfter.Format(TIMESTAMP_FORMAT)
+							timestampLatestTimeAfter := gu.MillisecondsToTime(timestampLatestAfter)
+							timestampLatestStringAfter = timestampLatestTimeAfter.Format(TIMESTAMP_FORMAT)
+						}
+
+						/*
+						* Create dataset statistics.
+						 */
+						datasetStatsAfter = webDatasetStatsStruct{
+							LocationCount:     locationCountAfter,
+							Ordered:           orderedAfter,
+							OrderedStrict:     orderedStrictAfter,
+							TimestampEarliest: timestampEarliestStringAfter,
+							TimestampLatest:   timestampLatestStringAfter,
+						}
+
+						/*
+						 * Report success.
+						 */
+						status := webResponseStruct{
+							Success: true,
+							Reason:  "",
+						}
+
+						/*
+						 * Create deduplication report.
+						 */
+						report = webDeduplicationReportStruct{
+							Status:  status,
+							Before:  datasetStatsBefore,
+							After:   datasetStatsAfter,
+							Removed: n,
+						}
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+	mimeType, buffer := this.createJSON(report)
 
 	/*
 	 * Create HTTP response.
@@ -2701,6 +2908,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.authRequestHandler(request)
 	case "auth-response":
 		response = this.authResponseHandler(request)
+	case "deduplicate-geodb-entries":
+		response = this.deduplicateGeoDBEntriesHandler(request)
 	case "download-geodb-content":
 		response = this.downloadGeoDBContentHandler(request)
 	case "export-activities-csv":
