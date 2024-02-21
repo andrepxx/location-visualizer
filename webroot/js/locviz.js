@@ -160,7 +160,7 @@ function Helper() {
 
 		}
 
-	}
+	};
 
 	/*
 	 * Removes all child nodes from an element.
@@ -230,7 +230,7 @@ function Helper() {
 		}
 
 		return result;
-	}
+	};
 
 	/*
 	 * Transform Mercator coordinates into geographic coordinates.
@@ -1485,8 +1485,6 @@ function UI() {
 			const importFormatValue = importFormatField.value;
 			const importStrategyField = document.getElementById('geodb_import_strategy_field');
 			const importStrategyValue = importStrategyField.value;
-			const importSortField = document.getElementById('geodb_sort_field');
-			const importSortValue = importSortField.value;
 
 			/*
 			 * This gets called when the server returns a response.
@@ -1500,7 +1498,6 @@ function UI() {
 			data.append('cgi', 'import-geodata');
 			data.append('format', importFormatValue);
 			data.append('strategy', importStrategyValue);
-			data.append('sort', importSortValue);
 			const cvs = document.getElementById('map_canvas');
 			const token = storage.get(cvs, 'token');
 			data.append('token', token);
@@ -1639,7 +1636,7 @@ function UI() {
 		const div = document.getElementById('geodbdialog');
 		div.style.display = 'block';
 		buttonBack.focus();
-	}
+	};
 
 	/*
 	 * Parse GeoDB import stats and display them.
@@ -1937,28 +1934,6 @@ function UI() {
 		fieldImportStrategy.value = importStrategyDefault;
 		importStrategyElem.appendChild(fieldImportStrategy);
 		importPropertiesDiv.appendChild(importStrategyElem);
-		const sortElem = this.createElement('Sort', '180px');
-		const sortValues = ['true', 'false'];
-		const sortDefault = sortValues[0];
-		const fieldSort = document.createElement('select');
-
-		/*
-		 * Add supported values for sorting.
-		 */
-		for (let i = 0; i < sortValues.length; i++) {
-			const v = sortValues[i];
-			const option = document.createElement('option');
-			option.setAttribute('value', v);
-			const optionNode = document.createTextNode(v);
-			option.appendChild(optionNode);
-			fieldSort.appendChild(option);
-		}
-
-		fieldSort.className = 'textfield';
-		fieldSort.setAttribute('id', 'geodb_sort_field');
-		fieldSort.value = sortDefault;
-		sortElem.appendChild(fieldSort);
-		importPropertiesDiv.appendChild(sortElem);
 		div.appendChild(importPropertiesDiv);
 		const spacerDivC = document.createElement('div');
 		spacerDivC.className = 'vspace';
@@ -1969,7 +1944,7 @@ function UI() {
 		actionPropertiesDescriptionDiv.appendChild(actionPropertiesDescriptionNode);
 		actionPropertiesDiv.appendChild(actionPropertiesDescriptionDiv);
 		const actionElem = this.createElement('Action', '180px');
-		const actionValues = ['(none)', 'deduplicate entries'];
+		const actionValues = ['(none)', 'sort entries', 'deduplicate entries'];
 		const actionDefault = actionValues[0];
 		const fieldAction = document.createElement('select');
 
@@ -2006,13 +1981,24 @@ function UI() {
 		buttonRunAction.onclick = function(e) {
 			const actionField = document.getElementById('geodb_action_field');
 			const actionValue = actionField.value;
+			let actionString = null;
 
 			/*
-			 * Check if we shall deduplicate entries in geographical database.
+			 * Map action value to right parameter.
 			 */
-			if (actionValue === 'deduplicate entries') {
+			if (actionValue === 'sort entries') {
+				actionString = 'sort';
+			} else if (actionValue === 'deduplicate entries') {
+				actionString = 'deduplicate';
+			}
+
+			/*
+			 * Check if we shall sort or deduplicate entries in geographical database.
+			 */
+			if (actionString != null) {
 				const request = new Request();
-				request.append('cgi', 'deduplicate-geodb-entries');
+				request.append('cgi', 'modify-geodata');
+				request.append('action', actionString);
 				const cvs = document.getElementById('map_canvas');
 				const token = storage.get(cvs, 'token');
 				request.append('token', token);
@@ -2365,7 +2351,7 @@ function UI() {
 				fieldPassword.focus();
 			}
 
-		}
+		};
 
 		/*
 		 * This is called when the user types in the password field.
@@ -2379,7 +2365,7 @@ function UI() {
 				buttonLogin.click();
 			}
 
-		}
+		};
 
 		/*
 		 * This is called when the user clicks on the 'Login' button.
@@ -2658,7 +2644,7 @@ function UI() {
 
 		ctx.putImageData(imageData, 0, 0);
 		return cvs;
-	}
+	};
 
 	/*
 	 * Draws a tile on the map canvas.
@@ -3556,7 +3542,7 @@ function Handler() {
 		};
 
 		ajax.request('POST', cgi, data, mime, callback, false);
-	}
+	};
 
 	/*
 	 * This is called when the user interface initializes.
