@@ -1885,12 +1885,12 @@ function UI() {
 		div.appendChild(spacerDivB);
 		const importPropertiesDiv = document.createElement('div');
 		const importPropertiesDescriptionDiv = document.createElement('div');
-		const importPropertiesDescriptionNode = document.createTextNode('Drop GPX or JSON file to import location data into geographical database.');
+		const importPropertiesDescriptionNode = document.createTextNode('Drop CSV, GPX or JSON file to import location data into geographical database.');
 		importPropertiesDescriptionDiv.appendChild(importPropertiesDescriptionNode);
 		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
 		const importFormatElem = this.createElement('Format', '180px');
-		const importFormatLabels = ['GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
-		const importFormatValues = ['gpx', 'json'];
+		const importFormatLabels = ['CSV / RFC 4180 (*.csv)', 'GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
+		const importFormatValues = ['csv', 'gpx', 'json'];
 		const importFormatDefault = importFormatValues[1];
 		const fieldImportFormat = document.createElement('select');
 

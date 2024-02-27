@@ -20,6 +20,7 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/user"
 	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/geo/geocsv"
 	"github.com/andrepxx/location-visualizer/geo/geodb"
 	"github.com/andrepxx/location-visualizer/geo/geojson"
 	"github.com/andrepxx/location-visualizer/geo/geoutil"
@@ -1562,7 +1563,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 }
 
 /*
- * Import location data in GeoJSON or GPX format.
+ * Import location data in CSV, GPX or GeoJSON format.
  */
 func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
@@ -1666,6 +1667,8 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					format := request.Params["format"]
 
 					switch format {
+					case "csv":
+						source, err = geocsv.FromBytes(data)
 					case "gpx":
 						source, err = gpx.FromBytes(data)
 					case "json":
@@ -1676,13 +1679,15 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					 * Check if source file could be successfully parsed.
 					 */
 					if err != nil {
+						msg := err.Error()
+						reason := fmt.Sprintf("Failed to parse source file: %s", msg)
 
 						/*
 						 * Indicate failure.
 						 */
 						status := webResponseStruct{
 							Success: false,
-							Reason:  "Failed to parse source file.",
+							Reason:  reason,
 						}
 
 						migrationReport.Status = status
@@ -2837,6 +2842,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
  * Handles CGI requests that could not be dispatched to other CGIs.
  */
 func (this *controllerStruct) errorHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	_ = request
 	conf := this.config
 	confServer := conf.WebServer
 	contentType := confServer.ErrorMime

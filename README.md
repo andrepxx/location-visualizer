@@ -6,11 +6,13 @@ Data can be imported from JSON files, for example from your location history, wh
 
 Starting with v1.3.0, data can also be imported from GPX files, which are usually created by dedicated GPS devices or dedicated GPS tracking apps. This is also in response to Google announcing its new version of the Timeline feature, for which location history data will be kept on the device itself instead of being stored in the cloud. It is unclear whether the export of location data will still be possible with the new system and in what format this data would be. In addition, this also makes *location-visualizer* interoperable with a wide range of GPS devices and related software, most of which can handle files in GPX format.
 
+Starting from v1.7.0, data can also be imported from CSV files as defined in RFC 4180. This is useful to "round-trip" data that has been exported by *location-visualizer*. Since the CSV format provides little metadata and can contain a variety of data in a variety of different formats, *location-visualizer* will, in an attemt to minimize data corruption by user error, reject a lot of data that is not of the same format that *location-visualizer* produces. For exchanging data with third-party applications, please perfer using the more structured GPX or JSON formats. The CSV format is mainly useful for exchange with data analysis software, like *R* or *Pandas*, or spreadsheet applications that are part of common office software suites.
+
 The software displays the aggregated location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
 It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc.
 
-In addition, the software also allows export of the aggregated location data as OpenGeoDB, CSV, GeoJSON, and, as of v1.3.0, also GPX files.
+In addition, the software also allows export of the aggregated location data as OpenGeoDB, CSV, JSON, and, as of v1.3.0, also GPX files.
 
 ## Building the software
 
@@ -94,7 +96,7 @@ If you want to pre-fetch zoom levels beyond 8, you will have to additionally spe
 
 ## Uploading geo data
 
-To upload geo data to the database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the GeoJSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+To upload geo data to the database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
 
 ## Clearing the database
 
