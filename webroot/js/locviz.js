@@ -1891,7 +1891,7 @@ function UI() {
 		const importFormatElem = this.createElement('Format', '180px');
 		const importFormatLabels = ['CSV / RFC 4180 (*.csv)', 'GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
 		const importFormatValues = ['csv', 'gpx', 'json'];
-		const importFormatDefault = importFormatValues[1];
+		const importFormatDefault = importFormatValues[2];
 		const fieldImportFormat = document.createElement('select');
 
 		/*
