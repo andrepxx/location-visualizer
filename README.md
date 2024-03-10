@@ -103,3 +103,7 @@ To upload geo data to the database, log in with a user account, which has at lea
 To clear the database, you will have to terminate the application and delete the database file storing the geo data. (This will by default reside under `data/locations.geodb`.) An empty database will be created on next startup of the application.
 
 There is currently no way to clear the database from within the web interface. This serves to prevent accidental deletion of data. In the future, we plan to offer clearing the database on the web interface as well, and put in other safeguards to prevent accidental deletion of data.
+
+## Exchanging data with location-visualizer
+
+Please refer to [our documentation of data formats](doc/data-formats.md) if you want to exchange location and / or activity data with *location-visualizer*.
