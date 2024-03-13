@@ -159,11 +159,11 @@ Each record in the CSV file describes what we call an **activity group** and has
 3. Duration of time spent **running** (e. g. `1h30m15s` for "1 hour, 30 minutes, 15 seconds")
 4. Distance in \[km\] covered while **running**, as fixed-point number with 1 decimal place to the right of the decimal point
 5. Number of steps taken while **running**, as (unsigned) integer
-6. Amount of energy in \[kJ\] consumed while **running**
+6. Amount of energy in \[kJ\] consumed while **running**, as (unsigned) integer
 7. Duration of time spent **cycling** (e. g. `1h30m15s` for "1 hour, 30 minutes, 15 seconds")
 8. Distance in \[km\] covered while **cycling**, as fixed-point number with 1 decimal place to the right of the decimal point
-9. Amount of energy in \[kJ\] consumed while **cycling**
-10. Amount of energy in \[kJ\] consumed while performing **other** activities
+9. Amount of energy in \[kJ\] consumed while **cycling**, as (unsigned) integer
+10. Amount of energy in \[kJ\] consumed while performing **other** activities, as (unsigned) integer
 
 The timestamp describing the beginning of an activity group is in the format described by *RFC 3339* and has millisecond precision. Activity groups are considered consecutive and without gaps. They subdivide the entire timeline (of GPS data) into segments. Therefore, they don't have an explicit "end" timestamp. Rather, each activity group is considered to end when the subsequent activity group begins. The last activity group is implicitly (and rather arbitrarily) considered to end 24 hours after it began.
 
