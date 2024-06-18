@@ -28,7 +28,7 @@ make
 
 This will create an RSA key pair for the TLS connection between the user-interface and the actual data processing backend (`make keys`) and then build the software for your system (`make`). The resulting executable is called `locviz`.
 
-Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json` and user account data is stored in `data/userdb.json`. All these paths can be adjusted in `config/config.json`.
+Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json`, user account data is stored in `data/userdb.json`, and map data / tiles are cached in `data/tile.bin` and `data/tile.idx`. All these paths can be adjusted in `config/config.json`.
 
 To use the software, create a user, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
@@ -65,7 +65,9 @@ Commands:
 - `add-permission name permission`: Adds the permission `permission` to the user `name`.
 - `clear-password name`: Set the password of user `name` to an empty string.
 - `create-user name`: Create a new user `name`.
+- `export-tiles path/file.tar.gz`: Export map tiles from tile database to `path/file.tar.gz`.
 - `has-permission name permission`: Check if user `name` has permission `permission`.
+- `import-tiles path/file.tar.gz`: Import map tiles to tile database from `path/file.tar.gz`.
 - `list-permissions name`: List all permissions of user `name`.
 - `list-users`: List all users.
 - `remove-permission name permission`: Removes the permission `permission` from the user `name`.
@@ -84,6 +86,8 @@ Replace `tile.example.com` with the domain name (or IP address) of the actual ti
 
 When enabled, note that response from the server may be **very** slow until a significant amount of map data has been cached locally. Map data stored in the cache never expires and can therefore become outdated. A proper cache update mechanism is not implemented yet. Also note that there is no bound up to which the cache will grow. **All** data fetched from OSM **will** be cached by the server indefinitely, in order to minimize the load on the map provider's infrastructure.
 
+The tile cache is stored in binary files that use a proprietary (*location-visualizer* specific) file format. However, an interface is provided to import map tiles from or export map tiles to *Gzip*-compressed tarballs (`.tar.gz` files). To import data from a directory, you will have to archive it. The directory inside the archive **needs** to have the name `tile/` for the import to succeed. If you still have a "legacy" cache directory (from *location-visualizer* versions before v1.8.0), and you did not change the file naming conventions, you can archive the directory (the directory itself, **not** just the files within it) and import the result.
+
 ### Pre-fetching data from a map service
 
 Since the application will be unresponsive unless all map data required to display the current viewport has been fetched from OSM, this application allows to pre-fetch map data from OSM in a bulk transfer. This is useful after initial setup, since otherwise, it may take a **very** long time to navigate even zoomed-out views of the map. Pre-fetch of map data may take a few hours. We suggest to pre-fetch map data up to a zoom level of 7 or 8.
@@ -94,11 +98,17 @@ Since the application will be unresponsive unless all map data required to displ
 
 If you want to pre-fetch zoom levels beyond 8, you will have to additionally specify the `-hard` option in order to confirm that you are aware that you are placing a significant load on OSM infrastructure, that the pre-fetch will take a long time and will use a lot of disk space (perhaps even more than you might have available on your system, potentially rendering it unstable).
 
+### Importing and exporting map data
+
+If you use *location-visualizer* v1.8.0 or newer, map tiles are stored in a binary database that consists of two files, normally residing under `data/tile.bin` and `data/tile.idx`, respectively. These two files always belong together, so backup, restore, delete, ... them always together. You can export the contents of the tile database to an archive using the `export-tiles` command, and import tiles from an archive into the database using the `import-tiles` command.
+
+Note that the tile database has no garbage collection mechanism yet, to reclaim storage occupied by outdated (unreferenced) images. Until this is implemented, you can export the tile data to an archive, delete the database, then reimport the tile data from the archive. The export will not contain unreferenced images.
+
 ## Uploading geo data
 
-To upload geo data to the database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+To upload geo data to the geo database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
 
-## Clearing the database
+## Clearing the geo database
 
 To clear the database, you will have to terminate the application and delete the database file storing the geo data. (This will by default reside under `data/locations.geodb`.) An empty database will be created on next startup of the application.
 

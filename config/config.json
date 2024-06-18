@@ -10,13 +10,18 @@
 
 	"LocationDB": "data/locations.geodb",
 	"MapServer": "",
-	"MapCache": "data/tile/osm-${z}-${x}-${y}.png",
 	"SessionExpiry": "2h",
+
+	"TileDB": {
+		"ImageDB": "data/tile.bin",
+		"IndexDB": "data/tile.idx"
+	},
+
 	"UseMap": false,
 	"UserDB": "data/userdb.json",
 
 	"WebServer": {
-		"Name": "location-visualizer/1.7.1",
+		"Name": "location-visualizer/1.8.0",
 		"Port": "8080",
 		"TLSDisabled": false,
 		"TLSPort": "8443",

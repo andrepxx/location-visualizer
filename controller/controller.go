@@ -28,6 +28,9 @@ import (
 	"github.com/andrepxx/location-visualizer/meta"
 	lsync "github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
+	"github.com/andrepxx/location-visualizer/tile/tiledb"
+	"github.com/andrepxx/location-visualizer/tile/tileserver"
+	"github.com/andrepxx/location-visualizer/tile/tileutil"
 	"github.com/andrepxx/location-visualizer/webserver"
 	"github.com/andrepxx/sydney/color"
 	"github.com/andrepxx/sydney/coordinates"
@@ -43,6 +46,8 @@ const (
 	CONFIG_PATH                        = "config/config.json"
 	LOCATION_BLOCK_SIZE                = 8192
 	PERMISSIONS_ACTIVITYDB os.FileMode = 0644
+	PERMISSIONS_IMAGEDB    os.FileMode = 0644
+	PERMISSIONS_INDEXDB    os.FileMode = 0644
 	PERMISSIONS_USERDB     os.FileMode = 0644
 	PERMISSIONS_LOCATIONDB os.FileMode = 0644
 	TIMESTAMP_FORMAT                   = "2006-01-02T15:04:05.000Z07:00"
@@ -189,6 +194,14 @@ type limitsStruct struct {
 }
 
 /*
+ * The configuration for the tile database.
+ */
+type tileDbConfigStruct struct {
+	ImageDB string
+	IndexDB string
+}
+
+/*
  * The configuration for the controller.
  */
 type configStruct struct {
@@ -196,8 +209,8 @@ type configStruct struct {
 	Limits        limitsStruct
 	LocationDB    string
 	MapServer     string
-	MapCache      string
 	SessionExpiry string
+	TileDB        tileDbConfigStruct
 	UseMap        bool
 	UserDB        string
 	WebServer     webserver.Config
@@ -212,8 +225,11 @@ type controllerStruct struct {
 	activitiesWriteLock sync.Mutex
 	activityDBPath      string
 	config              configStruct
+	imageDatabase       tiledb.ImageDatabase
+	indexDatabase       tiledb.IndexDatabase
 	locationDB          geodb.Database
-	tileSource          tile.Source
+	tileServer          tileserver.OSMTileServer
+	tileUtil            tileutil.TileUtil
 	userDBPath          string
 	userManager         user.Manager
 	semRender           lsync.Semaphore
@@ -1370,8 +1386,10 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		zIn := request.Params["z"]
 		z64, _ := strconv.ParseUint(zIn, 10, 8)
 		z := uint8(z64)
-		tileSource := this.tileSource
-		t, err := tileSource.Get(z, x, y)
+		tileId := tile.CreateId(z, x, y)
+		tileUtil := this.tileUtil
+		tileServer := this.tileServer
+		t, err := tileUtil.Fetch(tileServer, tileId)
 
 		/*
 		 * Check if tile could be fetched.
@@ -1395,53 +1413,23 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 			return response
 		} else {
-			id := t.Id()
-			idX := id.X()
-			idY := id.Y()
-			idZ := id.Zoom()
 
 			/*
-			 * Ensure that the tile IDs match.
+			 * Wrap data to provide nop Close method.
 			 */
-			if (x != idX) || (y != idY) || (z != idZ) {
-				msg := "Something is wrong here: (%d, %d, %d) != (%d, %d, %d)"
-				customMsg := fmt.Sprintf(msg, idX, idY, idZ, x, y, z)
-				customMsgBuf := bytes.NewBufferString(customMsg)
-				customMsgBytes := customMsgBuf.Bytes()
-				conf := this.config
-				confServer := conf.WebServer
-				contentType := confServer.ErrorMime
-
-				/*
-				 * Create HTTP response.
-				 */
-				response := webserver.HttpResponse{
-					Header: map[string]string{"Content-type": contentType},
-					Body:   customMsgBytes,
-				}
-
-				return response
-			} else {
-				data := t.Data()
-
-				/*
-				 * Wrap data to provide nop Close method.
-				 */
-				rsc := &readSeekerWithNopCloserStruct{
-					data,
-				}
-
-				/*
-				* Create HTTP response.
-				 */
-				response := webserver.HttpResponse{
-					Header:                map[string]string{"Content-type": "image/png"},
-					ContentReadSeekCloser: rsc,
-				}
-
-				return response
+			rsc := &readSeekerWithNopCloserStruct{
+				t,
 			}
 
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+				Header:                map[string]string{"Content-type": "image/png"},
+				ContentReadSeekCloser: rsc,
+			}
+
+			return response
 		}
 
 	}
@@ -1663,7 +1651,6 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					migrationReport.Status = status
 				} else {
 					source, err := geo.Database(nil), fmt.Errorf("%s", "No source file or invalid format.")
-
 					format := request.Params["format"]
 
 					switch format {
@@ -3094,6 +3081,62 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "export-tiles":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 2 {
+				fmt.Printf("Command '%s' expects 1 additional argument: path\n", cmd)
+			} else {
+				err := this.initializeTileDatabase()
+
+				/*
+				 * Check if tile database could be initialized.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Failed to initialize tile database: %s", msg)
+				} else {
+					path := args[1]
+					mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_USERDB)
+					fd, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+
+					/*
+					 * Check if file could be opened.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to create file '%s': %s\n", path, msg)
+					} else {
+						util := this.tileUtil
+						creationTime := time.Now()
+						err := util.Export(fd, creationTime)
+
+						/*
+						 * Check if errors occured during export.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("Failed to export tiles: %s\n", msg)
+						}
+
+					}
+
+					err = fd.Close()
+
+					/*
+					 * Check if file could be closed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to close file '%s': %s\n", path, msg)
+					}
+
+				}
+
+			}
+
 		case "has-permission":
 
 			/*
@@ -3115,6 +3158,61 @@ func (this *controllerStruct) interpret(args []string) {
 				} else {
 					resultString := strconv.FormatBool(result)
 					fmt.Printf("%s\n", resultString)
+				}
+
+			}
+
+		case "import-tiles":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 2 {
+				fmt.Printf("Command '%s' expects 1 additional argument: path\n", cmd)
+			} else {
+				err := this.initializeTileDatabase()
+
+				/*
+				 * Check if tile database could be initialized.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Failed to initialize tile database: %s", msg)
+				} else {
+					path := args[1]
+					mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_USERDB)
+					fd, err := os.OpenFile(path, os.O_RDONLY, mode)
+
+					/*
+					 * Check if file could be opened.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to open file '%s': %s\n", path, msg)
+					} else {
+						util := this.tileUtil
+						err := util.Import(fd)
+
+						/*
+						 * Check if errors occured during import.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("Failed to import tiles: %s\n", msg)
+						}
+
+					}
+
+					err = fd.Close()
+
+					/*
+					 * Check if file could be closed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to close file '%s': %s\n", path, msg)
+					}
+
 				}
 
 			}
@@ -3493,11 +3591,81 @@ func (this *controllerStruct) initializeLocationData() error {
 }
 
 /*
- * Initialize tile source.
+ * Initialize tile database.
  */
-func (this *controllerStruct) initializeTileSource() {
+func (this *controllerStruct) initializeTileDatabase() error {
 	config := this.config
-	cachePath := config.MapCache
+	tileDB := config.TileDB
+	indexDBPath := tileDB.IndexDB
+	imageDBPath := tileDB.ImageDB
+	useMap := config.UseMap
+	errResult := error(nil)
+
+	/*
+	 * Create index and image databases if map should be used and database
+	 * paths are set.
+	 */
+	if useMap && indexDBPath != "" && imageDBPath != "" {
+		modeIndexDB := os.ModeExclusive | (os.ModePerm & PERMISSIONS_INDEXDB)
+		fdIndexDB, err := os.OpenFile(indexDBPath, os.O_RDWR|os.O_CREATE, modeIndexDB)
+
+		/*
+		 * Check if file could be opened.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to open file '%s': %s", indexDBPath, msg)
+		} else {
+			indexDB, err := tiledb.CreateIndexDatabase(fdIndexDB)
+
+			/*
+			 * Check if index database was created sucessfully.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to create index database: %s", msg)
+			} else {
+				this.indexDatabase = indexDB
+				modeImageDB := os.ModeExclusive | (os.ModePerm & PERMISSIONS_IMAGEDB)
+				fdImageDb, err := os.OpenFile(imageDBPath, os.O_RDWR|os.O_CREATE, modeImageDB)
+
+				/*
+				 * Check if file could be opened
+				 */
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Failed to open file '%s': %s", imageDBPath, msg)
+				} else {
+					imageDB, err := tiledb.CreateImageDatabase(fdImageDb)
+
+					/*
+					 * Check if image database was created successfully.
+					 */
+					if err != nil {
+						msg := err.Error()
+						errResult = fmt.Errorf("Failed to create image database: %s", msg)
+					} else {
+						this.imageDatabase = imageDB
+						util := tileutil.CreateTileUtil(indexDB, imageDB)
+						this.tileUtil = util
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+	return errResult
+}
+
+/*
+ * Initialize tile server.
+ */
+func (this *controllerStruct) initializeTileServer() {
+	config := this.config
 	uri := config.MapServer
 	useMap := config.UseMap
 
@@ -3505,11 +3673,11 @@ func (this *controllerStruct) initializeTileSource() {
 	 * Create OSM tile source if map should be used
 	 * and cache path is set.
 	 */
-	if useMap && cachePath != "" {
-		tileSource := tile.CreateOSMSource(uri, cachePath)
-		this.tileSource = tileSource
+	if useMap {
+		srv := tileserver.CreateOSMTileServer(uri)
+		this.tileServer = srv
 	} else {
-		this.tileSource = nil
+		this.tileServer = nil
 	}
 
 }
@@ -3603,7 +3771,8 @@ func (this *controllerStruct) Operate(args []string) {
 				fmt.Printf("Error loading location data: %s\n", msg)
 			}
 
-			this.initializeTileSource()
+			this.initializeTileServer()
+			this.initializeTileDatabase()
 			err = this.initializeActivities()
 
 			/*
@@ -3636,8 +3805,11 @@ func (this *controllerStruct) Prefetch(zoomLevel uint8) {
 		msg := err.Error()
 		fmt.Printf("Initialization failed: %s\n", msg)
 	} else {
-		tileSource := this.tileSource
-		tileSource.Prefetch(zoomLevel)
+		this.initializeTileServer()
+		this.initializeTileDatabase()
+		tileUtil := this.tileUtil
+		tileServer := this.tileServer
+		tileUtil.Prefetch(tileServer, zoomLevel)
 	}
 
 }
