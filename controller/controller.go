@@ -1377,27 +1377,16 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 		return response
 	} else {
-		xIn := request.Params["x"]
-		x64, _ := strconv.ParseUint(xIn, 10, 32)
-		x := uint32(x64)
-		yIn := request.Params["y"]
-		y64, _ := strconv.ParseUint(yIn, 10, 32)
-		y := uint32(y64)
-		zIn := request.Params["z"]
-		z64, _ := strconv.ParseUint(zIn, 10, 8)
-		z := uint8(z64)
-		tileId := tile.CreateId(z, x, y)
-		tileUtil := this.tileUtil
-		tileServer := this.tileServer
-		t, err := tileUtil.Fetch(tileServer, tileId)
+		conf := this.config
+		useMap := conf.UseMap
 
 		/*
-		 * Check if tile could be fetched.
+		 * Check if we use a map at all.
+		 *
+		 * (If not, this.tileUtil and this.tileServer will be nil.)
 		 */
-		if err != nil {
-			msg := err.Error()
-			customMsg := fmt.Sprintf("Failed to fetch map tile: %s\n", msg)
-			customMsgBuf := bytes.NewBufferString(customMsg)
+		if !useMap {
+			customMsgBuf := bytes.NewBufferString("Server does not serve map tiles.")
 			customMsgBytes := customMsgBuf.Bytes()
 			conf := this.config
 			confServer := conf.WebServer
@@ -1413,23 +1402,60 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 
 			return response
 		} else {
+			xIn := request.Params["x"]
+			x64, _ := strconv.ParseUint(xIn, 10, 32)
+			x := uint32(x64)
+			yIn := request.Params["y"]
+			y64, _ := strconv.ParseUint(yIn, 10, 32)
+			y := uint32(y64)
+			zIn := request.Params["z"]
+			z64, _ := strconv.ParseUint(zIn, 10, 8)
+			z := uint8(z64)
+			tileId := tile.CreateId(z, x, y)
+			tileUtil := this.tileUtil
+			tileServer := this.tileServer
+			t, err := tileUtil.Fetch(tileServer, tileId)
 
 			/*
-			 * Wrap data to provide nop Close method.
+			 * Check if tile could be fetched.
 			 */
-			rsc := &readSeekerWithNopCloserStruct{
-				t,
+			if err != nil {
+				msg := err.Error()
+				customMsg := fmt.Sprintf("Failed to fetch map tile: %s\n", msg)
+				customMsgBuf := bytes.NewBufferString(customMsg)
+				customMsgBytes := customMsgBuf.Bytes()
+				confServer := conf.WebServer
+				contentType := confServer.ErrorMime
+
+				/*
+				 * Create HTTP response.
+				 */
+				response := webserver.HttpResponse{
+					Header: map[string]string{"Content-type": contentType},
+					Body:   customMsgBytes,
+				}
+
+				return response
+			} else {
+
+				/*
+				 * Wrap data to provide nop Close method.
+				 */
+				rsc := &readSeekerWithNopCloserStruct{
+					t,
+				}
+
+				/*
+				 * Create HTTP response.
+				 */
+				response := webserver.HttpResponse{
+					Header:                map[string]string{"Content-type": "image/png"},
+					ContentReadSeekCloser: rsc,
+				}
+
+				return response
 			}
 
-			/*
-			 * Create HTTP response.
-			 */
-			response := webserver.HttpResponse{
-				Header:                map[string]string{"Content-type": "image/png"},
-				ContentReadSeekCloser: rsc,
-			}
-
-			return response
 		}
 
 	}
