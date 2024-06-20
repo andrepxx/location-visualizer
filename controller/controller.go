@@ -3772,18 +3772,28 @@ func (this *controllerStruct) Operate(args []string) {
 			}
 
 			this.initializeTileServer()
-			this.initializeTileDatabase()
-			err = this.initializeActivities()
+			err = this.initializeTileDatabase()
 
 			/*
-			 * Check if activity data could be loaded.
+			 * Check if tile database could be initialized.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Error loading activity data: %s\n", msg)
+				fmt.Printf("Error initializing tile database: %s", msg)
+			} else {
+				err = this.initializeActivities()
+
+				/*
+				 * Check if activity data could be loaded.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Error loading activity data: %s\n", msg)
+				}
+
+				this.runServer()
 			}
 
-			this.runServer()
 		} else {
 			this.interpret(args)
 		}
