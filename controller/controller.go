@@ -3816,10 +3816,20 @@ func (this *controllerStruct) Prefetch(zoomLevel uint8) {
 		fmt.Printf("Initialization failed: %s\n", msg)
 	} else {
 		this.initializeTileServer()
-		this.initializeTileDatabase()
-		tileUtil := this.tileUtil
-		tileServer := this.tileServer
-		tileUtil.Prefetch(tileServer, zoomLevel)
+		err = this.initializeTileDatabase()
+
+		/*
+		 * Check if tile database could be initialized.
+		 */
+		if err != nil {
+			msg := err.Error()
+			fmt.Printf("Failed to initialize tile database: %s", msg)
+		} else {
+			tileUtil := this.tileUtil
+			tileServer := this.tileServer
+			tileUtil.Prefetch(tileServer, zoomLevel)
+		}
+
 	}
 
 }
