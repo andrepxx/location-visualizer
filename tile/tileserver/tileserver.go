@@ -25,7 +25,7 @@ const (
 )
 
 /*
- * A remote tile server serving OpenStreetmaps data.
+ * A remote tile server serving OpenStreetMaps data.
  */
 type OSMTileServer interface {
 	Get(z uint8, x uint32, y uint32) (tile.Image, error)
