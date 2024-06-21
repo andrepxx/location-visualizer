@@ -1439,18 +1439,11 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 			} else {
 
 				/*
-				 * Wrap data to provide nop Close method.
-				 */
-				rsc := &readSeekerWithNopCloserStruct{
-					t,
-				}
-
-				/*
 				 * Create HTTP response.
 				 */
 				response := webserver.HttpResponse{
 					Header:                map[string]string{"Content-type": "image/png"},
-					ContentReadSeekCloser: rsc,
+					ContentReadSeekCloser: t,
 				}
 
 				return response
