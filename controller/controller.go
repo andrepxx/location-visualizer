@@ -3036,6 +3036,38 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "cleanup-tiles":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 1 {
+				fmt.Printf("Command '%s' expects no additional arguments.\n", cmd)
+			} else {
+				err := this.initializeTileDatabase()
+
+				/*
+				 * Check if tile database could be initialized.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Failed to initialize tile database: %s", msg)
+				} else {
+					util := this.tileUtil
+					err := util.Cleanup()
+
+					/*
+					 * Check if errors occured during cleanup.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to cleanup tiles: %s\n", msg)
+					}
+
+				}
+
+			}
+
 		case "clear-password":
 
 			/*
@@ -3798,7 +3830,7 @@ func (this *controllerStruct) Operate(args []string) {
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Error initializing tile database: %s", msg)
+				fmt.Printf("Error initializing tile database: %s\n", msg)
 			} else {
 				err = this.initializeActivities()
 

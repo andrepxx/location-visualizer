@@ -29,6 +29,7 @@ const (
  * Utility for accessing a tile database.
  */
 type TileUtil interface {
+	Cleanup() error
 	Export(w io.Writer, creationTime time.Time) error
 	Fetch(server tileserver.OSMTileServer, id tile.Id) (tile.Image, error)
 	Import(r io.Reader) error
@@ -42,6 +43,75 @@ type tileUtilStruct struct {
 	mutex         sync.RWMutex
 	imageDatabase tiledb.ImageDatabase
 	indexDatabase tiledb.IndexDatabase
+}
+
+/*
+ * Remove all images from ImageDatabase that are no longer referenced from IndexDatabase.
+ */
+func (this *tileUtilStruct) Cleanup() error {
+	errResult := error(nil)
+	this.mutex.Lock()
+	imgdb := this.imageDatabase
+	idxdb := this.indexDatabase
+	numEntries, err := idxdb.Length()
+
+	/*
+	 * Check if we could get the number of entries from the index database.
+	 */
+	if err != nil {
+		msg := err.Error()
+		return fmt.Errorf("Failed to get number of entries from index database: %s", msg)
+	} else {
+		allHandles := make(map[tiledb.ImageHandle]bool)
+
+		/*
+		 * Iterate over all entries in index database and collect all handles.
+		 */
+		for idx := uint64(0); (idx < numEntries) && (errResult == nil); idx++ {
+			_, metadata, err := idxdb.Entry(idx)
+
+			/*
+			 * Check if error occured retrieving entry from index database.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to get entry %d from index database: %s", idx, msg)
+			} else {
+				handle := metadata.Handle()
+				allHandles[handle] = true
+			}
+
+		}
+
+		/*
+		 * If no error occured so far, continue to cleanup image database.
+		 */
+		if errResult == nil {
+
+			/*
+			 * The cleanup condition.
+			 */
+			condition := func(handle tiledb.ImageHandle) bool {
+				result := allHandles[handle]
+				return result
+			}
+
+			err := imgdb.Cleanup(condition)
+
+			/*
+			 * Check if error occured during cleanup.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Error occured during image database cleanup: %s", msg)
+			}
+
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return errResult
 }
 
 /*
@@ -292,78 +362,102 @@ func (this *tileUtilStruct) fetchFromCache(id tile.Id) (tile.Image, error) {
 	return result, errResult
 }
 
-/*
- * Lookup tile in cache or fetch it from server and store it in cache.
- */
-func (this *tileUtilStruct) Fetch(server tileserver.OSMTileServer, id tile.Id) (tile.Image, error) {
-	this.mutex.RLock()
-	result, errResult := this.fetchFromCache(id)
-	this.mutex.RUnlock()
+func (this *tileUtilStruct) fetchFromServer(server tileserver.OSMTileServer, id tile.Id) (tile.Image, error) {
+	z := id.Z()
+	x := id.X()
+	y := id.Y()
+	result, errResult := server.Get(z, x, y)
 
 	/*
-	 * If tile could not be loaded from cache, fetch it from server.
+	 * If we could fetch tile from server, store it in cache.
 	 */
-	if errResult != nil {
-		this.mutex.Lock()
-		result, errResult = this.fetchFromCache(id)
+	if errResult == nil {
+		content, err := io.ReadAll(result)
 
 		/*
-		 * Verify that we still have a cache miss, since we re-acquired the lock.
+		 * Check if tile content could be read.
 		 */
-		if errResult != nil {
-			z := id.Z()
-			x := id.X()
-			y := id.Y()
-			result, errResult = server.Get(z, x, y)
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to read tile content: %s", msg)
+		} else {
+			imgdb := this.imageDatabase
+			handle, err := imgdb.Insert(content)
 
 			/*
-			 * If we could fetch tile from server, store it in cache.
+			 * Check if tile was inserted into image database.
 			 */
-			if errResult == nil {
-				content, err := io.ReadAll(result)
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to insert tile into image database: %s", msg)
+			} else {
+				t := time.Now()
+				timestamp := t.UnixMilli()
+				metadata := tiledb.CreateTileMetadata(timestamp, handle)
+				idxdb := this.indexDatabase
+				err := idxdb.Insert(id, metadata)
 
 				/*
-				 * Check if tile content could be read.
+				 * Check if tile was inserted into index database.
 				 */
 				if err != nil {
 					msg := err.Error()
-					errResult = fmt.Errorf("Failed to read tile content: %s", msg)
-				} else {
-					imgdb := this.imageDatabase
-					handle, err := imgdb.Insert(content)
-
-					/*
-					 * Check if tile was inserted into image database.
-					 */
-					if err != nil {
-						msg := err.Error()
-						errResult = fmt.Errorf("Failed to insert tile into image database: %s", msg)
-					} else {
-						t := time.Now()
-						timestamp := t.UnixMilli()
-						metadata := tiledb.CreateTileMetadata(timestamp, handle)
-						idxdb := this.indexDatabase
-						err := idxdb.Insert(id, metadata)
-
-						/*
-						 * Check if tile was inserted into index database.
-						 */
-						if err != nil {
-							msg := err.Error()
-							errResult = fmt.Errorf("Failed to insert tile into index database: %s", msg)
-						}
-
-					}
-
+					errResult = fmt.Errorf("Failed to insert tile into index database: %s", msg)
 				}
 
 			}
 
 		}
 
-		this.mutex.Unlock()
 	}
 
+	return result, errResult
+}
+
+/*
+ * Lookup tile in cache or fetch it from server and store it in cache.
+ */
+func (this *tileUtilStruct) fetch(server tileserver.OSMTileServer, id tile.Id, forceUpdate bool) (tile.Image, error) {
+	result := tile.Image(nil)
+	errResult := error(nil)
+
+	/*
+	 * Check if we shall perform a forced update.
+	 */
+	if forceUpdate {
+		result, errResult = this.fetchFromServer(server, id)
+	} else {
+		this.mutex.RLock()
+		result, errResult = this.fetchFromCache(id)
+		this.mutex.RUnlock()
+
+		/*
+		 * If tile could not be loaded from cache, fetch it from server.
+		 */
+		if errResult != nil {
+			this.mutex.Lock()
+			result, errResult = this.fetchFromCache(id)
+
+			/*
+			 * Verify that we still have a cache miss, since we re-acquired the lock.
+			 */
+			if errResult != nil {
+				result, errResult = this.fetchFromServer(server, id)
+			}
+
+			this.mutex.Unlock()
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Lookup tile in cache or fetch it from server and store it in cache.
+ */
+func (this *tileUtilStruct) Fetch(server tileserver.OSMTileServer, id tile.Id) (tile.Image, error) {
+	result, errResult := this.fetch(server, id, false)
 	return result, errResult
 }
 
@@ -509,7 +603,7 @@ func (this *tileUtilStruct) Prefetch(server tileserver.OSMTileServer, zoomLevel 
 			 */
 			for x := uint32(0); x < tilesPerAxis; x++ {
 				id := tile.CreateId(z, x, y)
-				this.Fetch(server, id)
+				this.fetch(server, id, false)
 			}
 
 		}

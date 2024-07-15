@@ -63,6 +63,7 @@ Log in with the user name and password defined above, in our example, these were
 Commands:
 
 - `add-permission name permission`: Adds the permission `permission` to the user `name`.
+- `cleanup-tiles`: Perform a cleanup of the tile database.
 - `clear-password name`: Set the password of user `name` to an empty string.
 - `create-user name`: Create a new user `name`.
 - `export-tiles path/file.tar.gz`: Export map tiles from tile database to `path/file.tar.gz`.
@@ -102,7 +103,7 @@ If you want to pre-fetch zoom levels beyond 8, you will have to additionally spe
 
 If you use *location-visualizer* v1.8.0 or newer, map tiles are stored in a binary database that consists of two files, normally residing under `data/tile.bin` and `data/tile.idx`, respectively. These two files always belong together, so backup, restore, delete, ... them always together. You can export the contents of the tile database to an archive using the `export-tiles` command, and import tiles from an archive into the database using the `import-tiles` command.
 
-Note that the tile database has no garbage collection mechanism yet, to reclaim storage occupied by outdated (unreferenced) images. Until this is implemented, you can export the tile data to an archive, delete the database, then reimport the tile data from the archive. The export will not contain unreferenced images.
+To reclaim storage occupied by outdated (unreferenced) images, you can run the `cleanup-tiles` command.
 
 ## Uploading geo data
 

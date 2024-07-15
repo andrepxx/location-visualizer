@@ -326,6 +326,8 @@ func (this *imageDatabaseStruct) initialize() error {
 								 */
 								if err != nil {
 									errResult = fmt.Errorf("Read error at offset %d (0x%016x) inside section of size %d (0x%08x) starting at offset %d (0x%016x).", offset, offset, sizeSection, sizeSection, offsetSectionStart, offsetSectionStart)
+								} else if n != sizeSectionSigned {
+									errResult = fmt.Errorf("Read incorrect amount of bytes from section at offset %d (0x%016x). Expected %d (0x%016x), got %d (0x%016x).", offset, offset, sizeSectionSigned, sizeSectionSigned, n, n)
 								} else {
 									sectionHash := bufSum[:0]
 									// h.Sum can write in-place or allocate a new buffer.
@@ -380,8 +382,166 @@ func (this *imageDatabaseStruct) initialize() error {
  * database in an inconsistent / corrupted state.
  */
 func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
-	// TODO: Write code.
-	return fmt.Errorf("%s", "Not yet implemented.")
+	offsetRead := int64(SIZE_MAGIC)
+	offsetWrite := offsetRead
+	errResult := error(nil)
+	endian := binary.BigEndian
+	this.mutex.Lock()
+	fd := this.fd
+	sizeDatabase := this.size
+	sizeDatabaseSigned := int64(sizeDatabase)
+	r := io.NewSectionReader(fd, 0, sizeDatabaseSigned)
+	buf := make([]byte, SIZE_BUFFER)
+	h := sha512.New()
+	bufSum := [SIZE_HASH]byte{}
+
+	/*
+	 * Read images until reaching the end of the database or an error occurs.
+	 */
+	for (offsetRead < sizeDatabaseSigned) && (errResult == nil) {
+		currentOffset, err := r.Seek(offsetRead, io.SeekStart)
+
+		/*
+		 * Check if seeking was successful.
+		 */
+		if err != nil {
+			errResult = fmt.Errorf("Failed to seek to offset %d (0x%016x).", offsetRead, offsetRead)
+		} else if currentOffset != offsetRead {
+			errResult = fmt.Errorf("Failed to seek to offset %d (0x%016x). Arrived at offset %d (0x%016x) instead.", offsetRead, offsetRead, currentOffset, currentOffset)
+		} else {
+			sizeSection := uint32(0)
+			err = binary.Read(r, endian, &sizeSection)
+
+			/*
+			 * Check if reading length field was successful.
+			 */
+			if err != nil {
+				errResult = fmt.Errorf("Error reading length field at offset %d (0x%016x).", offsetRead, offsetRead)
+			} else {
+				sizeSectionSigned := int64(sizeSection)
+				offsetRead += SIZE_LENGTH_FIELD
+				offsetSectionStart := int64(offsetRead)
+				section := io.NewSectionReader(fd, offsetSectionStart, sizeSectionSigned)
+				h.Reset()
+				n, err := io.CopyBuffer(h, section, buf)
+
+				/*
+				 * Check if section got added to hash.
+				 */
+				if err != nil {
+					errResult = fmt.Errorf("Read error at offset %d (0x%016x) inside section of size %d (0x%08x) starting at offset %d (0x%016x).", offsetRead, offsetRead, sizeSection, sizeSection, offsetSectionStart, offsetSectionStart)
+				} else if n != sizeSectionSigned {
+					errResult = fmt.Errorf("Read incorrect amount of bytes from section at offset %d (0x%016x). Expected %d (0x%016x), got %d (0x%016x).", offsetRead, offsetRead, sizeSectionSigned, sizeSectionSigned, n, n)
+				} else {
+					sectionHash := bufSum[:0]
+					// h.Sum can write in-place or allocate a new buffer.
+					sectionHash = h.Sum(sectionHash)
+					m := copy(bufSum[:], sectionHash)
+
+					/*
+					 * If resulting hash is smaller than buffer,
+					 * zero the rest of the buffer.
+					 */
+					if m < SIZE_HASH {
+						bufToZero := bufSum[m:SIZE_HASH]
+
+						/*
+						 * Zero remaining part of buffer.
+						 */
+						for i := range bufToZero {
+							bufToZero[i] = 0
+						}
+
+					}
+
+					handle := ImageHandle(bufSum)
+					keepImage := keep(handle)
+
+					/*
+					 * Check if we shall keep the image.
+					 */
+					if keepImage {
+
+						/*
+						 * If offsets match, we can just skip over the image
+						 * instead of moving it, since we would just write it
+						 * back to its original location anyhow.
+						 */
+						if currentOffset == offsetWrite {
+							offsetWrite += SIZE_LENGTH_FIELD
+							offsetWrite += sizeSectionSigned
+						} else {
+							lengthField := io.NewSectionReader(fd, currentOffset, SIZE_LENGTH_FIELD)
+							w := io.NewOffsetWriter(fd, offsetWrite)
+							n, err := io.CopyBuffer(w, lengthField, buf)
+
+							/*
+							* Check if length field was copied successfully.
+							 */
+							if err != nil {
+								errResult = fmt.Errorf("Failed to copy length field from offset %d (0x%016x) to offset %d (0x%08x).", offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite)
+							} else if n != SIZE_LENGTH_FIELD {
+								errResult = fmt.Errorf("Failed to copy length field from offset %d (0x%016x) to offset %d (0x%08x). Copied %d (0x%08x) bytes.", offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite, n, n)
+							} else {
+								offsetWrite += SIZE_LENGTH_FIELD
+								offsetInSection, err := section.Seek(0, io.SeekStart)
+
+								/*
+								* Check if an error occured while seeking back
+								* to beginning of the section.
+								 */
+								if err != nil {
+									errResult = fmt.Errorf("Failed to seek back to start of section.")
+								} else if offsetInSection != 0 {
+									errResult = fmt.Errorf("Failed to seek back to start of section. Arrived at offset %d (0x%016x) in section.", offsetInSection, offsetInSection)
+								} else {
+									w := io.NewOffsetWriter(fd, offsetWrite)
+									n, err := io.CopyBuffer(w, section, buf)
+
+									/*
+									* Check if section was copied successfully.
+									 */
+									if err != nil {
+										errResult = fmt.Errorf("Failed to copy section of size %d (0x%016x) from offset %d (0x%016x) to offset %d (0x%08x).", sizeSection, sizeSection, offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite)
+									} else if n != sizeSectionSigned {
+										errResult = fmt.Errorf("Failed to copy section of size %d (0x%016x) from offset %d (0x%016x) to offset %d (0x%08x). Copied %d (0x%08x) bytes.", sizeSection, sizeSection, offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite, n, n)
+									}
+
+									offsetWrite += n
+								}
+
+							}
+
+						}
+
+					}
+
+				}
+
+				offsetRead += sizeSectionSigned
+			}
+
+		}
+
+	}
+
+	/*
+	 * If no error occured so far, finally truncate file.
+	 */
+	if errResult == nil {
+		err := fd.Truncate(offsetWrite)
+
+		/*
+		* Check if file got truncated correctly.
+		 */
+		if err != nil {
+			errResult = fmt.Errorf("Failed to truncate image database to size %d (0x%016x).", offsetWrite, offsetWrite)
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return errResult
 }
 
 /*
