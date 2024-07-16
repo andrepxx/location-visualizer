@@ -21,7 +21,7 @@
 	"UserDB": "data/userdb.json",
 
 	"WebServer": {
-		"Name": "location-visualizer/1.8.3",
+		"Name": "location-visualizer/1.8.4",
 		"Port": "8080",
 		"TLSDisabled": false,
 		"TLSPort": "8443",

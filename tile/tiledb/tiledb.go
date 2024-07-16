@@ -386,6 +386,7 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 	offsetWrite := offsetRead
 	errResult := error(nil)
 	endian := binary.BigEndian
+	index := make(map[ImageHandle]uint64)
 	this.mutex.Lock()
 	fd := this.fd
 	sizeDatabase := this.size
@@ -461,6 +462,8 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 					 * Check if we shall keep the image.
 					 */
 					if keepImage {
+						currentOffset64 := uint64(currentOffset)
+						index[handle] = currentOffset64
 
 						/*
 						 * If offsets match, we can just skip over the image
@@ -540,6 +543,7 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 
 	}
 
+	this.index = index
 	this.mutex.Unlock()
 	return errResult
 }
