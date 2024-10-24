@@ -2315,7 +2315,10 @@ func (this *databaseSorterStruct) Swap(i int, j int) {
 		/*
 		 * Prevent out-of-bounds access.
 		 */
-		if ((i >= 0) && (i < locationCount)) && ((j >= 0) && (j < locationCount)) {
+		if ((i < 0) || (i >= locationCount)) || ((j < 0) || (j >= locationCount)) {
+			msg := fmt.Sprintf("Index pair (%d, %d) out of bounds. (There are %d elements.)", i, j, locationCount)
+			panic(msg)
+		} else {
 			i64 := int64(i)
 			j64 := int64(j)
 			offsetI := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * i64)
@@ -2331,7 +2334,10 @@ func (this *databaseSorterStruct) Swap(i int, j int) {
 			/*
 			 * Make sure that we read both values.
 			 */
-			if ((errI == nil) && (numBytesI == SIZE_DATABASE_ENTRY)) && ((errJ == nil) && (numBytesJ == SIZE_DATABASE_ENTRY)) {
+			if ((errI != nil) || (numBytesI != SIZE_DATABASE_ENTRY)) || ((errJ != nil) || (numBytesJ != SIZE_DATABASE_ENTRY)) {
+				msg := fmt.Sprintf("Error reading from offsets 0x%016x and 0x%016x!", offsetI, offsetJ)
+				panic(msg)
+			} else {
 				bufEntryI, bufEntryJ = bufEntryJ, bufEntryI
 				numBytesI, errI = fd.WriteAt(bufEntryI, offsetI)
 				numBytesJ, errJ = fd.WriteAt(bufEntryJ, offsetJ)

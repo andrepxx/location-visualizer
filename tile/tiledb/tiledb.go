@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"runtime/debug"
+	"sort"
 	"sync"
 
 	"github.com/andrepxx/location-visualizer/tile"
@@ -48,6 +50,7 @@ type IndexDatabase interface {
 	Insert(id tile.Id, metadata TileMetadata) error
 	Length() (uint64, error)
 	Search(id tile.Id) (uint64, bool)
+	Sort() error
 }
 
 /*
@@ -787,7 +790,7 @@ func CreateImageDatabase(fd Storage) (ImageDatabase, error) {
 	idx := make(map[ImageHandle]uint64)
 
 	/*
-	 * Create image database..
+	 * Create image database.
 	 */
 	db := &imageDatabaseStruct{
 		fd:    fd,
@@ -797,7 +800,7 @@ func CreateImageDatabase(fd Storage) (ImageDatabase, error) {
 	err := db.initialize()
 
 	/*
-	 * If an error occured during initialization destroy database.
+	 * If an error occured during initialization, destroy database.
 	 */
 	if err != nil {
 		db = nil
@@ -815,7 +818,7 @@ func CreateImageDatabase(fd Storage) (ImageDatabase, error) {
  * The timestamp shall represent the instant in time when the entry was created
  * or last updated.
  */
-type indexDbEntry struct {
+type indexDatabaseEntryStruct struct {
 	Z           uint8
 	X           uint32
 	Y           uint32
@@ -852,9 +855,9 @@ func (this *indexDatabaseStruct) calculateOffset(idx uint64) int64 {
 /*
  * Read entry from storage.
  *
- * This function assumes that the database it locked for either reading or writing.
+ * This function assumes that the database is locked for either reading or writing.
  */
-func (this *indexDatabaseStruct) readEntry(fd Storage, idx uint64, entry *indexDbEntry) error {
+func (this *indexDatabaseStruct) readEntry(fd Storage, idx uint64, entry *indexDatabaseEntryStruct) error {
 	result := error(nil)
 	offset := this.calculateOffset(idx)
 
@@ -886,7 +889,7 @@ func (this *indexDatabaseStruct) readEntry(fd Storage, idx uint64, entry *indexD
  *
  * This function assumes that the database is locked for writing.
  */
-func (this *indexDatabaseStruct) writeEntry(fd Storage, idx uint64, entry *indexDbEntry) error {
+func (this *indexDatabaseStruct) writeEntry(fd Storage, idx uint64, entry *indexDatabaseEntryStruct) error {
 	result := error(nil)
 	offset := this.calculateOffset(idx)
 
@@ -916,7 +919,7 @@ func (this *indexDatabaseStruct) writeEntry(fd Storage, idx uint64, entry *index
 /*
  * Returns the number of entries currently stored in storage.
  *
- * This function assumes that the database it locked for either reading or writing.
+ * This function assumes that the database is locked for either reading or writing.
  */
 func (this *indexDatabaseStruct) numEntries(fd Storage) (uint64, error) {
 	offsetSaved, err := fd.Seek(0, io.SeekCurrent)
@@ -1013,7 +1016,7 @@ func (this *indexDatabaseStruct) Entry(idx uint64) (tile.Id, TileMetadata, error
 	} else if idx >= numEntries {
 		errResult = fmt.Errorf("Index out of range: %d (database has %d entries)", idx, numEntries)
 	} else {
-		entry := indexDbEntry{}
+		entry := indexDatabaseEntryStruct{}
 		err := this.readEntry(fd, idx, &entry)
 
 		/*
@@ -1064,7 +1067,7 @@ func (this *indexDatabaseStruct) Insert(id tile.Id, metadata TileMetadata) error
 	/*
 	 * Create entry for index database.
 	 */
-	entry := indexDbEntry{
+	entry := indexDatabaseEntryStruct{
 		Z:           z,
 		X:           x,
 		Y:           y,
@@ -1148,12 +1151,44 @@ func (this *indexDatabaseStruct) Search(id tile.Id) (uint64, bool) {
 }
 
 /*
- * Initialize index database by either writing header to file descriptor (if
- * file is empty) or filling entries and index by walking the file.
+ * Sorts entries in the database by (ascending) time stamp using a stable
+ * sorting algorithm.
+ *
+ * If the database is closed, this is a no-op.
+ *
+ * This temporarily locks the database for write access.
  */
-func (this *indexDatabaseStruct) initialize() error {
-	errResult := error(nil)
+func (this *indexDatabaseStruct) Sort() error {
+	result := error(nil)
+	this.mutex.Lock()
 	fd := this.fd
+
+	/*
+	 * Only sort database if it is still open.
+	 */
+	if fd != nil {
+		result = this.sort()
+	}
+
+	errIndex := this.buildIndex(fd)
+
+	/*
+	 * If no error occured during sorting, but an error occured during
+	 * indexing, report the latter.
+	 */
+	if (result == nil) && (errIndex != nil) {
+		result = errIndex
+	}
+
+	this.mutex.Unlock()
+	return result
+}
+
+/*
+ * Build (or rebuild) index mapping tile IDs to offsets in the file.
+ */
+func (this *indexDatabaseStruct) buildIndex(fd Storage) error {
+	errResult := error(nil)
 
 	/*
 	 * Verify that file descriptor is not nil.
@@ -1174,23 +1209,9 @@ func (this *indexDatabaseStruct) initialize() error {
 		} else {
 
 			/*
-			 * If file is empty, write header. If file is non-empty but too small, fail.
-			 * Otherwise, index file.
+			 * Verify that file is large enough to hold magic number.
 			 */
-			if size == 0 {
-				endian := binary.BigEndian
-				w := io.NewOffsetWriter(fd, 0)
-				data := uint64(MAGIC_INDEXDB)
-				err := binary.Write(w, endian, data)
-
-				/*
-				 * Check if magic number was written to file.
-				 */
-				if err != nil {
-					errResult = fmt.Errorf("%s", "Failed to write magic number to file.")
-				}
-
-			} else if size < SIZE_MAGIC {
+			if size < SIZE_MAGIC {
 				errResult = fmt.Errorf("File too small: Should have at least %d bytes.", SIZE_MAGIC)
 			} else {
 				endian := binary.BigEndian
@@ -1207,8 +1228,8 @@ func (this *indexDatabaseStruct) initialize() error {
 					errResult = fmt.Errorf("Failed to read magic number from file: Expected 0x%016x, found 0x%016x.", MAGIC_INDEXDB, magic)
 				} else {
 					offset += SIZE_MAGIC
-					index := this.index
-					entry := indexDbEntry{}
+					index := make(map[tile.Id]uint64)
+					entry := indexDatabaseEntryStruct{}
 					numEntriesRead := uint64(0)
 
 					/*
@@ -1260,6 +1281,106 @@ func (this *indexDatabaseStruct) initialize() error {
 }
 
 /*
+ * Initialize index database by either writing header to file descriptor (if
+ * file is empty) or filling the index by walking the file.
+ */
+func (this *indexDatabaseStruct) initialize() error {
+	errResult := error(nil)
+	fd := this.fd
+
+	/*
+	 * Verify that file descriptor is not nil.
+	 */
+	if fd == nil {
+		errResult = fmt.Errorf("%s", "File descriptor must not be nil.")
+	} else {
+		size, errSeekEnd := fd.Seek(0, io.SeekEnd)
+		offset, errSeekStart := fd.Seek(0, io.SeekStart)
+
+		/*
+		 * Check if determining file size was successful.
+		 */
+		if (size < 0) || (errSeekEnd != nil) {
+			errResult = fmt.Errorf("%s", "Failed to seek to end of file.")
+		} else if (offset != 0) || (errSeekStart != nil) {
+			errResult = fmt.Errorf("%s", "Failed to seek to beginning of file.")
+		} else {
+
+			/*
+			 * If file is empty, write header. Otherwise, index file.
+			 */
+			if size == 0 {
+				endian := binary.BigEndian
+				w := io.NewOffsetWriter(fd, 0)
+				data := uint64(MAGIC_INDEXDB)
+				err := binary.Write(w, endian, data)
+
+				/*
+				 * Check if magic number was written to file.
+				 */
+				if err != nil {
+					errResult = fmt.Errorf("%s", "Failed to write magic number to file.")
+				}
+
+			} else {
+				errResult = this.buildIndex(fd)
+			}
+
+		}
+
+	}
+
+	return errResult
+}
+
+/*
+ * Internal sorting function.
+ *
+ * Converts panic into proper error handling.
+ *
+ * Assumes that the database is locked for writing.
+ */
+func (this *indexDatabaseStruct) sort() (err error) {
+
+	/*
+	 * Sorting may panic, for example on I/O errors.
+	 */
+	defer func() {
+		r := recover()
+
+		/*
+		 * Check if panic occured during sorting.
+		 */
+		if r != nil {
+			msg, ok := r.(string)
+
+			/*
+			 * Check if string was passed to panic.
+			 */
+			if ok {
+				err = fmt.Errorf("Error during sorting: %s", msg)
+			} else {
+				err = fmt.Errorf("Unknown error during sorting.")
+				stack := debug.Stack()
+				fmt.Printf("%s\n", string(stack))
+			}
+
+		}
+
+	}()
+
+	/*
+	 * Create database accessor for the sort algorithm.
+	 */
+	sorter := indexDatabaseSorterStruct{
+		db: this,
+	}
+
+	sort.Stable(&sorter)
+	return
+}
+
+/*
  * Creates an index database backed by Storage.
  */
 func CreateIndexDatabase(fd Storage) (IndexDatabase, error) {
@@ -1276,13 +1397,254 @@ func CreateIndexDatabase(fd Storage) (IndexDatabase, error) {
 	err := db.initialize()
 
 	/*
-	 * If an error occured during initialization destroy database.
+	 * If an error occured during initialization, destroy database.
 	 */
 	if err != nil {
 		db = nil
 	}
 
 	return db, err
+}
+
+/*
+ * Data structure for sorting the index database.
+ */
+type indexDatabaseSorterStruct struct {
+	db *indexDatabaseStruct
+}
+
+/*
+ * Returns the number of elements in the database sorted by this sorter.
+ *
+ * This method is required for implementation of sort.Interface.
+ *
+ * The underlying database is locked for write access during sorting.
+ */
+func (this *indexDatabaseSorterStruct) Len() int {
+	result := int(0)
+	db := this.db
+
+	/*
+	 * Make sure we reference a database.
+	 */
+	if db == nil {
+		panic("Database does not exist.")
+	} else {
+		fd := db.fd
+
+		/*
+		 * Make sure database is open.
+		 */
+		if fd == nil {
+			panic("Database is not open.")
+		} else {
+			numEntries, err := db.numEntries(fd)
+
+			/*
+			 * Make sure we got the number of entries.
+			 */
+			if err != nil {
+				errMsg := err.Error()
+				customErrMsg := fmt.Sprintf("Error obtaining number of entries: %s", errMsg)
+				panic(customErrMsg)
+			} else if numEntries > math.MaxInt {
+				panic("Database is too large to be sorted on this architecture.")
+			} else {
+				result = int(numEntries)
+			}
+
+		}
+
+	}
+
+	return result
+}
+
+/*
+ * Decide whether the element with index i must sort before the element with
+ * the index j.
+ *
+ * This method is required for implementation of sort.Interface.
+ *
+ * The underlying database is locked for write access during sorting.
+ */
+func (this *indexDatabaseSorterStruct) Less(i int, j int) bool {
+	result := false
+	db := this.db
+
+	/*
+	 * Make sure we reference a database.
+	 */
+	if db == nil {
+		panic("Database does not exist.")
+	} else {
+		fd := db.fd
+
+		/*
+		 * Make sure database is open.
+		 */
+		if fd == nil {
+			panic("Database is not open.")
+		} else {
+			numEntries64, err := db.numEntries(fd)
+
+			/*
+			 * Make sure we got the number of entries.
+			 */
+			if err != nil {
+				errMsg := err.Error()
+				customErrMsg := fmt.Sprintf("Error obtaining number of entries: %s", errMsg)
+				panic(customErrMsg)
+			} else if numEntries64 > math.MaxInt {
+				panic("Database is too large to be sorted on this architecture.")
+			} else {
+				numEntries := int(numEntries64)
+
+				/*
+				 * Prevent out-of-bounds access.
+				 */
+				if ((i < 0) || (i >= numEntries)) || ((j < 0) || (j >= numEntries)) {
+					msg := fmt.Sprintf("Index pair (%d, %d) out of bounds. (There are %d elements.)", i, j, numEntries)
+					panic(msg)
+				} else {
+					i64 := uint64(i)
+					j64 := uint64(j)
+					entryI := indexDatabaseEntryStruct{}
+					entryJ := indexDatabaseEntryStruct{}
+					errI := db.readEntry(fd, i64, &entryI)
+					errJ := db.readEntry(fd, j64, &entryJ)
+
+					/*
+					* Make sure that we read both values.
+					 */
+					if errI != nil {
+						msg := errI.Error()
+						customMsg := fmt.Sprintf("Failed to read entry %d: %s", i64, msg)
+						panic(customMsg)
+					} else if errJ != nil {
+						msg := errJ.Error()
+						customMsg := fmt.Sprintf("Failed to read entry %d: %s", j64, msg)
+						panic(customMsg)
+					} else {
+						zi := entryI.Z
+						zj := entryJ.Z
+						xi := entryI.X
+						xj := entryJ.X
+						yi := entryI.Y
+						yj := entryJ.Y
+						result = (zi < zj) || ((zi == zj) && (xi < xj)) || ((zi == zj) && (xi == xj) && (yi < yj))
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+	return result
+}
+
+/*
+ * Swap the elements with indices i and j.
+ *
+ * This method is required for implementation of sort.Interface.
+ *
+ * The underlying database is locked for write access during sorting.
+ */
+func (this *indexDatabaseSorterStruct) Swap(i int, j int) {
+	db := this.db
+
+	/*
+	 * Make sure we reference a database.
+	 */
+	if db == nil {
+		panic("Database does not exist.")
+	} else {
+		fd := db.fd
+
+		/*
+		 * Make sure database is open.
+		 */
+		if fd == nil {
+			panic("Database is not open.")
+		} else {
+			numEntries64, err := db.numEntries(fd)
+
+			/*
+			 * Make sure we got the number of entries.
+			 */
+			if err != nil {
+				errMsg := err.Error()
+				customErrMsg := fmt.Sprintf("Error obtaining number of entries: %s", errMsg)
+				panic(customErrMsg)
+			} else if numEntries64 > math.MaxInt {
+				panic("Database is too large to be sorted on this architecture.")
+			} else {
+				numEntries := int(numEntries64)
+
+				/*
+				 * Prevent out-of-bounds access.
+				 */
+				if ((i < 0) || (i >= numEntries)) || ((j < 0) || (j >= numEntries)) {
+					msg := fmt.Sprintf("Index pair (%d, %d) out of bounds. (There are %d elements.)", i, j, numEntries)
+					panic(msg)
+				} else {
+					i64 := uint64(i)
+					j64 := uint64(j)
+					entryI := indexDatabaseEntryStruct{}
+					entryJ := indexDatabaseEntryStruct{}
+					errReadI := db.readEntry(fd, i64, &entryI)
+					errReadJ := db.readEntry(fd, j64, &entryJ)
+
+					/*
+					 * Make sure that we read both values.
+					 */
+					if errReadI != nil {
+						msg := errReadI.Error()
+						customMsg := fmt.Sprintf("Failed to read entry %d: %s", i64, msg)
+						panic(customMsg)
+					} else if errReadJ != nil {
+						msg := errReadJ.Error()
+						customMsg := fmt.Sprintf("Failed to read entry %d: %s", j64, msg)
+						panic(customMsg)
+					} else {
+						// Swap entries: Write former entry "J" at offset of entry "I".
+						errWriteI := db.writeEntry(fd, i64, &entryJ)
+
+						/*
+						 * Check if write error occured writing entry I.
+						 */
+						if errWriteI != nil {
+							msg := errWriteI.Error()
+							customMsg := fmt.Sprintf("Failed to write entry %d: %s", i64, msg)
+							panic(customMsg)
+						} else {
+							// Swap entries: Write former entry "I" at offset of entry "J".
+							errWriteJ := db.writeEntry(fd, j64, &entryI)
+
+							/*
+							 * Check if write error occured writing entry J.
+							 */
+							if errWriteJ != nil {
+								msg := errWriteJ.Error()
+								customMsg := fmt.Sprintf("Failed to write entry %d: %s", i64, msg)
+								panic(customMsg)
+							}
+
+						}
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
 }
 
 /*

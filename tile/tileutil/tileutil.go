@@ -53,57 +53,68 @@ func (this *tileUtilStruct) Cleanup() error {
 	this.mutex.Lock()
 	imgdb := this.imageDatabase
 	idxdb := this.indexDatabase
-	numEntries, err := idxdb.Length()
+	err := idxdb.Sort()
 
 	/*
-	 * Check if we could get the number of entries from the index database.
+	 * Check if index database got sorted.
 	 */
 	if err != nil {
 		msg := err.Error()
-		return fmt.Errorf("Failed to get number of entries from index database: %s", msg)
+		return fmt.Errorf("Failed sort index database: %s", msg)
 	} else {
-		allHandles := make(map[tiledb.ImageHandle]bool)
+		numEntries, err := idxdb.Length()
 
 		/*
-		 * Iterate over all entries in index database and collect all handles.
+		 * Check if we could get the number of entries from the index database.
 		 */
-		for idx := uint64(0); (idx < numEntries) && (errResult == nil); idx++ {
-			_, metadata, err := idxdb.Entry(idx)
+		if err != nil {
+			msg := err.Error()
+			return fmt.Errorf("Failed to get number of entries from index database: %s", msg)
+		} else {
+			allHandles := make(map[tiledb.ImageHandle]bool)
 
 			/*
-			 * Check if error occured retrieving entry from index database.
+			 * Iterate over all entries in index database and collect all handles.
 			 */
-			if err != nil {
-				msg := err.Error()
-				errResult = fmt.Errorf("Failed to get entry %d from index database: %s", idx, msg)
-			} else {
-				handle := metadata.Handle()
-				allHandles[handle] = true
+			for idx := uint64(0); (idx < numEntries) && (errResult == nil); idx++ {
+				_, metadata, err := idxdb.Entry(idx)
+
+				/*
+				 * Check if error occured retrieving entry from index database.
+				 */
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Failed to get entry %d from index database: %s", idx, msg)
+				} else {
+					handle := metadata.Handle()
+					allHandles[handle] = true
+				}
+
 			}
 
-		}
-
-		/*
-		 * If no error occured so far, continue to cleanup image database.
-		 */
-		if errResult == nil {
-
 			/*
-			 * The cleanup condition.
+			 * If no error occured so far, continue to cleanup image database.
 			 */
-			condition := func(handle tiledb.ImageHandle) bool {
-				result := allHandles[handle]
-				return result
-			}
+			if errResult == nil {
 
-			err := imgdb.Cleanup(condition)
+				/*
+				 * The cleanup condition.
+				 */
+				condition := func(handle tiledb.ImageHandle) bool {
+					result := allHandles[handle]
+					return result
+				}
 
-			/*
-			 * Check if error occured during cleanup.
-			 */
-			if err != nil {
-				msg := err.Error()
-				errResult = fmt.Errorf("Error occured during image database cleanup: %s", msg)
+				err := imgdb.Cleanup(condition)
+
+				/*
+				 * Check if error occured during cleanup.
+				 */
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Error occured during image database cleanup: %s", msg)
+				}
+
 			}
 
 		}
