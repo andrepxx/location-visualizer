@@ -373,6 +373,11 @@ func (this *tileUtilStruct) fetchFromCache(id tile.Id) (tile.Image, error) {
 	return result, errResult
 }
 
+/*
+ * Fetch tile from server.
+ *
+ * This assumes that the databases are locked for writing.
+ */
 func (this *tileUtilStruct) fetchFromServer(server tileserver.OSMTileServer, id tile.Id) (tile.Image, error) {
 	z := id.Z()
 	x := id.X()
