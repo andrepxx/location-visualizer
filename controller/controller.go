@@ -25,6 +25,7 @@ import (
 	"github.com/andrepxx/location-visualizer/geo/geojson"
 	"github.com/andrepxx/location-visualizer/geo/geoutil"
 	"github.com/andrepxx/location-visualizer/geo/gpx"
+	"github.com/andrepxx/location-visualizer/geo/opengeodb"
 	"github.com/andrepxx/location-visualizer/meta"
 	lsync "github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
@@ -1673,6 +1674,8 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					format := request.Params["format"]
 
 					switch format {
+					case "binary":
+						source, err = opengeodb.FromBytes(data)
 					case "csv":
 						source, err = geocsv.FromBytes(data)
 					case "gpx":

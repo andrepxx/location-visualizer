@@ -131,21 +131,21 @@ func parseFixed32(number string, decimalPlaces uint8) (int32, error) {
 	} else {
 
 		/*
-		* Shift value by the required number of decimal places.
+		 * Shift value by the required number of decimal places.
 		 */
 		for i := uint8(0); i < decimalPlaces; i++ {
 			value *= 10
 		}
 
 		/*
-		* Handle fractional part, if present.
+		 * Handle fractional part, if present.
 		 */
 		if hasFractionalPart {
 			lenFractionalPart := len(fractionalPartString)
 			decimalPlacesInt := int(decimalPlaces)
 
 			/*
-			* If fractional part is longer than number of decimal places, trim it.
+			 * If fractional part is longer than number of decimal places, trim it.
 			 */
 			if lenFractionalPart > decimalPlacesInt {
 				fractionalPartString = fractionalPartString[:decimalPlacesInt]

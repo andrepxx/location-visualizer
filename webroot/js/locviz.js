@@ -1815,7 +1815,7 @@ function UI() {
 		const downloadLinkCSVHref = document.createAttribute('href');
 		downloadLinkCSVHref.value = cgi + '?' + requestDownloadCSVData;
 		downloadLinkCSV.setAttributeNode(downloadLinkCSVHref);
-		const downloadLinkCSVNode = document.createTextNode('Download CSV (*.csv)');
+		const downloadLinkCSVNode = document.createTextNode('Download CSV / RFC 4180 (*.csv)');
 		downloadLinkCSV.appendChild(downloadLinkCSVNode);
 		downloadLinkCSVDiv.appendChild(downloadLinkCSV);
 		downloadLinksDiv.appendChild(downloadLinkCSVDiv);
@@ -1830,7 +1830,7 @@ function UI() {
 		const downloadLinkGPXHref = document.createAttribute('href');
 		downloadLinkGPXHref.value = cgi + '?' + requestDownloadGPXData;
 		downloadLinkGPX.setAttributeNode(downloadLinkGPXHref);
-		const downloadLinkGPXNode = document.createTextNode('Download compact GPX (*.gpx)');
+		const downloadLinkGPXNode = document.createTextNode('Download compact GPS Exchange (*.gpx)');
 		downloadLinkGPX.appendChild(downloadLinkGPXNode);
 		downloadLinkGPXDiv.appendChild(downloadLinkGPX);
 		downloadLinksDiv.appendChild(downloadLinkGPXDiv);
@@ -1845,7 +1845,7 @@ function UI() {
 		const downloadLinkGPXPrettyHref = document.createAttribute('href');
 		downloadLinkGPXPrettyHref.value = cgi + '?' + requestDownloadGPXPrettyData;
 		downloadLinkGPXPretty.setAttributeNode(downloadLinkGPXPrettyHref);
-		const downloadLinkGPXPrettyNode = document.createTextNode('Download pretty-printed GPX (*.gpx)');
+		const downloadLinkGPXPrettyNode = document.createTextNode('Download pretty-printed GPS Exchange (*.gpx)');
 		downloadLinkGPXPretty.appendChild(downloadLinkGPXPrettyNode);
 		downloadLinkGPXPrettyDiv.appendChild(downloadLinkGPXPretty);
 		downloadLinksDiv.appendChild(downloadLinkGPXPrettyDiv);
@@ -1860,7 +1860,7 @@ function UI() {
 		const downloadLinkJSONHref = document.createAttribute('href');
 		downloadLinkJSONHref.value = cgi + '?' + requestDownloadJSONData;
 		downloadLinkJSON.setAttributeNode(downloadLinkJSONHref);
-		const downloadLinkJSONNode = document.createTextNode('Download compact JSON (*.json)');
+		const downloadLinkJSONNode = document.createTextNode('Download compact Records JSON (*.json)');
 		downloadLinkJSON.appendChild(downloadLinkJSONNode);
 		downloadLinkJSONDiv.appendChild(downloadLinkJSON);
 		downloadLinksDiv.appendChild(downloadLinkJSONDiv);
@@ -1875,7 +1875,7 @@ function UI() {
 		const downloadLinkJSONPrettyHref = document.createAttribute('href');
 		downloadLinkJSONPrettyHref.value = cgi + '?' + requestDownloadJSONPrettyData;
 		downloadLinkJSONPretty.setAttributeNode(downloadLinkJSONPrettyHref);
-		const downloadLinkJSONPrettyNode = document.createTextNode('Download pretty-printed JSON (*.json)');
+		const downloadLinkJSONPrettyNode = document.createTextNode('Download pretty-printed Records JSON (*.json)');
 		downloadLinkJSONPretty.appendChild(downloadLinkJSONPrettyNode);
 		downloadLinkJSONPrettyDiv.appendChild(downloadLinkJSONPretty);
 		downloadLinksDiv.appendChild(downloadLinkJSONPrettyDiv);
@@ -1885,13 +1885,13 @@ function UI() {
 		div.appendChild(spacerDivB);
 		const importPropertiesDiv = document.createElement('div');
 		const importPropertiesDescriptionDiv = document.createElement('div');
-		const importPropertiesDescriptionNode = document.createTextNode('Drop CSV, GPX or JSON file to import location data into geographical database.');
+		const importPropertiesDescriptionNode = document.createTextNode('Drop OpenGeoDB, CSV, GPX or JSON file to import location data into geographical database.');
 		importPropertiesDescriptionDiv.appendChild(importPropertiesDescriptionNode);
 		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
 		const importFormatElem = this.createElement('Format', '180px');
-		const importFormatLabels = ['CSV / RFC 4180 (*.csv)', 'GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
-		const importFormatValues = ['csv', 'gpx', 'json'];
-		const importFormatDefault = importFormatValues[2];
+		const importFormatLabels = ['OpenGeoDB (*.geodb)', 'CSV / RFC 4180 (*.csv)', 'GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
+		const importFormatValues = ['binary', 'csv', 'gpx', 'json'];
+		const importFormatDefault = importFormatValues[3];
 		const fieldImportFormat = document.createElement('select');
 
 		/*
