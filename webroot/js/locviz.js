@@ -1944,7 +1944,7 @@ function UI() {
 		actionPropertiesDescriptionDiv.appendChild(actionPropertiesDescriptionNode);
 		actionPropertiesDiv.appendChild(actionPropertiesDescriptionDiv);
 		const actionElem = this.createElement('Action', '180px');
-		const actionValues = ['(none)', 'sort entries', 'deduplicate entries'];
+		const actionValues = ['(none)', 'sort entries', 'deduplicate entries', 'clear database'];
 		const actionDefault = actionValues[0];
 		const fieldAction = document.createElement('select');
 
@@ -1965,6 +1965,13 @@ function UI() {
 		fieldAction.value = actionDefault;
 		actionElem.appendChild(fieldAction);
 		actionPropertiesDiv.appendChild(actionElem);
+		const hashElem = this.createElement('Hash', '180px');
+		const fieldHash = document.createElement('input');
+		fieldHash.className = 'textfield';
+		fieldHash.setAttribute('id', 'geodb_hash_field');
+		fieldHash.setAttribute('type', 'text');
+		hashElem.appendChild(fieldHash);
+		actionPropertiesDiv.appendChild(hashElem);
 		div.appendChild(actionPropertiesDiv);
 		const spacerDivD = document.createElement('div');
 		spacerDivD.className = 'vspace';
@@ -1981,6 +1988,8 @@ function UI() {
 		buttonRunAction.onclick = function(e) {
 			const actionField = document.getElementById('geodb_action_field');
 			const actionValue = actionField.value;
+			const hashField = document.getElementById('geodb_hash_field');
+			const hashValue = hashField.value;
 			let actionString = null;
 
 			/*
@@ -1990,15 +1999,27 @@ function UI() {
 				actionString = 'sort';
 			} else if (actionValue === 'deduplicate entries') {
 				actionString = 'deduplicate';
+			} else if (actionValue === 'clear database') {
+				actionString = 'clear';
 			}
 
 			/*
-			 * Check if we shall sort or deduplicate entries in geographical database.
+			 * Check if we shall sort or deduplicate entries in geographical
+			 * database or clear the database.
 			 */
 			if (actionString != null) {
 				const request = new Request();
 				request.append('cgi', 'modify-geodata');
 				request.append('action', actionString);
+
+				/*
+				 * If we shall clear the database, provide a hash of the
+				 * database contents
+				 */
+				if (actionString === 'clear') {
+					request.append('hash', hashValue);
+				}
+
 				const cvs = document.getElementById('map_canvas');
 				const token = storage.get(cvs, 'token');
 				request.append('token', token);

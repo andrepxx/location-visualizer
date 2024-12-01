@@ -46,6 +46,12 @@ To use the software, create a user, set a password and add permissions to fetch 
 ./locviz add-permission root geodb-download
 ```
 
+Optionally, if you want to allow clearing the geographical database, you can also add a permission for that.
+
+```
+./locviz add-permission root geodb-clear
+```
+
 Finally, run the server.
 
 ```
@@ -113,9 +119,9 @@ To upload geo data to the geo database, log in with a user account, which has at
 
 ## Clearing the geo database
 
-To clear the database, you will have to terminate the application and delete the database file storing the geo data. (This will by default reside under `data/locations.geodb`.) An empty database will be created on next startup of the application.
+To clear the database, you can terminate the application and delete the database file storing the geo data. (This will by default reside under `data/locations.geodb`.) An empty database will be created on next startup of the application.
 
-There is currently no way to clear the database from within the web interface. This serves to prevent accidental deletion of data. In the future, we plan to offer clearing the database on the web interface as well, and put in other safeguards to prevent accidental deletion of data.
+The database can also be cleared from within the web interface if the respective account performing the action has the required permission. For that, a SHA-512 hash of the database contents (in OpenGeoDB representation) has to be provided. This serves as proof that the person deciding to clear the database has downloaded a backup copy before and serves to prevent accidental deletion of data. You can prevent users from clearing the database by not giving them the required permission.
 
 ## Exchanging data with location-visualizer
 

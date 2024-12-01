@@ -2,6 +2,8 @@ package geodb
 
 import (
 	"bytes"
+	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/binary"
 	"encoding/csv"
 	"fmt"
@@ -22,6 +24,7 @@ const (
 	SIZE_DATABASE_ENTRY  = 14
 	SIZE_DATABASE_HEADER = 10
 	SIZE_TIMESTAMP       = 6
+	SUBTLE_COMPARE_EQUAL = 1
 	VERSION_MAJOR        = 1
 	VERSION_MINOR        = 0
 )
@@ -80,6 +83,7 @@ type Location struct {
  */
 type Database interface {
 	Append(loc *Location) error
+	Clear(hash []byte) (uint32, error)
 	Close()
 	Deduplicate() (uint32, error)
 	LocationCount() uint32
@@ -326,6 +330,72 @@ func (this *databaseStruct) Append(loc *Location) error {
 	}
 
 	return errResult
+}
+
+/*
+ * Clears the database, removing all entries.
+ *
+ * Caller has to provide a hash of the database contents.
+ *
+ * Returns the number of removed entries.
+ */
+func (this *databaseStruct) Clear(hash []byte) (uint32, error) {
+	result := uint32(0)
+	errResult := error(nil)
+	this.mutex.Lock()
+	fd := this.fd
+
+	/*
+	 * Verify that database is not closed.
+	 */
+	if fd == nil {
+		errResult = fmt.Errorf("%s", "Database is already closed")
+	} else {
+		h := sha512.New()
+		locationCount := this.locationCount
+		locationCount64 := int64(locationCount)
+		size := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * locationCount64)
+		r := io.NewSectionReader(fd, 0, size)
+		_, err := io.Copy(h, r)
+
+		/*
+		 * Check if an I/O error occured.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("I/O error: %s", msg)
+		} else {
+			buf := make([]byte, sha512.Size)
+			buf = h.Sum(buf[:0])
+			comparisonResult := subtle.ConstantTimeCompare(buf, hash)
+
+			/*
+			 * If the hash matches, clear database.
+			 */
+			if comparisonResult != SUBTLE_COMPARE_EQUAL {
+				errResult = fmt.Errorf("%s", "Hashes do not match")
+			} else {
+				err := fd.Truncate(SIZE_DATABASE_HEADER)
+
+				/*
+				 * Check if truncation was successful.
+				 */
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Error truncating database file: %s", msg)
+				} else {
+					result = locationCount
+					this.locationCount = 0
+				}
+
+			}
+
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return result, errResult
 }
 
 /*
