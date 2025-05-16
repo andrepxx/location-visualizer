@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image/png"
@@ -18,6 +19,7 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/rand"
 	"github.com/andrepxx/location-visualizer/auth/session"
 	"github.com/andrepxx/location-visualizer/auth/user"
+	"github.com/andrepxx/location-visualizer/controller/client"
 	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
 	"github.com/andrepxx/location-visualizer/geo/geocsv"
@@ -724,200 +726,9 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 }
 
 /*
- * Download the contents of the GeoDB location database.
- */
-func (this *controllerStruct) downloadGeoDBContentHandler(request webserver.HttpRequest) webserver.HttpResponse {
-	token := request.Params["token"]
-	format := request.Params["format"]
-	permA, errA := this.checkPermission(token, "geodb-read")
-	permB, errB := this.checkPermission(token, "geodb-download")
-
-	/*
-	 * Check permissions.
-	 */
-	if errA != nil {
-		msg := errA.Error()
-		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
-		customMsgBuf := bytes.NewBufferString(customMsg)
-		customMsgBytes := customMsgBuf.Bytes()
-		conf := this.config
-		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
-
-		/*
-		 * Create HTTP response.
-		 */
-		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
-		}
-
-		return response
-	} else if errB != nil {
-		msg := errB.Error()
-		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
-		customMsgBuf := bytes.NewBufferString(customMsg)
-		customMsgBytes := customMsgBuf.Bytes()
-		conf := this.config
-		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
-
-		/*
-		 * Create HTTP response.
-		 */
-		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
-		}
-
-		return response
-	} else if !permA || !permB {
-		customMsgBuf := bytes.NewBufferString("Forbidden!")
-		customMsgBytes := customMsgBuf.Bytes()
-		conf := this.config
-		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
-
-		/*
-		 * Create HTTP response.
-		 */
-		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
-		}
-
-		return response
-	} else {
-		customMsgBuf := bytes.NewBufferString("Database not accessible.")
-		customMsgBytes := customMsgBuf.Bytes()
-		conf := this.config
-		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
-
-		/*
-		 * Create default HTTP response.
-		 */
-		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
-		}
-
-		db := this.locationDB
-
-		/*
-		 * Make sure database exists.
-		 */
-		if db != nil {
-
-			switch format {
-			case "binary":
-				contentProvider := db.SerializeBinary()
-				creationTime := time.Now()
-				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
-				fileName := fmt.Sprintf("locations-%s.geodb", timeStamp)
-				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
-
-				/*
-				 * Create HTTP response.
-				 */
-				response = webserver.HttpResponse{
-
-					Header: map[string]string{
-						"Content-disposition": disposition,
-						"Content-type":        "application/octet-stream",
-					},
-
-					ContentReadSeekCloser: contentProvider,
-				}
-
-			case "csv":
-				contentProvider := db.SerializeCSV()
-				creationTime := time.Now()
-				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
-				fileName := fmt.Sprintf("locations-%s.csv", timeStamp)
-				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
-
-				/*
-				 * Create HTTP response.
-				 */
-				response = webserver.HttpResponse{
-
-					Header: map[string]string{
-						"Content-disposition": disposition,
-						"Content-type":        "text/csv",
-					},
-
-					ContentReadCloser: contentProvider,
-				}
-
-			case "gpx", "gpx-pretty":
-				pretty := format == "gpx-pretty"
-				contentProvider := db.SerializeXML(pretty)
-				creationTime := time.Now()
-				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
-				fileName := fmt.Sprintf("locations-%s.gpx", timeStamp)
-				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
-
-				/*
-				 * Create HTTP response.
-				 */
-				response = webserver.HttpResponse{
-
-					Header: map[string]string{
-						"Content-disposition": disposition,
-						"Content-type":        "application/gpx+xml",
-					},
-
-					ContentReadCloser: contentProvider,
-				}
-
-			case "json", "json-pretty":
-				pretty := format == "json-pretty"
-				contentProvider := db.SerializeJSON(pretty)
-				creationTime := time.Now()
-				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
-				fileName := fmt.Sprintf("locations-%s.json", timeStamp)
-				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
-
-				/*
-				 * Create HTTP response.
-				 */
-				response = webserver.HttpResponse{
-
-					Header: map[string]string{
-						"Content-disposition": disposition,
-						"Content-type":        "application/json; charset=utf-8",
-					},
-
-					ContentReadCloser: contentProvider,
-				}
-
-			default:
-				msg := fmt.Sprintf("Unknown format: '%s'", format)
-				msgBuf := bytes.NewBufferString(msg)
-				msgBytes := msgBuf.Bytes()
-
-				/*
-				 * Create HTTP response.
-				 */
-				response = webserver.HttpResponse{
-					Header: map[string]string{"Content-type": contentType},
-					Body:   msgBytes,
-				}
-
-			}
-
-		}
-
-		return response
-	}
-
-}
-
-/*
  * Export activity data as CSV.
  */
-func (this *controllerStruct) exportActivitiesCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
+func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-read")
 
@@ -1012,6 +823,197 @@ func (this *controllerStruct) exportActivitiesCsvHandler(request webserver.HttpR
 			return response
 		}
 
+	}
+
+}
+
+/*
+ * Export the contents of the GeoDB location database.
+ */
+func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	format := request.Params["format"]
+	permA, errA := this.checkPermission(token, "geodb-read")
+	permB, errB := this.checkPermission(token, "geodb-download")
+
+	/*
+	 * Check permissions.
+	 */
+	if errA != nil {
+		msg := errA.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if errB != nil {
+		msg := errB.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else if !permA || !permB {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		return response
+	} else {
+		customMsgBuf := bytes.NewBufferString("Database not accessible.")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create default HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header: map[string]string{"Content-type": contentType},
+			Body:   customMsgBytes,
+		}
+
+		db := this.locationDB
+
+		/*
+		 * Make sure database exists.
+		 */
+		if db != nil {
+
+			switch format {
+			case "csv":
+				contentProvider := db.SerializeCSV()
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.csv", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "text/csv",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
+			case "gpx", "gpx-pretty":
+				pretty := format == "gpx-pretty"
+				contentProvider := db.SerializeXML(pretty)
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.gpx", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/gpx+xml",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
+			case "json", "json-pretty":
+				pretty := format == "json-pretty"
+				contentProvider := db.SerializeJSON(pretty)
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.json", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/json; charset=utf-8",
+					},
+
+					ContentReadCloser: contentProvider,
+				}
+
+			case "opengeodb":
+				contentProvider := db.SerializeOpenGeoDB()
+				creationTime := time.Now()
+				timeStamp := creationTime.Format(ARCHIVE_TIME_STAMP)
+				fileName := fmt.Sprintf("locations-%s.geodb", timeStamp)
+				disposition := fmt.Sprintf("attachment; filename=\"%s\"", fileName)
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+
+					Header: map[string]string{
+						"Content-disposition": disposition,
+						"Content-type":        "application/octet-stream",
+					},
+
+					ContentReadSeekCloser: contentProvider,
+				}
+
+			default:
+				msg := fmt.Sprintf("Unknown format: '%s'", format)
+				msgBuf := bytes.NewBufferString(msg)
+				msgBytes := msgBuf.Bytes()
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+					Header: map[string]string{"Content-type": contentType},
+					Body:   msgBytes,
+				}
+
+			}
+
+		}
+
+		return response
 	}
 
 }
@@ -1674,14 +1676,14 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					format := request.Params["format"]
 
 					switch format {
-					case "binary":
-						source, err = opengeodb.FromBytes(data)
 					case "csv":
 						source, err = geocsv.FromBytes(data)
 					case "gpx":
 						source, err = gpx.FromBytes(data)
 					case "json":
 						source, err = geojson.FromBytes(data)
+					case "opengeodb":
+						source, err = opengeodb.FromBytes(data)
 					}
 
 					/*
@@ -1956,14 +1958,17 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
  */
 func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
-	perm, err := this.checkPermission(token, "geodb-write")
+	action := request.Params["action"]
+	hash := request.Params["hash"]
+	permClear, errClear := this.checkPermission(token, "geodb-clear")
+	permWrite, errWrite := this.checkPermission(token, "geodb-write")
 	report := webDatasetModificationReportStruct{}
 
 	/*
 	 * Check permissions.
 	 */
-	if err != nil {
-		msg := err.Error()
+	if errClear != nil {
+		msg := errClear.Error()
 		reason := fmt.Sprintf("Failed to check permission: %s\n", msg)
 
 		/*
@@ -1974,7 +1979,19 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 			Reason:  reason,
 		}
 
-	} else if !perm {
+	} else if errWrite != nil {
+		msg := errWrite.Error()
+		reason := fmt.Sprintf("Failed to check permission: %s\n", msg)
+
+		/*
+		 * Report failure.
+		 */
+		report.Status = webResponseStruct{
+			Success: false,
+			Reason:  reason,
+		}
+
+	} else if !permWrite || ((action == "clear") && !permClear) {
 		reason := "Forbidden!"
 
 		/*
@@ -2042,7 +2059,6 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 					TimestampLatest:   timestampLatestStringBefore,
 				}
 
-				action := request.Params["action"]
 				n := uint32(0)
 				err := fmt.Errorf("Unknown action: '%s'", action)
 				actionDescription := "unknown action"
@@ -2051,6 +2067,20 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 				 * Decide which action to carry out.
 				 */
 				switch action {
+				case "clear":
+					actionDescription = "clearing"
+					hashBytes, errDecode := hex.DecodeString(hash)
+
+					/*
+					 * Check if hash value could be decoded.
+					 */
+					if errDecode != nil {
+						msg := errDecode.Error()
+						err = fmt.Errorf("Error decoding hash: %s", msg)
+					} else {
+						n, err = db.Clear(hashBytes)
+					}
+
 				case "deduplicate":
 					actionDescription = "deduplication"
 					n, err = db.Deduplicate()
@@ -2888,10 +2918,10 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.authRequestHandler(request)
 	case "auth-response":
 		response = this.authResponseHandler(request)
-	case "download-geodb-content":
-		response = this.downloadGeoDBContentHandler(request)
-	case "export-activities-csv":
-		response = this.exportActivitiesCsvHandler(request)
+	case "export-activity-csv":
+		response = this.exportActivityCsvHandler(request)
+	case "export-geodb-content":
+		response = this.exportGeoDBContentHandler(request)
 	case "get-activities":
 		response = this.getActivitiesHandler(request)
 	case "get-geodb-stats":
@@ -3318,6 +3348,18 @@ func (this *controllerStruct) interpret(args []string) {
 					fmt.Printf("%s\n", user)
 				}
 
+			}
+
+		case "remote":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs < 6 {
+				fmt.Printf("Command '%s' expects at least 5 additional arguments: host, port, username, password, command [and possibly options]\n", cmd)
+			} else {
+				c := client.CreateController()
+				c.Interpret(args)
 			}
 
 		case "remove-permission":
@@ -3892,6 +3934,6 @@ func (this *controllerStruct) Prefetch(zoomLevel uint8) {
  * Creates a new controller.
  */
 func CreateController() Controller {
-	controller := controllerStruct{}
-	return &controller
+	c := controllerStruct{}
+	return &c
 }

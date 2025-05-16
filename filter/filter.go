@@ -10,9 +10,7 @@ import (
 )
 
 const (
-	MILLISECONDS_PER_SECOND     = 1000
-	NANOSECONDS_PER_MILLISECOND = 1000000
-	REX_SLOPPY_TIME             = "^\\s*(\\d{4})(-(\\d{2}))?(-(\\d{2}))?(((T|\\s)(\\d{2})(:(\\d{2}))(:(\\d{2}))?)?((Z)|((\\s+(GMT|UTC))?(([+-])(\\d{2})(:(\\d{2}))?)?)))?\\s*$"
+	REX_SLOPPY_TIME = "^\\s*(\\d{4})(-(\\d{2}))?(-(\\d{2}))?(((T|\\s)(\\d{2})(:(\\d{2}))(:(\\d{2}))?)?((Z)|((\\s+(GMT|UTC))?(([+-])(\\d{2})(:(\\d{2}))?)?)))?\\s*$"
 )
 
 /*
@@ -118,11 +116,8 @@ func (this *timeFilterStruct) Evaluate(loc *geodb.Location) bool {
 		return false
 	} else {
 		ts := loc.Timestamp
-		tsSeconds := ts / MILLISECONDS_PER_SECOND
-		tsSecondsUnix := int64(tsSeconds)
-		tsNanos := (ts % MILLISECONDS_PER_SECOND) * NANOSECONDS_PER_MILLISECOND
-		tsNanosUnix := int64(tsNanos)
-		tsTime := time.Unix(tsSecondsUnix, tsNanosUnix)
+		tsSigned := int64(ts)
+		tsTime := time.UnixMilli(tsSigned)
 		tsTimeUTC := tsTime.UTC()
 		match := true
 		min := this.min

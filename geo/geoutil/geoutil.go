@@ -549,9 +549,8 @@ func (this *utilStruct) Migrate(dst geodb.Database, src geo.Database, importStra
  * Convert a timestamp from milliseconds since the Epoch into a time.Time.
  */
 func (this *utilStruct) MillisecondsToTime(ms uint64) time.Time {
-	s := int64(ms / MILLISECONDS_PER_SECOND)
-	ns := int64((ms % MILLISECONDS_PER_SECOND) * NANOSECONDS_PER_MILLISECOND)
-	t := time.Unix(s, ns)
+	msSigned := int64(ms)
+	t := time.UnixMilli(msSigned)
 	utc := t.UTC()
 	return utc
 }

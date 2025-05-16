@@ -88,9 +88,9 @@ type Database interface {
 	Deduplicate() (uint32, error)
 	LocationCount() uint32
 	ReadLocations(offset uint32, target []Location) (uint32, error)
-	SerializeBinary() io.ReadSeekCloser
 	SerializeCSV() io.ReadCloser
 	SerializeJSON(pretty bool) io.ReadCloser
+	SerializeOpenGeoDB() io.ReadSeekCloser
 	SerializeXML(pretty bool) io.ReadCloser
 	Sort() error
 }
@@ -137,15 +137,6 @@ type databaseStruct struct {
 }
 
 /*
- * Data structure for serializing the database into binary format.
- */
-type databaseBinarySerializerStruct struct {
-	mutex  sync.Mutex
-	db     *databaseStruct
-	offset uint64
-}
-
-/*
  * Data structure for serializing the database into CSV format.
  */
 type databaseCsvSerializerStruct struct {
@@ -168,6 +159,15 @@ type databaseJsonSerializerStruct struct {
 	indent  uint16
 	pretty  bool
 	state   int
+}
+
+/*
+ * Data structure for serializing the database into OpenGeoDB format.
+ */
+type databaseOpenGeoDBSerializerStruct struct {
+	mutex  sync.Mutex
+	db     *databaseStruct
+	offset uint64
 }
 
 /*
@@ -733,25 +733,6 @@ func (this *databaseStruct) ReadLocations(offset uint32, target []Location) (uin
 }
 
 /*
- * Locks the database for read access and provides a ReadSeekCloser
- * granting random access to the database in binary format.
- *
- * Closing the returned ReadSeekCloser yields the lock on the database.
- */
-func (this *databaseStruct) SerializeBinary() io.ReadSeekCloser {
-	this.mutex.RLock()
-
-	/*
-	 * Create database binary serializer.
-	 */
-	s := databaseBinarySerializerStruct{
-		db: this,
-	}
-
-	return &s
-}
-
-/*
  * Locks the database for read access and provides a ReadCloser granting
  * sequential access to the database in CSV format.
  *
@@ -807,6 +788,25 @@ func (this *databaseStruct) SerializeJSON(pretty bool) io.ReadCloser {
 }
 
 /*
+ * Locks the database for read access and provides a ReadSeekCloser
+ * granting random access to the database in OpenGeoDB format.
+ *
+ * Closing the returned ReadSeekCloser yields the lock on the database.
+ */
+func (this *databaseStruct) SerializeOpenGeoDB() io.ReadSeekCloser {
+	this.mutex.RLock()
+
+	/*
+	 * Create database OpenGeoDB serializer.
+	 */
+	s := databaseOpenGeoDBSerializerStruct{
+		db: this,
+	}
+
+	return &s
+}
+
+/*
  * Locks the database for read access and provides a ReadCloser granting
  * sequential access to the database in XML format.
  *
@@ -853,216 +853,6 @@ func (this *databaseStruct) Sort() error {
 	 */
 	if fd != nil {
 		result = this.sort()
-	}
-
-	this.mutex.Unlock()
-	return result
-}
-
-/*
- * Implements the Read function from io.ReadSeekCloser.
- */
-func (this *databaseBinarySerializerStruct) Read(buf []byte) (int, error) {
-	result := int(0)
-	errResult := error(nil)
-	this.mutex.Lock()
-	db := this.db
-
-	/*
-	 * Check if serializer is still open.
-	 */
-	if db == nil {
-		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
-	} else {
-		fd := db.fd
-
-		/*
-		 * Check if file descriptor is still open.
-		 */
-		if fd == nil {
-			errResult = fmt.Errorf("%s", "Database is already closed.")
-		} else {
-			locationCount := db.locationCount
-			locationCount64 := uint64(locationCount)
-			size := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * locationCount64)
-			offset := this.offset
-			bytesInFile := size - offset
-			bufSize := len(buf)
-			bytesToRead := uint64(bufSize)
-
-			/*
-			 * Limit bytes to read to file size.
-			 */
-			if bytesToRead > bytesInFile {
-				bytesToRead = bytesInFile
-			}
-
-			bufTarget := buf[0:bytesToRead]
-			offsetSigned := int64(offset)
-
-			/*
-			 * Prevent overflow.
-			 */
-			if offsetSigned < 0 {
-				errResult = fmt.Errorf("%s", "Overflow.")
-			} else {
-				bytesRead, err := fd.ReadAt(bufTarget, offsetSigned)
-				bytesRead64 := uint64(bytesRead)
-
-				/*
-				 * Prevent out of bounds errors and implausible results.
-				 */
-				if bytesRead < 0 {
-					bytesRead = 0
-					bytesRead64 = uint64(bytesRead)
-				} else if bytesRead64 > bytesToRead {
-					bytesRead = int(bytesToRead)
-					bytesRead64 = bytesToRead
-				}
-
-				/*
-				 * Handle I/O errors.
-				 */
-				if err == io.EOF {
-
-					/*
-					 * Check if we read as many bytes as expected.
-					 */
-					if bytesRead64 < bytesToRead {
-						errResult = io.ErrUnexpectedEOF
-					}
-
-				} else if err != nil {
-					msg := err.Error()
-					errResult = fmt.Errorf("I/O error: %s", msg)
-					bytesRead = 0
-					bytesRead64 = 0
-				}
-
-				bufToZero := buf[bytesRead:bufSize]
-
-				/*
-				 * Zero out remaining part of the buffer.
-				 */
-				for i := range bufToZero {
-					bufToZero[i] = 0
-				}
-
-				offset += bytesRead64
-				result = bytesRead
-			}
-
-			this.offset = offset
-		}
-
-	}
-
-	this.mutex.Unlock()
-	return result, errResult
-}
-
-/*
- * Implements the Seek function from io.ReadSeekCloser.
- */
-func (this *databaseBinarySerializerStruct) Seek(offset int64, whence int) (int64, error) {
-	result := int64(0)
-	errResult := error(nil)
-	this.mutex.Lock()
-	db := this.db
-
-	/*
-	 * Check if serializer is still open.
-	 */
-	if db == nil {
-		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
-	} else {
-		fd := db.fd
-
-		/*
-		 * Check if file descriptor is still open.
-		 */
-		if fd == nil {
-			errResult = fmt.Errorf("%s", "Database is already closed.")
-		} else {
-			locationCount := db.locationCount
-			locationCount64 := uint64(locationCount)
-			size := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * locationCount64)
-			offset64 := uint64(offset)
-			offsetCurrent := this.offset
-
-			/*
-			 * Decide relative to what to seek.
-			 */
-			switch whence {
-			case io.SeekStart:
-
-				/*
-				 * Check if absolute offset is negative.
-				 */
-				if offset < 0 {
-					errResult = fmt.Errorf("%s", "Cannot seek to negative absolute offset.")
-				} else {
-					offsetCurrent = offset64
-					result = int64(offsetCurrent)
-				}
-
-			case io.SeekCurrent:
-				offsetNew := offsetCurrent + offset64
-
-				/*
-				 * Prevent numeric overflow.
-				 */
-				if ((offset > 0) && (offsetNew <= offsetCurrent)) || ((offset < 0) && (offsetNew >= offsetCurrent)) {
-					errResult = fmt.Errorf("%s", "Overflow or negative target offset.")
-				} else {
-					offsetCurrent = offsetNew
-					result = int64(offsetCurrent)
-				}
-
-			case io.SeekEnd:
-				offsetNew := size + offset64
-
-				/*
-				 * Prevent numeric overflow.
-				 */
-				if ((offset > 0) && (offsetNew <= size)) || ((offset < 0) && (offsetNew >= size)) {
-					errResult = fmt.Errorf("%s", "Overflow or negative target offset.")
-				} else {
-					offsetCurrent = offsetNew
-					result = int64(offsetCurrent)
-				}
-
-			default:
-				errResult = fmt.Errorf("Seek: Invalid value for 'whence': %d", whence)
-			}
-
-			this.offset = offsetCurrent
-		}
-
-	}
-
-	this.mutex.Unlock()
-	return result, errResult
-}
-
-/*
- * Implements the Close function from io.ReadSeekCloser.
- *
- * This will yield the read lock on the underlying database.
- */
-func (this *databaseBinarySerializerStruct) Close() error {
-	result := error(nil)
-	this.mutex.Lock()
-	db := this.db
-
-	/*
-	 * Check if serializer is already closed.
-	 */
-	if db == nil {
-		result = fmt.Errorf("%s", "Database serializer is already closed.")
-	} else {
-		db.mutex.RUnlock()
-		this.db = nil
 	}
 
 	this.mutex.Unlock()
@@ -1781,6 +1571,216 @@ func (this *databaseJsonSerializerStruct) Read(buf []byte) (int, error) {
  * This will yield the read lock on the underlying database.
  */
 func (this *databaseJsonSerializerStruct) Close() error {
+	result := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is already closed.
+	 */
+	if db == nil {
+		result = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		db.mutex.RUnlock()
+		this.db = nil
+	}
+
+	this.mutex.Unlock()
+	return result
+}
+
+/*
+ * Implements the Read function from io.ReadSeekCloser.
+ */
+func (this *databaseOpenGeoDBSerializerStruct) Read(buf []byte) (int, error) {
+	result := int(0)
+	errResult := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is still open.
+	 */
+	if db == nil {
+		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		fd := db.fd
+
+		/*
+		 * Check if file descriptor is still open.
+		 */
+		if fd == nil {
+			errResult = fmt.Errorf("%s", "Database is already closed.")
+		} else {
+			locationCount := db.locationCount
+			locationCount64 := uint64(locationCount)
+			size := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * locationCount64)
+			offset := this.offset
+			bytesInFile := size - offset
+			bufSize := len(buf)
+			bytesToRead := uint64(bufSize)
+
+			/*
+			 * Limit bytes to read to file size.
+			 */
+			if bytesToRead > bytesInFile {
+				bytesToRead = bytesInFile
+			}
+
+			bufTarget := buf[0:bytesToRead]
+			offsetSigned := int64(offset)
+
+			/*
+			 * Prevent overflow.
+			 */
+			if offsetSigned < 0 {
+				errResult = fmt.Errorf("%s", "Overflow.")
+			} else {
+				bytesRead, err := fd.ReadAt(bufTarget, offsetSigned)
+				bytesRead64 := uint64(bytesRead)
+
+				/*
+				 * Prevent out of bounds errors and implausible results.
+				 */
+				if bytesRead < 0 {
+					bytesRead = 0
+					bytesRead64 = uint64(bytesRead)
+				} else if bytesRead64 > bytesToRead {
+					bytesRead = int(bytesToRead)
+					bytesRead64 = bytesToRead
+				}
+
+				/*
+				 * Handle I/O errors.
+				 */
+				if err == io.EOF {
+
+					/*
+					 * Check if we read as many bytes as expected.
+					 */
+					if bytesRead64 < bytesToRead {
+						errResult = io.ErrUnexpectedEOF
+					}
+
+				} else if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("I/O error: %s", msg)
+					bytesRead = 0
+					bytesRead64 = 0
+				}
+
+				bufToZero := buf[bytesRead:bufSize]
+
+				/*
+				 * Zero out remaining part of the buffer.
+				 */
+				for i := range bufToZero {
+					bufToZero[i] = 0
+				}
+
+				offset += bytesRead64
+				result = bytesRead
+			}
+
+			this.offset = offset
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return result, errResult
+}
+
+/*
+ * Implements the Seek function from io.ReadSeekCloser.
+ */
+func (this *databaseOpenGeoDBSerializerStruct) Seek(offset int64, whence int) (int64, error) {
+	result := int64(0)
+	errResult := error(nil)
+	this.mutex.Lock()
+	db := this.db
+
+	/*
+	 * Check if serializer is still open.
+	 */
+	if db == nil {
+		errResult = fmt.Errorf("%s", "Database serializer is already closed.")
+	} else {
+		fd := db.fd
+
+		/*
+		 * Check if file descriptor is still open.
+		 */
+		if fd == nil {
+			errResult = fmt.Errorf("%s", "Database is already closed.")
+		} else {
+			locationCount := db.locationCount
+			locationCount64 := uint64(locationCount)
+			size := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * locationCount64)
+			offset64 := uint64(offset)
+			offsetCurrent := this.offset
+
+			/*
+			 * Decide relative to what to seek.
+			 */
+			switch whence {
+			case io.SeekStart:
+
+				/*
+				 * Check if absolute offset is negative.
+				 */
+				if offset < 0 {
+					errResult = fmt.Errorf("%s", "Cannot seek to negative absolute offset.")
+				} else {
+					offsetCurrent = offset64
+					result = int64(offsetCurrent)
+				}
+
+			case io.SeekCurrent:
+				offsetNew := offsetCurrent + offset64
+
+				/*
+				 * Prevent numeric overflow.
+				 */
+				if ((offset > 0) && (offsetNew <= offsetCurrent)) || ((offset < 0) && (offsetNew >= offsetCurrent)) {
+					errResult = fmt.Errorf("%s", "Overflow or negative target offset.")
+				} else {
+					offsetCurrent = offsetNew
+					result = int64(offsetCurrent)
+				}
+
+			case io.SeekEnd:
+				offsetNew := size + offset64
+
+				/*
+				 * Prevent numeric overflow.
+				 */
+				if ((offset > 0) && (offsetNew <= size)) || ((offset < 0) && (offsetNew >= size)) {
+					errResult = fmt.Errorf("%s", "Overflow or negative target offset.")
+				} else {
+					offsetCurrent = offsetNew
+					result = int64(offsetCurrent)
+				}
+
+			default:
+				errResult = fmt.Errorf("Seek: Invalid value for 'whence': %d", whence)
+			}
+
+			this.offset = offsetCurrent
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return result, errResult
+}
+
+/*
+ * Implements the Close function from io.ReadSeekCloser.
+ *
+ * This will yield the read lock on the underlying database.
+ */
+func (this *databaseOpenGeoDBSerializerStruct) Close() error {
 	result := error(nil)
 	this.mutex.Lock()
 	db := this.db

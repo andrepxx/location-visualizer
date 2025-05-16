@@ -69,7 +69,7 @@ type managerStruct struct {
 	prng        io.Reader
 	mutex       sync.RWMutex
 	userManager user.Manager
-	sessions    []sessionStruct
+	sessions    []*sessionStruct
 }
 
 /*
@@ -292,7 +292,7 @@ func (this *managerStruct) Response(name string, response []byte) (Token, error)
 				this.mutex.Lock()
 				mgr.RegenerateNonce(name)
 				sessions := this.sessions
-				sessions = append(sessions, s)
+				sessions = append(sessions, &s)
 				this.sessions = sessions
 				this.mutex.Unlock()
 
@@ -375,7 +375,7 @@ func (this *managerStruct) UserName(token Token) (string, error) {
 		case SESSION_REFRESH:
 			this.refresh(sid, now)
 			sessions := this.sessions
-			s := &sessions[sid]
+			s := sessions[sid]
 			name := s.name
 			this.mutex.RUnlock()
 			return name, nil
@@ -415,7 +415,7 @@ func CreateManager(userManager user.Manager, prng io.Reader, expiry time.Duratio
 	} else if prng == nil {
 		return nil, fmt.Errorf("%s", "PRNG must not be nil!")
 	} else {
-		sessions := []sessionStruct{}
+		sessions := []*sessionStruct{}
 
 		/*
 		 * Create session manager.

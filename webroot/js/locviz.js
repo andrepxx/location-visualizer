@@ -992,12 +992,12 @@ function UI() {
 		div.appendChild(spacerDivB);
 		const cvs = document.getElementById('map_canvas');
 		const token = storage.get(cvs, 'token');
-		const cgiExportActivitiesCsv = 'export-activities-csv';
+		const cgiExportActivityCsv = 'export-activity-csv';
 		const downloadLinkDiv = document.createElement('div');
 		const downloadLink = document.createElement('a');
 		downloadLink.className = 'link';
 		const requestDownload = new Request();
-		requestDownload.append('cgi', cgiExportActivitiesCsv);
+		requestDownload.append('cgi', cgiExportActivityCsv);
 		requestDownload.append('token', token);
 		const requestDownloadData = requestDownload.getData();
 		const downloadLinkHref = document.createAttribute('href');
@@ -1744,7 +1744,7 @@ function UI() {
 		const cgi = globals.cgi;
 		const cvs = document.getElementById('map_canvas');
 		const token = storage.get(cvs, 'token');
-		const cgiDownloadGeoDBContent = 'download-geodb-content';
+		const cgiExportGeoDBContent = 'export-geodb-content';
 		helper.clearElement(div);
 		const table = document.createElement('table');
 		table.className = 'geodbtable';
@@ -1793,8 +1793,8 @@ function UI() {
 		const downloadLinkOpenGeoDB = document.createElement('a');
 		downloadLinkOpenGeoDB.className = 'link';
 		const requestDownloadOpenGeoDB = new Request();
-		requestDownloadOpenGeoDB.append('cgi', cgiDownloadGeoDBContent);
-		requestDownloadOpenGeoDB.append('format', 'binary');
+		requestDownloadOpenGeoDB.append('cgi', cgiExportGeoDBContent);
+		requestDownloadOpenGeoDB.append('format', 'opengeodb');
 		requestDownloadOpenGeoDB.append('token', token);
 		const requestDownloadOpenGeoDBData = requestDownloadOpenGeoDB.getData();
 		const downloadLinkOpenGeoDBHref = document.createAttribute('href');
@@ -1808,7 +1808,7 @@ function UI() {
 		const downloadLinkCSV = document.createElement('a');
 		downloadLinkCSV.className = 'link';
 		const requestDownloadCSV = new Request();
-		requestDownloadCSV.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadCSV.append('cgi', cgiExportGeoDBContent);
 		requestDownloadCSV.append('format', 'csv');
 		requestDownloadCSV.append('token', token);
 		const requestDownloadCSVData = requestDownloadCSV.getData();
@@ -1823,7 +1823,7 @@ function UI() {
 		const downloadLinkGPX = document.createElement('a');
 		downloadLinkGPX.className = 'link';
 		const requestDownloadGPX = new Request();
-		requestDownloadGPX.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadGPX.append('cgi', cgiExportGeoDBContent);
 		requestDownloadGPX.append('format', 'gpx');
 		requestDownloadGPX.append('token', token);
 		const requestDownloadGPXData = requestDownloadGPX.getData();
@@ -1838,7 +1838,7 @@ function UI() {
 		const downloadLinkGPXPretty = document.createElement('a');
 		downloadLinkGPXPretty.className = 'link';
 		const requestDownloadGPXPretty = new Request();
-		requestDownloadGPXPretty.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadGPXPretty.append('cgi', cgiExportGeoDBContent);
 		requestDownloadGPXPretty.append('format', 'gpx-pretty');
 		requestDownloadGPXPretty.append('token', token);
 		const requestDownloadGPXPrettyData = requestDownloadGPXPretty.getData();
@@ -1853,7 +1853,7 @@ function UI() {
 		const downloadLinkJSON = document.createElement('a');
 		downloadLinkJSON.className = 'link';
 		const requestDownloadJSON = new Request();
-		requestDownloadJSON.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadJSON.append('cgi', cgiExportGeoDBContent);
 		requestDownloadJSON.append('format', 'json');
 		requestDownloadJSON.append('token', token);
 		const requestDownloadJSONData = requestDownloadJSON.getData();
@@ -1868,7 +1868,7 @@ function UI() {
 		const downloadLinkJSONPretty = document.createElement('a');
 		downloadLinkJSONPretty.className = 'link';
 		const requestDownloadJSONPretty = new Request();
-		requestDownloadJSONPretty.append('cgi', cgiDownloadGeoDBContent);
+		requestDownloadJSONPretty.append('cgi', cgiExportGeoDBContent);
 		requestDownloadJSONPretty.append('format', 'json-pretty');
 		requestDownloadJSONPretty.append('token', token);
 		const requestDownloadJSONPrettyData = requestDownloadJSONPretty.getData();
@@ -1890,7 +1890,7 @@ function UI() {
 		importPropertiesDiv.appendChild(importPropertiesDescriptionDiv);
 		const importFormatElem = this.createElement('Format', '180px');
 		const importFormatLabels = ['OpenGeoDB (*.geodb)', 'CSV / RFC 4180 (*.csv)', 'GPS Exchange (*.gpx)', 'Records JSON (*.json)'];
-		const importFormatValues = ['binary', 'csv', 'gpx', 'json'];
+		const importFormatValues = ['opengeodb', 'csv', 'gpx', 'json'];
 		const importFormatDefault = importFormatValues[3];
 		const fieldImportFormat = document.createElement('select');
 

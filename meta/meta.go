@@ -670,9 +670,9 @@ func createActivityGroup(info *ActivityInfo) (activityGroupStruct, error) {
 	runningDistanceKM, err := parseUnsignedFixed(runningDistanceKMString, 1)
 
 	/*
-	 * Check if this is the first error.
+	 * Check if an error occured.
 	 */
-	if errResult == nil && err != nil {
+	if err != nil {
 		msg := err.Error()
 		errResult = fmt.Errorf("Failed to parse running distance: %s", msg)
 	}

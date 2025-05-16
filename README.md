@@ -79,6 +79,7 @@ Commands:
 - `import-tiles path/file.tar.gz`: Import map tiles to tile database from `path/file.tar.gz`.
 - `list-permissions name`: List all permissions of user `name`.
 - `list-users`: List all users.
+- `remote command host port name password [...]`: Perform `command` on remote host `host` : `port`. Authenticate as user `name` using `password`. (See command-line client section below.)
 - `remove-permission name permission`: Removes the permission `permission` from the user `name`.
 - `remove-user name`: Removes the user `name`.
 - `set-password name password`: Sets the password of user `name` to `password`.
@@ -116,6 +117,18 @@ To reclaim storage occupied by outdated (unreferenced) images, you can run the `
 ## Uploading geo data
 
 To upload geo data to the geo database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+
+## Interaction via command-line client
+
+Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote command [...]`. (Each command may expect further parameters.)
+
+The following commands are currently supported:
+
+- `export-activity-csv host port name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
+- `export-geodata host port name password format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
+- `import-geodata host port name password format strategy input_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty` and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+
+**Note:** The command `import-geodata` is not yet fully implemented as of version v1.11.0. (Implementation is work-in-progress!)
 
 ## Clearing the geo database
 
