@@ -126,7 +126,7 @@ The following commands are currently supported:
 
 - `export-activity-csv host port name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
 - `export-geodata host port name password format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
-- `import-geodata host port name password format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx` or and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+- `import-geodata host port name password format strategy input_file_path`: Import data from the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
 
 **Note:** The command `import-geodata` is not yet fully implemented as of version v1.11.0. (Implementation is work-in-progress!)
 
