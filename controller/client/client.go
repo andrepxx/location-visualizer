@@ -254,7 +254,7 @@ func (this *controllerStruct) importGeodata(args []string) {
 					msg := err.Error()
 					fmt.Printf("Failed to open input file: %s\n", msg)
 				} else {
-					err := sess.ImportGeodata(format, strategy, fd)
+					r, err := sess.ImportGeodata(format, strategy, fd)
 
 					/*
 					 * Check if error occured during import call.
@@ -262,6 +262,18 @@ func (this *controllerStruct) importGeodata(args []string) {
 					if err != nil {
 						msg := err.Error()
 						fmt.Printf("Failed to import geo data: %s\n", msg)
+					} else if r != nil {
+						_, err := io.Copy(os.Stdout, r)
+
+						/*
+						 * Check if error occured reading response.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("Failed to read response: %s\n", msg)
+						}
+
+						fmt.Printf("%s\n", "")
 					}
 
 				}

@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/andrepxx/location-visualizer/remote/multipart"
 )
 
 const (
@@ -17,8 +19,13 @@ const (
 	CONTENT_TYPE_BINARY      = "application/octet-stream"
 	CONTENT_TYPE_CSV         = "text/csv"
 	CONTENT_TYPE_JSON        = "application/json"
+	CONTENT_TYPE_MULTIPART   = "multipart/form-data"
+	CONTENT_TYPE_URLENCODED  = "application/x-www-form-urlencoded"
+	HTTP_METHOD_POST         = "POST"
 	SIZE_KEY_BYTES           = 64
 	TWO_TIMES_SIZE_KEY_BYTES = 2 * SIZE_KEY_BYTES
+	// TODO: This should not be constant, but supplied by the caller.
+	USER_AGENT = "location-visualizer/1.11.1"
 )
 
 /*
@@ -39,13 +46,6 @@ type webAuthChallengeStruct struct {
 }
 
 /*
- * Web representation of an authentication response.
- */
-type webAuthResponseStruct struct {
-	Hash string
-}
-
-/*
  * Web representation of a session token.
  */
 type webTokenStruct struct {
@@ -59,7 +59,7 @@ type webTokenStruct struct {
 type Session interface {
 	ExportActivityCsv() (io.ReadCloser, error)
 	ExportGeodata(format string) (io.ReadCloser, error)
-	ImportGeodata(format string, strategy string, data io.ReadSeeker) error
+	ImportGeodata(format string, strategy string, data io.ReadSeekCloser) (io.ReadCloser, error)
 	Logout() error
 }
 
@@ -151,9 +151,50 @@ func (this *sessionStruct) ExportGeodata(format string) (io.ReadCloser, error) {
 /*
  * Imports geodata in specified format from provided io.ReadSeeker.
  */
-func (this *sessionStruct) ImportGeodata(format string, strategy string, data io.ReadSeeker) error {
-	// TODO: Write code.
-	return fmt.Errorf("%s", "Not yet implemented")
+func (this *sessionStruct) ImportGeodata(format string, strategy string, data io.ReadSeekCloser) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		tokenPair := multipart.CreateKeyValuePair("token", encodedToken)
+		cgiPair := multipart.CreateKeyValuePair("cgi", "import-geodata")
+		formatPair := multipart.CreateKeyValuePair("format", format)
+		strategyPair := multipart.CreateKeyValuePair("strategy", strategy)
+
+		/*
+		* Create metadata key value pairs.
+		 */
+		metadata := []multipart.KeyValuePair{
+			tokenPair,
+			cgiPair,
+			formatPair,
+			strategyPair,
+		}
+
+		fileEntry := multipart.CreateFileEntry("file", "locations", data)
+
+		/*
+		* Create file entries.
+		 */
+		fileEntries := []multipart.FileEntry{
+			fileEntry,
+		}
+
+		requestData, mimeType := multipart.CreateMultipartProvider(metadata, fileEntries)
+		result, errResult = connection.requestMultipart(requestData, mimeType, CONTENT_TYPE_JSON)
+	}
+
+	return result, errResult
 }
 
 /*
@@ -246,17 +287,92 @@ type connectionStruct struct {
 }
 
 /*
+ * Performs an HTTP POST request.
+ *
+ * Equivalent to net/http.Post(string, string, io.Reader), but sets "User-Agent" header.
+ */
+func (this *connectionStruct) post(uri string, contentType string, body io.Reader) (*http.Response, error) {
+	request, err := http.NewRequest(HTTP_METHOD_POST, uri, body)
+
+	/*
+	 * Check if error occured.
+	 */
+	if err != nil {
+		return nil, err
+	} else {
+		hdr := request.Header
+		hdr.Set("Content-Type", contentType)
+		hdr.Set("User-Agent", USER_AGENT)
+		client := this.client
+		response, err := client.Do(request)
+		return response, err
+	}
+
+}
+
+/*
+ * Performs an HTTP POST request for form data.
+ *
+ * Equivalent to net/http.PostForm(string, string, io.Reader), but sets "User-Agent" header.
+ */
+func (this *connectionStruct) postForm(uri string, data url.Values) (*http.Response, error) {
+	dataString := data.Encode()
+	fd := strings.NewReader(dataString)
+	response, err := this.post(uri, CONTENT_TYPE_URLENCODED, fd)
+	return response, err
+}
+
+/*
  * Perform a POST request sending data and retrieving a response.
  */
 func (this *connectionStruct) request(data url.Values, expectedContentType string) (io.ReadCloser, error) {
 	result := io.ReadCloser(nil)
 	errResult := error(nil)
-	client := this.client
 	host := this.host
 	port := this.port
 	endpointURI := this.endpointURI
 	url := fmt.Sprintf("https://%s:%d%s", host, port, endpointURI)
-	resp, err := client.PostForm(url, data)
+	resp, err := this.postForm(url, data)
+
+	/*
+	 * Check if an error occured.
+	 */
+	if err != nil {
+		msg := err.Error()
+		errResult = fmt.Errorf("Error during TLS request: %s", msg)
+	} else {
+		status := resp.StatusCode
+		header := resp.Header
+		contentType := header.Get("Content-Type")
+		isExpectedContentType := strings.HasPrefix(contentType, expectedContentType)
+
+		/*
+		 * Check if status is HTTP 200 OK.
+		 */
+		if status != http.StatusOK {
+			errResult = fmt.Errorf("Error during TLS request: Expected status HTTP 200, but got HTTP %d.", status)
+		} else if !isExpectedContentType {
+			errResult = fmt.Errorf("Error during TLS request: Expected response to have content type '%s', but actually has '%s'.'", expectedContentType, contentType)
+		} else {
+			result = resp.Body
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Perform a multipart POST request sending data and retrieving a response.
+ */
+func (this *connectionStruct) requestMultipart(data io.Reader, providedContentType string, expectedContentType string) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	host := this.host
+	port := this.port
+	endpointURI := this.endpointURI
+	url := fmt.Sprintf("https://%s:%d%s", host, port, endpointURI)
+	resp, err := this.post(url, providedContentType, data)
 
 	/*
 	 * Check if an error occured.
