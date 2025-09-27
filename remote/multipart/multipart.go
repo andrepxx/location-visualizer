@@ -127,7 +127,6 @@ func CreateFileEntry(key string, name string, value io.ReadSeekCloser) FileEntry
  */
 type multipartProviderStruct struct {
 	buf            *bytes.Buffer
-	fileBuffer     []byte
 	fileEntries    []fileEntryStruct
 	fw             io.Writer
 	keyValuePairs  []keyValuePairStruct
@@ -410,8 +409,8 @@ func CreateMultipartProvider(keyValuePairs []KeyValuePair, fileEntries []FileEnt
 		fileEntries:    fileEntriesInternal,
 		fw:             nil,
 		keyValuePairs:  keyValuePairsInternal,
-		trailerWritten: false,
 		mimeType:       mimeType,
+		trailerWritten: false,
 		w:              w,
 	}
 
