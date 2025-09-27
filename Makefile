@@ -1,6 +1,5 @@
 GCFLAGS_DEBUG := 'all=-N -l'
 LDFLAGS_RELEASE := 'all=-w -s'
-GOPATH := `pwd`/../../../..
 
 all: locviz locviz-debug
 
