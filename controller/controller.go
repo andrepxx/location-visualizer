@@ -74,13 +74,6 @@ type webAuthChallengeStruct struct {
 }
 
 /*
- * Web representation of an authentication response.
- */
-type webAuthResponseStruct struct {
-	Hash string
-}
-
-/*
  * Web representation of a session token.
  */
 type webTokenStruct struct {
@@ -3358,7 +3351,10 @@ func (this *controllerStruct) interpret(args []string) {
 			if numArgs < 6 {
 				fmt.Printf("Command '%s' expects at least 5 additional arguments: host, port, username, password, command [and possibly options]\n", cmd)
 			} else {
-				c := client.CreateController()
+				cfg := this.config
+				webServerConfig := cfg.WebServer
+				userAgent := webServerConfig.Name
+				c := client.CreateController(userAgent)
 				c.Interpret(args)
 			}
 

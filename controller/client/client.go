@@ -25,6 +25,7 @@ type Controller interface {
  * Data structure representing the controller for the command-line client.
  */
 type controllerStruct struct {
+	userAgent string
 }
 
 /*
@@ -54,7 +55,8 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
 			fmt.Printf("%s\n", "Failed to parse port number")
 		} else {
 			portValue := uint16(port)
-			conn := remote.CreateConnection(host, portValue)
+			userAgent := this.userAgent
+			conn := remote.CreateConnection(host, portValue, userAgent)
 			sess, err := conn.Login(user, password)
 
 			/*
@@ -144,7 +146,8 @@ func (this *controllerStruct) exportGeodata(args []string) {
 			fmt.Printf("%s\n", "Failed to parse port number")
 		} else {
 			portValue := uint16(port)
-			conn := remote.CreateConnection(host, portValue)
+			userAgent := this.userAgent
+			conn := remote.CreateConnection(host, portValue, userAgent)
 			sess, err := conn.Login(user, password)
 
 			/*
@@ -235,7 +238,8 @@ func (this *controllerStruct) importGeodata(args []string) {
 			fmt.Printf("%s\n", "Failed to parse port number")
 		} else {
 			portValue := uint16(port)
-			conn := remote.CreateConnection(host, portValue)
+			userAgent := this.userAgent
+			conn := remote.CreateConnection(host, portValue, userAgent)
 			sess, err := conn.Login(user, password)
 
 			/*
@@ -331,7 +335,14 @@ func (this *controllerStruct) Interpret(args []string) {
 /*
  * Creates a client controller.
  */
-func CreateController() Controller {
-	controller := controllerStruct{}
+func CreateController(userAgent string) Controller {
+
+	/*
+	 * Create client controller.
+	 */
+	controller := controllerStruct{
+		userAgent: userAgent,
+	}
+
 	return &controller
 }

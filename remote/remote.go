@@ -24,8 +24,6 @@ const (
 	HTTP_METHOD_POST         = "POST"
 	SIZE_KEY_BYTES           = 64
 	TWO_TIMES_SIZE_KEY_BYTES = 2 * SIZE_KEY_BYTES
-	// TODO: This should not be constant, but supplied by the caller.
-	USER_AGENT = "location-visualizer/1.11.1"
 )
 
 /*
@@ -284,6 +282,7 @@ type connectionStruct struct {
 	port        uint16
 	client      *http.Client
 	endpointURI string
+	userAgent   string
 }
 
 /*
@@ -300,9 +299,10 @@ func (this *connectionStruct) post(uri string, contentType string, body io.Reade
 	if err != nil {
 		return nil, err
 	} else {
+		userAgent := this.userAgent
 		hdr := request.Header
 		hdr.Set("Content-Type", contentType)
-		hdr.Set("User-Agent", USER_AGENT)
+		hdr.Set("User-Agent", userAgent)
 		client := this.client
 		response, err := client.Do(request)
 		return response, err
@@ -638,7 +638,7 @@ func (this *connectionStruct) Login(name string, password string) (Session, erro
 /*
  * Creates a new connection to a remote host.
  */
-func CreateConnection(host string, port uint16) Connection {
+func CreateConnection(host string, port uint16, userAgent string) Connection {
 
 	/*
 	 * Create TLS configuration.
@@ -669,6 +669,7 @@ func CreateConnection(host string, port uint16) Connection {
 		port:        port,
 		client:      client,
 		endpointURI: "/cgi-bin/locviz",
+		userAgent:   userAgent,
 	}
 
 	return &conn
