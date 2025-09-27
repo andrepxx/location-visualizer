@@ -124,9 +124,11 @@ Starting from version v1.11.0, *location-visualizer* also implements a command-l
 
 The following commands are currently supported:
 
-- `export-activity-csv host port name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
-- `export-geodata host port name password format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
-- `import-geodata host port name password format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+- `export-activity-csv host port certificate_file_path name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
+- `export-geodata host port certificate_file_path name password format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
+- `import-geodata host port certificate_file_path name password format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+
+The certificate file provided must be in PEM format. The certificate chain that the server provides is verified to match **exactly** against the one provided in the certificate file.
 
 ## Clearing the geo database
 
