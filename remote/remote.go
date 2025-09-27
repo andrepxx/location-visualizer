@@ -1,10 +1,13 @@
 package remote
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +18,7 @@ import (
 )
 
 const (
+	COMPARISON_RESULT_EQUAL  = 0
 	CONTENT_TYPE_ANY         = ""
 	CONTENT_TYPE_BINARY      = "application/octet-stream"
 	CONTENT_TYPE_CSV         = "text/csv"
@@ -22,6 +26,7 @@ const (
 	CONTENT_TYPE_MULTIPART   = "multipart/form-data"
 	CONTENT_TYPE_URLENCODED  = "application/x-www-form-urlencoded"
 	HTTP_METHOD_POST         = "POST"
+	PEM_TYPE_CERTIFICATE     = "CERTIFICATE"
 	SIZE_KEY_BYTES           = 64
 	TWO_TIMES_SIZE_KEY_BYTES = 2 * SIZE_KEY_BYTES
 )
@@ -636,15 +641,64 @@ func (this *connectionStruct) Login(name string, password string) (Session, erro
 }
 
 /*
- * Creates a new connection to a remote host.
+ * Creates a new connection to a remote host, expecting a certain certificate chain.
  */
-func CreateConnection(host string, port uint16, userAgent string) Connection {
+func CreateConnection(host string, port uint16, userAgent string, certificateChain []byte) Connection {
+
+	/*
+	 * Certificate verification function.
+	 */
+	v := func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		errResult := error(nil)
+
+		/*
+		 * Ensure that the system didn't already verify the certificates.
+		 */
+		if verifiedChains != nil {
+			errResult = fmt.Errorf("%s", "System-side certificate validation shall not occur")
+		} else if certificateChain != nil {
+			allCerts := []byte{}
+
+			/*
+			 * Concatenate all certificates in chain.
+			 */
+			for _, cert := range rawCerts {
+				allCerts = append(allCerts, cert...)
+			}
+
+			comparisonResult := bytes.Compare(certificateChain, allCerts)
+
+			/*
+			 * If there is a difference, output certificate chain and report error.
+			 */
+			if comparisonResult != COMPARISON_RESULT_EQUAL {
+				errResult = fmt.Errorf("%s", "Certificate mismatch")
+
+				/*
+				 * Create PEM block.
+				 */
+				pemBlock := pem.Block{
+					Type:    PEM_TYPE_CERTIFICATE,
+					Headers: nil,
+					Bytes:   allCerts,
+				}
+
+				certificateBytes := pem.EncodeToMemory(&pemBlock)
+				certificateString := string(certificateBytes)
+				fmt.Printf("%s", certificateString)
+			}
+
+		}
+
+		return errResult
+	}
 
 	/*
 	 * Create TLS configuration.
 	 */
 	cfg := tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify:    true,
+		VerifyPeerCertificate: v,
 	}
 
 	/*

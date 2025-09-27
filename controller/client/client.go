@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/pem"
 	"fmt"
 	"io"
 	"os"
@@ -28,11 +29,26 @@ type controllerStruct struct {
 	userAgent string
 }
 
+func (this *controllerStruct) loadCertificate(path string) ([]byte, error) {
+	result := []byte(nil)
+	certificateBytes, err := os.ReadFile(path)
+
+	/*
+	 * If certificate could be loaded, decode it.
+	 */
+	if err == nil {
+		block, _ := pem.Decode(certificateBytes)
+		result = block.Bytes
+	}
+
+	return result, err
+}
+
 /*
  * Export activities from remote server into a CSV file.
  */
 func (this *controllerStruct) exportActivityCsv(args []string) {
-	const EXPECTED_NUMBER_OF_ARGS = 7
+	const EXPECTED_NUMBER_OF_ARGS = 8
 	numArgs := len(args)
 
 	/*
@@ -43,20 +59,24 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
 	} else {
 		host := args[2]
 		portString := args[3]
-		user := args[4]
-		password := args[5]
-		path := args[6]
-		port, err := strconv.ParseUint(portString, 10, 16)
+		certificatePath := args[4]
+		user := args[5]
+		password := args[6]
+		path := args[7]
+		port, errPort := strconv.ParseUint(portString, 10, 16)
+		certificate, errCertificate := this.loadCertificate(certificatePath)
 
 		/*
-		 * Check if port number could be parsed.
+		 * Check if port number could be parsed and certificate could be read.
 		 */
-		if err != nil {
+		if errPort != nil {
 			fmt.Printf("%s\n", "Failed to parse port number")
+		} else if errCertificate != nil {
+			fmt.Printf("%s\n", "Failed to load certificate")
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent)
+			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
 			sess, err := conn.Login(user, password)
 
 			/*
@@ -122,7 +142,7 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
  * Export geo data from remote server into a file of the selected format.
  */
 func (this *controllerStruct) exportGeodata(args []string) {
-	const EXPECTED_NUMBER_OF_ARGS = 8
+	const EXPECTED_NUMBER_OF_ARGS = 9
 	numArgs := len(args)
 
 	/*
@@ -133,21 +153,25 @@ func (this *controllerStruct) exportGeodata(args []string) {
 	} else {
 		host := args[2]
 		portString := args[3]
-		user := args[4]
-		password := args[5]
-		format := args[6]
-		path := args[7]
-		port, err := strconv.ParseUint(portString, 10, 16)
+		certificatePath := args[4]
+		user := args[5]
+		password := args[6]
+		format := args[7]
+		path := args[8]
+		port, errPort := strconv.ParseUint(portString, 10, 16)
+		certificate, errCertificate := this.loadCertificate(certificatePath)
 
 		/*
-		 * Check if port number could be parsed.
+		 * Check if port number could be parsed and certificate could be read.
 		 */
-		if err != nil {
+		if errPort != nil {
 			fmt.Printf("%s\n", "Failed to parse port number")
+		} else if errCertificate != nil {
+			fmt.Printf("%s\n", "Failed to load certificate")
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent)
+			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
 			sess, err := conn.Login(user, password)
 
 			/*
@@ -213,7 +237,7 @@ func (this *controllerStruct) exportGeodata(args []string) {
  * Import geo data to remote server from a file of the selected format.
  */
 func (this *controllerStruct) importGeodata(args []string) {
-	const EXPECTED_NUMBER_OF_ARGS = 9
+	const EXPECTED_NUMBER_OF_ARGS = 10
 	numArgs := len(args)
 
 	/*
@@ -224,22 +248,26 @@ func (this *controllerStruct) importGeodata(args []string) {
 	} else {
 		host := args[2]
 		portString := args[3]
-		user := args[4]
-		password := args[5]
-		format := args[6]
-		strategy := args[7]
-		path := args[8]
-		port, err := strconv.ParseUint(portString, 10, 16)
+		certificatePath := args[4]
+		user := args[5]
+		password := args[6]
+		format := args[7]
+		strategy := args[8]
+		path := args[9]
+		port, errPort := strconv.ParseUint(portString, 10, 16)
+		certificate, errCertificate := this.loadCertificate(certificatePath)
 
 		/*
-		 * Check if port number could be parsed.
+		 * Check if port number could be parsed and certificate could be read.
 		 */
-		if err != nil {
+		if errPort != nil {
 			fmt.Printf("%s\n", "Failed to parse port number")
+		} else if errCertificate != nil {
+			fmt.Printf("%s\n", "Failed to load certificate")
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent)
+			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
 			sess, err := conn.Login(user, password)
 
 			/*
