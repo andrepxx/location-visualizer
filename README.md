@@ -20,7 +20,7 @@ In addition, the software also allows export of the aggregated location data as 
 
 To download and build the software from source for your system, run the following commands in a shell.
 
-```
+```bash
 cd ~/go/src/
 go get -d github.com/andrepxx/location-visualizer
 cd github.com/andrepxx/location-visualizer/
@@ -34,7 +34,9 @@ Location data will be stored in the file `data/locations.geodb`, while activity 
 
 To use the software, create a user, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
-```
+**HINT:** These commands are to be executed in a shell when the server does **not** run. User management is currently completely "offline". This is mainly a security measure since we do not want user or permissions management to be available remotely, even in the case that a "privileged" account gets compromised.
+
+```bash
 ./locviz create-user root
 ./locviz set-password root secret
 ./locviz add-permission root get-tile
@@ -48,13 +50,13 @@ To use the software, create a user, set a password and add permissions to fetch 
 
 Optionally, if you want to allow clearing the geographical database, you can also add a permission for that.
 
-```
+```bash
 ./locviz add-permission root geodb-clear
 ```
 
 Finally, run the server.
 
-```
+```bash
 ./locviz
 ```
 
@@ -79,7 +81,7 @@ Commands:
 - `import-tiles path/file.tar.gz`: Import map tiles to tile database from `path/file.tar.gz`.
 - `list-permissions name`: List all permissions of user `name`.
 - `list-users`: List all users.
-- `remote command host port name password [...]`: Perform `command` on remote host `host` : `port`. Authenticate as user `name` using `password`. (See command-line client section below.)
+- `remote command host port certificate_file name password [...]`: Perform `command` on remote host `host` : `port`. Verify the server's certificate against `certificate_file` and authenticate as user `name` using `password`. (See command-line client section below.)
 - `remove-permission name permission`: Removes the permission `permission` from the user `name`.
 - `remove-user name`: Removes the user `name`.
 - `set-password name password`: Sets the password of user `name` to `password`.
@@ -100,13 +102,15 @@ The tile cache is stored in binary files that use a proprietary (*location-visua
 
 ### Pre-fetching data from a map service
 
-Since the application will be unresponsive unless all map data required to display the current viewport has been fetched from OSM, this application allows to pre-fetch map data from OSM in a bulk transfer. This is useful after initial setup, since otherwise, it may take a **very** long time to navigate even zoomed-out views of the map. Pre-fetch of map data may take a few hours. We suggest to pre-fetch map data up to a zoom level of 7 or 8.
+Pre-fetching of map data was more relevant in the past, when OSM heavily throttled third-party applications and *location-visualizer*'s tile handling wasn't as efficient as it is now and we generally don't recommend it anymore, in order not to cause unnecessary load on the map provider's infrastructure.
 
-```
+If you still want to prefetch map data, we suggest to pre-fetch map data up to a zoom level of 7 or 8.
+
+```bash
 ./locviz -prefetch 7
 ```
 
-If you want to pre-fetch zoom levels beyond 8, you will have to additionally specify the `-hard` option in order to confirm that you are aware that you are placing a significant load on OSM infrastructure, that the pre-fetch will take a long time and will use a lot of disk space (perhaps even more than you might have available on your system, potentially rendering it unstable).
+If you want to pre-fetch zoom levels beyond 8, you will have to additionally specify the `-hard` option in order to confirm that you are aware that you are placing a significant load on the map provider's infrastructure, that the pre-fetch will take a long time and will use a lot of disk space (perhaps even more than you might have available on your system, potentially rendering it unstable).
 
 ### Importing and exporting map data
 
@@ -120,7 +124,7 @@ To upload geo data to the geo database, log in with a user account, which has at
 
 ## Interaction via command-line client
 
-Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote command [...]`. (Each command may expect further parameters.)
+Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote [...]`. Each command expects further parameters. The first five parameters (`host`, `port`, `certificate_file_path`, `name`, `password`) are required for connection and session establishment and are common to all commands.
 
 The following commands are currently supported:
 
@@ -139,3 +143,7 @@ The database can also be cleared from within the web interface if the respective
 ## Exchanging data with location-visualizer
 
 Please refer to [our documentation of data formats](doc/data-formats.md) if you want to exchange location and / or activity data with *location-visualizer*.
+
+## Further information
+
+Also see [our Q and A section](doc/q-and-a.md) for more information about *location-visualizer* and its development.
