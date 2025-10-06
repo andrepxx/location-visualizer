@@ -204,11 +204,11 @@ So there were lots of reasons for me to develop *location-visualizer* and my hop
 
 **Q:** Is the OpenGeoDB file format proprietary to *location-visualizer*?
 
-The format is neither proprietary nor limited to *location-visualizer*. Its compactness, fixed-sized record structure and binary representation make it well-suited as a so called *wire-format* for GNSS receivers, i. e. the data format that the receiver uses to send positional data to a receiving host (e. g. PC or microcontroller), for example over serial interfaces like I2C, RS232 or USB, or over network protocols like TCP or MQTT. In this sense, it can fulfil functions similar to what the NMEA 0183 protocol is doing. Similarly, the *OpenGeoDB* format can be used by hardware GNSS logging devices to store records in their internal memory, before they are potentially encoded into a different format and sent over the external interface. In fact, some positional devices use either the *OpenGeoDB* format, or a similar format derived from it, for exactly these purposes.
+**A:** The format is neither proprietary nor limited to *location-visualizer*. Its compactness, fixed-sized record structure and binary representation make it well-suited as a so called *wire-format* for GNSS receivers, i. e. the data format that the receiver uses to send positional data to a receiving host (e. g. PC or microcontroller), for example over serial interfaces like I2C, RS232 or USB, or over network protocols like TCP or MQTT. In this sense, it can fulfil functions similar to what the NMEA 0183 protocol is doing. Similarly, the *OpenGeoDB* format can be used by hardware GNSS logging devices to store records in their internal memory, before they are potentially encoded into a different format and sent over the external interface. In fact, some positional devices use either the *OpenGeoDB* format, or a similar format derived from it, for exactly these purposes.
 
 **Q:** Is the OpenGeoDB file format related to the postal code database of the same name?
 
-No, the *OpenGeoDB* file or wire format for storing and / or transmitting positional data is not related to the hierarchical location and postal code database of the same name.
+**A:** No, the *OpenGeoDB* file or wire format for storing and / or transmitting positional data is not related to the hierarchical location and postal code database of the same name.
 
 **Q:** What is the CSV format that *location-visualizer* supports for coordinate data?
 
