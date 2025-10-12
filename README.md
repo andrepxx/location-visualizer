@@ -32,7 +32,7 @@ This will create an RSA key pair for the TLS connection between the user-interfa
 
 Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json`, user account data is stored in `data/userdb.json`, and map data / tiles are cached in `data/tile.bin` and `data/tile.idx`. All these paths can be adjusted in `config/config.json`.
 
-*location-visualizer* is a scalable, high-performance software solution that is not only supports private, single-user scenarios, but also larger, enterprise-grade deployments. Therefore, besides supporting state-of-the-art cryptography, like TLS 1.3 in combination with RSA, ECDH over Curve25519, ChaCha20 and Poly1305, it also features strong, challenge-response based user authentication and secure storage of passwords as salted hashes.
+*location-visualizer* is a scalable, high-performance software solution that not only supports private, single-user scenarios, but also larger, enterprise-grade deployments. Therefore, besides supporting state-of-the-art cryptography, like TLS 1.3 in combination with RSA, ECDH over Curve25519, ChaCha20 and Poly1305, it also features strong, challenge-response based user authentication and secure storage of passwords as salted hashes.
 
 Therefore, before the software can be used, at least one user account has to be created. Then, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
