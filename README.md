@@ -32,9 +32,11 @@ This will create an RSA key pair for the TLS connection between the user-interfa
 
 Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json`, user account data is stored in `data/userdb.json`, and map data / tiles are cached in `data/tile.bin` and `data/tile.idx`. All these paths can be adjusted in `config/config.json`.
 
-To use the software, create a user, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
+*location-visualizer* is a scalable, high-performance software solution that is not only supports private, single-user scenarios, but also larger, enterprise-grade deployments. Therefore, besides supporting state-of-the-art cryptography, like TLS 1.3 in combination with RSA, ECDH over Curve25519, ChaCha20 and Poly1305, it also features strong, challenge-response based user authentication and secure storage of passwords as salted hashes.
 
-**HINT:** These commands are to be executed in a shell when the server does **not** run. User management is currently completely "offline". This is mainly a security measure since we do not want user or permissions management to be available remotely, even in the case that a "privileged" account gets compromised.
+Therefore, before the software can be used, at least one user account has to be created. Then, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
+
+**HINT:** These commands are to be executed in a shell when the server does **not** run. User management is currently completely "offline". This is mainly a security measure since we do not want user or permissions management to be available remotely, even in the case of a "privileged" account getting compromised. However, we do consider adding some form of "dynamic", on-demand user management at a later point in time for improved maintenance and scalability.
 
 ```bash
 ./locviz create-user root
@@ -143,6 +145,8 @@ The database can also be cleared from within the web interface if the respective
 ## Exchanging data with location-visualizer
 
 Please refer to [our documentation of data formats](doc/data-formats.md) if you want to exchange location and / or activity data with *location-visualizer*.
+
+If you want to implement a client interfacing with *location-visualizer*, for example for continuously uploading coordinate data, then, in addition to the data format specification referenced above, please also refer to the [protocol specification](doc/communications-protocol.md). Note that the *location-visualizer* project already provides implementations for both a web-based UI client (supplied by the server) and a command-line client.
 
 ## Q and A
 
