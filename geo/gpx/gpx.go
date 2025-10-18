@@ -3,11 +3,10 @@ package gpx
 import (
 	"encoding/xml"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/andrepxx/location-visualizer/geo"
+	"github.com/andrepxx/location-visualizer/math"
 )
 
 /*
@@ -115,81 +114,6 @@ func (this *databaseStruct) LocationCount() int {
 }
 
 /*
- * Parse 32-bit fixed-point number.
- */
-func parseFixed32(number string, decimalPlaces uint8) (int32, error) {
-	numberTrimmed := strings.TrimSpace(number)
-	integerPartString, fractionalPartString, hasFractionalPart := strings.Cut(numberTrimmed, ".")
-	negativeNumber := strings.HasPrefix(integerPartString, "-")
-	value, err := strconv.ParseInt(integerPartString, 10, 32)
-
-	/*
-	 * Check if we could parse the integer part of the number.
-	 */
-	if err != nil {
-		return 0, fmt.Errorf("%s", "Parse error")
-	} else {
-
-		/*
-		 * Shift value by the required number of decimal places.
-		 */
-		for i := uint8(0); i < decimalPlaces; i++ {
-			value *= 10
-		}
-
-		/*
-		 * Handle fractional part, if present.
-		 */
-		if hasFractionalPart {
-			lenFractionalPart := len(fractionalPartString)
-			decimalPlacesInt := int(decimalPlaces)
-
-			/*
-			 * If fractional part is longer than number of decimal places, trim it.
-			 */
-			if lenFractionalPart > decimalPlacesInt {
-				fractionalPartString = fractionalPartString[:decimalPlacesInt]
-				lenFractionalPart = decimalPlacesInt
-			}
-
-			fractionalPart, err := strconv.ParseUint(fractionalPartString, 10, 32)
-
-			/*
-			 * Check if we could parse the fractional part of the number.
-			 */
-			if err != nil {
-				return 0, fmt.Errorf("%s", "Parse error")
-			} else {
-
-				/*
-				 * Shift the fractional part in case it's too short.
-				 */
-				for i := lenFractionalPart; i < decimalPlacesInt; i++ {
-					fractionalPart *= 10
-				}
-
-				fractionalPartSigned := int64(fractionalPart)
-
-				/*
-				 * Subtract or add fractional part from or to value.
-				 */
-				if negativeNumber {
-					value -= fractionalPartSigned
-				} else {
-					value += fractionalPartSigned
-				}
-
-			}
-
-		}
-
-		result := int32(value)
-		return result, nil
-	}
-
-}
-
-/*
  * Create GPX database from byte slice.
  */
 func FromBytes(data []byte) (geo.Database, error) {
@@ -225,9 +149,9 @@ func FromBytes(data []byte) (geo.Database, error) {
 				 */
 				for i, point := range points {
 					latitudeString := point.Latitude
-					latitudeE7, _ := parseFixed32(latitudeString, 7)
+					latitudeE7, _ := math.ParseFixed32(latitudeString, 7)
 					longitudeString := point.Longitude
-					longitudeE7, _ := parseFixed32(longitudeString, 7)
+					longitudeE7, _ := math.ParseFixed32(longitudeString, 7)
 					timestampString := point.Timestamp
 					timestamp := uint64(0)
 					layout := time.RFC3339Nano

@@ -35,6 +35,7 @@ type HttpRequest struct {
  */
 type HttpResponse struct {
 	Header                map[string]string
+	StatusCode            int
 	Body                  []byte
 	ContentReadCloser     io.ReadCloser
 	ContentReadSeekCloser io.ReadSeekCloser
@@ -235,10 +236,22 @@ func (this *webServerStruct) cgiHandler(writer http.ResponseWriter, request *htt
 		hdr.Set(key, value)
 	}
 
+	statusCode := response.StatusCode
+
+	/*
+	 * Set default status code of HTTP 200 - OK.
+	 */
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+
 	body := response.Body
 	contentReadCloser := response.ContentReadCloser
 	contentReadSeekCloser := response.ContentReadSeekCloser
 
+	/*
+	 * Check which body to serve.
+	 */
 	if body != nil {
 		writer.Write(body)
 	} else if contentReadSeekCloser != nil {
@@ -367,7 +380,7 @@ func (this *webServerStruct) GetCgis() []string {
 	/*
 	 * Append all CGI paths to list.
 	 */
-	for path, _ := range cgis {
+	for path := range cgis {
 		cgisNew = append(cgisNew, path)
 	}
 
@@ -404,7 +417,7 @@ func (this *webServerStruct) Run() {
 		/*
 		 * Register all CGI paths to HTTP server.
 		 */
-		for path, _ := range cgis {
+		for path := range cgis {
 			httpMux.HandleFunc(path, cgiHandler)
 		}
 
@@ -457,7 +470,7 @@ func (this *webServerStruct) Run() {
 		/*
 		 * Register all CGI paths to TLS server.
 		 */
-		for path, _ := range cgis {
+		for path := range cgis {
 			tlsMux.HandleFunc(path, cgiHandler)
 		}
 

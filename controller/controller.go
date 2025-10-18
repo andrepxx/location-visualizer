@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/andrepxx/location-visualizer/geo/geoutil"
 	"github.com/andrepxx/location-visualizer/geo/gpx"
 	"github.com/andrepxx/location-visualizer/geo/opengeodb"
+	lmath "github.com/andrepxx/location-visualizer/math"
 	"github.com/andrepxx/location-visualizer/meta"
 	lsync "github.com/andrepxx/location-visualizer/sync"
 	"github.com/andrepxx/location-visualizer/tile"
@@ -45,15 +47,16 @@ import (
  * Constants for the controller.
  */
 const (
-	ARCHIVE_TIME_STAMP                 = "20060102-150405"
-	CONFIG_PATH                        = "config/config.json"
-	LOCATION_BLOCK_SIZE                = 8192
-	PERMISSIONS_ACTIVITYDB os.FileMode = 0644
-	PERMISSIONS_IMAGEDB    os.FileMode = 0644
-	PERMISSIONS_INDEXDB    os.FileMode = 0644
-	PERMISSIONS_USERDB     os.FileMode = 0644
-	PERMISSIONS_LOCATIONDB os.FileMode = 0644
-	TIMESTAMP_FORMAT                   = "2006-01-02T15:04:05.000Z07:00"
+	ARCHIVE_TIME_STAMP                     = "20060102-150405"
+	CONFIG_PATH                            = "config/config.json"
+	DECIMAL_PLACES_COORDINATES             = 7
+	LOCATION_BLOCK_SIZE                    = 8192
+	PERMISSIONS_ACTIVITYDB     os.FileMode = 0644
+	PERMISSIONS_IMAGEDB        os.FileMode = 0644
+	PERMISSIONS_INDEXDB        os.FileMode = 0644
+	PERMISSIONS_USERDB         os.FileMode = 0644
+	PERMISSIONS_LOCATIONDB     os.FileMode = 0644
+	TIMESTAMP_FORMAT                       = "2006-01-02T15:04:05.000Z07:00"
 )
 
 /*
@@ -355,8 +358,9 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -371,8 +375,9 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -488,8 +493,9 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -559,8 +565,9 @@ func (this *controllerStruct) authLogoutHandler(request webserver.HttpRequest) w
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": mimeType},
-		Body:   buffer,
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
 	}
 
 	return response
@@ -625,8 +632,9 @@ func (this *controllerStruct) authRequestHandler(request webserver.HttpRequest) 
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": mimeType},
-		Body:   buffer,
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
 	}
 
 	return response
@@ -711,8 +719,9 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": mimeType},
-		Body:   buffer,
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
 	}
 
 	return response
@@ -741,8 +750,9 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -757,8 +767,9 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -781,8 +792,9 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 			 * Create HTTP response.
 			 */
 			response := webserver.HttpResponse{
-				Header: map[string]string{"Content-type": contentType},
-				Body:   []byte(msg),
+				Header:     map[string]string{"Content-type": contentType},
+				StatusCode: http.StatusInternalServerError,
+				Body:       []byte(msg),
 			}
 
 			return response
@@ -845,8 +857,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -863,8 +876,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -879,8 +893,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -895,8 +910,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		 * Create default HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusInternalServerError,
+			Body:       customMsgBytes,
 		}
 
 		db := this.locationDB
@@ -924,6 +940,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 						"Content-type":        "text/csv",
 					},
 
+					StatusCode:        http.StatusOK,
 					ContentReadCloser: contentProvider,
 				}
 
@@ -945,6 +962,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 						"Content-type":        "application/gpx+xml",
 					},
 
+					StatusCode:        http.StatusOK,
 					ContentReadCloser: contentProvider,
 				}
 
@@ -966,6 +984,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 						"Content-type":        "application/json; charset=utf-8",
 					},
 
+					StatusCode:        http.StatusOK,
 					ContentReadCloser: contentProvider,
 				}
 
@@ -986,6 +1005,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 						"Content-type":        "application/octet-stream",
 					},
 
+					StatusCode:            http.StatusOK,
 					ContentReadSeekCloser: contentProvider,
 				}
 
@@ -998,8 +1018,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 				 * Create HTTP response.
 				 */
 				response = webserver.HttpResponse{
-					Header: map[string]string{"Content-type": contentType},
-					Body:   msgBytes,
+					Header:     map[string]string{"Content-type": contentType},
+					StatusCode: http.StatusBadRequest,
+					Body:       msgBytes,
 				}
 
 			}
@@ -1034,8 +1055,9 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1050,8 +1072,9 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1219,8 +1242,9 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -1251,8 +1275,9 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1267,8 +1292,9 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1319,8 +1345,9 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -1351,8 +1378,9 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1367,8 +1395,9 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1427,8 +1456,9 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 				 * Create HTTP response.
 				 */
 				response := webserver.HttpResponse{
-					Header: map[string]string{"Content-type": contentType},
-					Body:   customMsgBytes,
+					Header:     map[string]string{"Content-type": contentType},
+					StatusCode: http.StatusInternalServerError,
+					Body:       customMsgBytes,
 				}
 
 				return response
@@ -1439,6 +1469,7 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 				 */
 				response := webserver.HttpResponse{
 					Header:                map[string]string{"Content-type": "image/png"},
+					StatusCode:            http.StatusOK,
 					ContentReadSeekCloser: t,
 				}
 
@@ -1474,8 +1505,9 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1490,8 +1522,9 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -1556,8 +1589,9 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -1939,8 +1973,9 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": mimeType},
-		Body:   buffer,
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
 	}
 
 	return response
@@ -2179,8 +2214,9 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": mimeType},
-		Body:   buffer,
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
 	}
 
 	return response
@@ -2209,8 +2245,9 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2225,8 +2262,9 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2347,8 +2385,9 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -2379,8 +2418,9 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2395,8 +2435,9 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2569,8 +2610,9 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": mimeType},
-			Body:   buffer,
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
 		}
 
 		return response
@@ -2601,8 +2643,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2617,8 +2660,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 		 * Create HTTP response.
 		 */
 		response := webserver.HttpResponse{
-			Header: map[string]string{"Content-type": contentType},
-			Body:   customMsgBytes,
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
 		}
 
 		return response
@@ -2666,8 +2710,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			 * Create HTTP response.
 			 */
 			response := webserver.HttpResponse{
-				Header: map[string]string{"Content-type": contentType},
-				Body:   msgBytes,
+				Header:     map[string]string{"Content-type": contentType},
+				StatusCode: http.StatusBadRequest,
+				Body:       msgBytes,
 			}
 
 			return response
@@ -2810,8 +2855,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 				 * Create HTTP response.
 				 */
 				response := webserver.HttpResponse{
-					Header: map[string]string{"Content-type": contentType},
-					Body:   customMsgBytes,
+					Header:     map[string]string{"Content-type": contentType},
+					StatusCode: http.StatusInternalServerError,
+					Body:       customMsgBytes,
 				}
 
 				return response
@@ -2843,8 +2889,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 					 * Create HTTP response.
 					 */
 					response := webserver.HttpResponse{
-						Header: map[string]string{"Content-type": contentType},
-						Body:   customMsgBytes,
+						Header:     map[string]string{"Content-type": contentType},
+						StatusCode: http.StatusInternalServerError,
+						Body:       customMsgBytes,
 					}
 
 					return response
@@ -2855,8 +2902,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 					 * Create HTTP response.
 					 */
 					response := webserver.HttpResponse{
-						Header: map[string]string{"Content-type": "image/png"},
-						Body:   bufBytes,
+						Header:     map[string]string{"Content-type": "image/png"},
+						StatusCode: http.StatusOK,
+						Body:       bufBytes,
 					}
 
 					return response
@@ -2864,6 +2912,236 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 			}
 
+		}
+
+	}
+
+}
+
+/*
+ * Handles submissions of coordinates from third-party applications.
+ */
+func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	name := request.Params["name"]
+	deviceTokenString := request.Params["devicetoken"]
+	timeString := request.Params["time"]
+	latitudeString := request.Params["latitude"]
+	longitudeString := request.Params["longitude"]
+	deviceToken, errDeviceToken := strconv.ParseUint(deviceTokenString, 16, 64)
+	um := this.userManager
+	perm, errPerm := um.HasPermission(name, "geodb-write")
+	tokenValid, errToken := um.HasDeviceToken(name, deviceToken)
+	loc := time.UTC
+	timestamp, errTimestamp := time.ParseInLocation(time.RFC3339, timeString, loc)
+	latitude, errLatitude := lmath.ParseFixed32(latitudeString, DECIMAL_PLACES_COORDINATES)
+	longitude, errLongitude := lmath.ParseFixed32(longitudeString, DECIMAL_PLACES_COORDINATES)
+
+	/*
+	 * Check permissions.
+	 */
+	if errDeviceToken != nil {
+		msg := errDeviceToken.Error()
+		customMsg := fmt.Sprintf("Failed to parse device token: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if errPerm != nil {
+		msg := errPerm.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if errToken != nil {
+		msg := errToken.Error()
+		customMsg := fmt.Sprintf("Failed to validate device token: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !tokenValid {
+		customMsgBuf := bytes.NewBufferString("Invalid device token!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if errTimestamp != nil {
+		msg := errTimestamp.Error()
+		customMsg := fmt.Sprintf("Failed to parse timestamp: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if errLatitude != nil {
+		msg := errLatitude.Error()
+		customMsg := fmt.Sprintf("Failed to parse latitude: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if errLongitude != nil {
+		msg := errLongitude.Error()
+		customMsg := fmt.Sprintf("Failed to parse longitude: %s", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		ts := timestamp.UnixMilli()
+		ts64 := uint64(ts)
+
+		/*
+		 * Create GeoDB location.
+		 */
+		location := geodb.Location{
+			Timestamp:   ts64,
+			LatitudeE7:  latitude,
+			LongitudeE7: longitude,
+		}
+
+		locationDB := this.locationDB
+		err := locationDB.Append(&location)
+
+		/*
+		 * Check if location could be appended.
+		 */
+		if err != nil {
+			msg := err.Error()
+			customMsg := fmt.Sprintf("Failed to append location: %s", msg)
+			customMsgBuf := bytes.NewBufferString(customMsg)
+			customMsgBytes := customMsgBuf.Bytes()
+			conf := this.config
+			confServer := conf.WebServer
+			contentType := confServer.ErrorMime
+
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+				Header:     map[string]string{"Content-type": contentType},
+				StatusCode: http.StatusInternalServerError,
+				Body:       customMsgBytes,
+			}
+
+			return response
+		} else {
+			customMsgBuf := bytes.NewBufferString("OK")
+			customMsgBytes := customMsgBuf.Bytes()
+			conf := this.config
+			confServer := conf.WebServer
+			contentType := confServer.ErrorMime
+
+			/*
+			 * Create HTTP response.
+			 */
+			response := webserver.HttpResponse{
+				Header:     map[string]string{"Content-type": contentType},
+				StatusCode: http.StatusOK,
+				Body:       customMsgBytes,
+			}
+
+			return response
 		}
 
 	}
@@ -2885,8 +3163,9 @@ func (this *controllerStruct) errorHandler(request webserver.HttpRequest) webser
 	 * Create HTTP response.
 	 */
 	response := webserver.HttpResponse{
-		Header: map[string]string{"Content-type": contentType},
-		Body:   msgBytes,
+		Header:     map[string]string{"Content-type": contentType},
+		StatusCode: http.StatusBadRequest,
+		Body:       msgBytes,
 	}
 
 	return response
@@ -2939,6 +3218,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		this.acquire(sem)
 		response = this.renderHandler(request)
 		this.release(sem)
+	case "submit-coordinates":
+		response = this.submitCoordinatesHandler(request)
 	default:
 		response = this.errorHandler(request)
 	}
@@ -3126,6 +3407,44 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "create-device-token":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 3 {
+				fmt.Printf("Command '%s' expects 1 additional argument: name, description\n", cmd)
+			} else {
+				now := time.Now()
+				creationTime := now.UTC()
+				name := args[1]
+				description := args[2]
+				token, err := umgr.CreateDeviceToken(name, creationTime, description)
+
+				/*
+				 * Check if something went wrong.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Command '%s' failed: %s\n", cmd, msg)
+				} else {
+					err = this.syncUserDB()
+
+					/*
+					 * Check if something went wrong.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("%s\n", msg)
+					} else {
+						value := token.Token()
+						fmt.Printf("%016x\n", value)
+					}
+
+				}
+
+			}
+
 		case "create-user":
 
 			/*
@@ -3214,6 +3533,42 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "has-device-token":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 3 {
+				fmt.Printf("Command '%s' expects 2 additional arguments: name, token\n", cmd)
+			} else {
+				name := args[1]
+				tokenString := args[2]
+				token, err := strconv.ParseUint(tokenString, 16, 64)
+
+				/*
+				 * Check if token could be parsed.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Error parsing device token: %s\n", msg)
+				} else {
+					result, err := umgr.HasDeviceToken(name, token)
+
+					/*
+					 * Check if presence of token could be determined.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to determine presence of token: %s\n", msg)
+					} else {
+						resultString := strconv.FormatBool(result)
+						fmt.Printf("%s\n", resultString)
+					}
+
+				}
+
+			}
+
 		case "has-permission":
 
 			/*
@@ -3294,6 +3649,40 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "list-device-tokens":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 2 {
+				fmt.Printf("Command '%s' expects 1 additional argument: name\n", cmd)
+			} else {
+				name := args[1]
+				tokens, err := umgr.DeviceTokens(name)
+
+				/*
+				 * Check if something went wrong.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Command '%s' failed: %s\n", cmd, msg)
+				} else {
+
+					/*
+					 * List each token.
+					 */
+					for _, token := range tokens {
+						t := token.CreationTime()
+						timeString := t.Format(time.RFC3339)
+						description := token.Description()
+						value := token.Token()
+						fmt.Printf("%016x %s %s\n", value, timeString, description)
+					}
+
+				}
+
+			}
+
 		case "list-permissions":
 
 			/*
@@ -3356,6 +3745,50 @@ func (this *controllerStruct) interpret(args []string) {
 				userAgent := webServerConfig.Name
 				c := client.CreateController(userAgent)
 				c.Interpret(args)
+			}
+
+		case "remove-device-token":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 3 {
+				fmt.Printf("Command '%s' expects 2 additional arguments: name, token\n", cmd)
+			} else {
+				name := args[1]
+				tokenString := args[2]
+				token, err := strconv.ParseUint(tokenString, 16, 64)
+
+				/*
+				 * Check if token could be parsed.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Error parsing device token: %s\n", msg)
+				} else {
+					err := umgr.RemoveDeviceToken(name, token)
+
+					/*
+					 * Check if device token could be removed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to remove device token: %s\n", msg)
+					} else {
+						err = this.syncUserDB()
+
+						/*
+						 * Check if something went wrong.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("%s\n", msg)
+						}
+
+					}
+
+				}
+
 			}
 
 		case "remove-permission":

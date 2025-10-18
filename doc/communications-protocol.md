@@ -20,7 +20,7 @@ Most calls can be done via GET or POST method and with either "application/x-www
 
 *location-visualizer* is designed to use **strong, challenge-response based authentication** and a client will have to get past this authentication before it is authorized to access any data.
 
-(**Note:** A token-based authentication method for use by third-party applications with certain API endpoints may be added at some point.)
+(**Note:** A token-based authentication method for use by third-party applications is also available for submission of coordinate data. Please see the section below for more details.)
 
 **1. Send an authentication request to the server**
 
@@ -99,3 +99,27 @@ You have to encode the following fields.
 If you only want to post a single location, then CSV might be a good choice for that format, since it doesn't contain any headers / trailers, so you may just submit a single line or an arbitrary number of lines.
 
 The server will respond with a rather large and complex, JSON-based "import report", in which it tries to explain how it merged the data you submitted into its current dataset. If you don't care about the details, just ignore it - except perhaps the boolean indicating whether the import was successful at all.
+
+## Alternative submission of coordinate data for third-party applications
+
+For third-party clients or endpoints, which do not implement the full challenge-response based authentication and application protocol, there is a special "CGI" (action) called `submit-coordinates`, which allows authentication by device tokens. Such endpoints are typically IoT devices or other embedded systems like sensors deployed in the field, but also third-party mobile applications or message brokers.
+
+Device tokens are static secrets of (currently) 64 bit size, which are sent along a request from an endpoint. You can think of a device token as a "static" session id for a session, which does not expire (unless the device token is explicitly revoked). Device tokens are stored and displayed and transmitted to the server in hexadecimal encoded.
+
+Device tokens are bound to the users, for which they are generated. Each user can have an arbitrary number of device tokens attached. *location-visualizer* stores metadata for each device token, such as its creation time and a textual description, which allows for identification of the device the token was issued for. Device tokens can be individually revoked (removed from the user account) in case they get compromised.
+
+A size of 64 bits is considered insufficient for cryptographic keys. However, device tokens only serve as a means of authenticating the submitting device or sensor to the data recipient. A rogue client submitting requests to an instance of *location-visualizer* every 5 milliseconds would need, on average, 35 billion years, to randomly guess a 64 bit token and successfully submit a fake measurement.
+
+To submit data to *location-visualizer* via an API token, send the following request to the API endpoint.
+
+Request: `cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
+
+Provide the name of the user which provisioned the device token data submitted by the sensor will be considered as being uploaded by the respective user, which means that this user must have the `geodb-write` permission for the submission to succeed.
+
+The device token must be transmitted in hexadecimal encoding.
+
+The timestamp must be in the format described by *RFC 3339* and has millisecond precision.
+
+Latitude and longitude values must be in decimal representation, using '.' as the decimal separator. Longitudes on the northern hemisphere (north of the equator) are considered "positive", while longitudes on the souther hemisphere (south of the equator) are considered "negative". Latitudes east of the zero meridian are considered "positive", while latitudes west of the zero meridian are considered "positive". Negative values are prefixed by unary minus (`-`), while positive values have no prefix. A zero longitude or latitude is, by convention, considered "positive".
+
+Longitudes and latitudes are stored with a resolution of $ 10^{-7} $ degrees. Values with less than seven digits after the decimal separator are filled up with zeros after their last digit. Values with more than seven digits after the decimal separator are truncated (**not** rounded) to a precision of seven digits after the decimal separator. To achieve optimal precision when submitting data to *location-visualizer*, consider rounding sensor data and storing the result in a fixed-point representation on your sensor platform.

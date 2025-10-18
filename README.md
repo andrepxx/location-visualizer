@@ -10,6 +10,8 @@ Starting from v1.7.0, data can also be imported from CSV files as defined in RFC
 
 Starting from v1.9.0, data can also be imported from files in OpenGeoDB format. The OpenGeoDB format is used by *location-visualizer* for its internal storage, but also by some recent GNSS receiver / logger modules as their internal storage format or wire format that they use to send position information to a host, usually over a serial interface. Supporting this "native" / wire format directly in *location-visualizer* means that the output of some GNSS modules may be imported into *location-visualizer* directly or with little post-processing. Of course, it is still possible to turn the raw GNSS receiver output into a more structured and higher-level representation, like CSV or GPX, and then import it into *location-visualizer*.
 
+Data can also be streamed live from sensors deployed in a field or submitted by other applications. Especially, since v1.12.0, a token-based authentication method is allowed for data submission by third-party applications or IoT devices, such as field sensors, which do not implement the full challenge-response based authentication protocol, which is usually required for integration with *location-visualizer*.
+
 The software displays the aggregated location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
 It also allows you to annotate your location data with metadata like time stamps and begin of exercises, distances travelled, energy used, etc.
@@ -74,23 +76,27 @@ Log in with the user name and password defined above, in our example, these were
 
 Commands:
 
-- `add-permission name permission`: Adds the permission `permission` to the user `name`.
+- `add-permission name permission`: Add the permission `permission` to the user `name`.
 - `cleanup-tiles`: Perform a cleanup of the tile database.
 - `clear-password name`: Set the password of user `name` to an empty string.
+- `create-device-token name`: Create a new device token associated with user `name`.
 - `create-user name`: Create a new user `name`.
 - `export-tiles path/file.tar.gz`: Export map tiles from tile database to `path/file.tar.gz`.
+- `has-device-token name token`: Check if user `name` has device token `token` associated.
 - `has-permission name permission`: Check if user `name` has permission `permission`.
 - `import-tiles path/file.tar.gz`: Import map tiles to tile database from `path/file.tar.gz`.
+- `list-device-tokens name`: List all device tokens associated with user `name`, along with their creation time and an optional description.
 - `list-permissions name`: List all permissions of user `name`.
 - `list-users`: List all users.
 - `remote command host port certificate_file name password [...]`: Perform `command` on remote host `host` : `port`. Verify the server's certificate against `certificate_file` and authenticate as user `name` using `password`. (See command-line client section below.)
-- `remove-permission name permission`: Removes the permission `permission` from the user `name`.
-- `remove-user name`: Removes the user `name`.
-- `set-password name password`: Sets the password of user `name` to `password`.
+- `remove-device-token name token`: Remove the device token `token` from user `name`.
+- `remove-permission name permission`: Remove the permission `permission` from the user `name`.
+- `remove-user name`: Remove the user `name`.
+- `set-password name password`: Set the password of user `name` to `password`.
 
-## Integration with a map service like OpenStreetMaps
+## Integration with a map service like OpenStreetMap
 
-This software can use data from sources of map data, like the OpenStreetMaps project (OSM), to plot location data overlaid on an actual map. However, since OpenStreetMaps is a free service running on donated ressources, access to the map data is rather slow for "third-party" users (i. e. everything but the "official" openstreetmaps.org map viewer). When OSM integration is enabled on both server and client side, the application may become slow / unresponsive until a significant amount of data has been replicated to the server's local cache. In addition, we do not want to place an unnecessary burden on OSM servers. Therefore, OSM integration is disabled via the configuration file when you download this software, and we strongly suggest that you keep it disabled unless you actually **need** it.
+This software can use data from sources of map data, like the OpenStreetMap project (OSM), to plot location data overlaid on an actual map. However, since OpenStreetMap is a free service running on donated ressources, access to the map data is rather slow for "third-party" users (i. e. everything but the "official" openstreetmap.org map viewer). When OSM integration is enabled on both server and client side, the application may become slow / unresponsive until a significant amount of data has been replicated to the server's local cache. In addition, we do not want to place an unnecessary burden on OSM servers. Therefore, OSM integration is disabled via the configuration file when you download this software, and we strongly suggest that you keep it disabled unless you actually **need** it.
 
 To enable integration with a map service, open the `config/config.json` file and replace the entry `"UseMap": false,` with `"UseMap": true,`. Then enter the URL of the map server to use, making use of the placeholders `${z}`, `${x}` and `${y}` for zoom level, X and Y coordinate of the map tile, respectively.
 
@@ -147,6 +153,42 @@ The database can also be cleared from within the web interface if the respective
 Please refer to [our documentation of data formats](doc/data-formats.md) if you want to exchange location and / or activity data with *location-visualizer*.
 
 If you want to implement a client interfacing with *location-visualizer*, for example for continuously uploading coordinate data, then, in addition to the data format specification referenced above, please also refer to the [protocol specification](doc/communications-protocol.md). Note that the *location-visualizer* project already provides implementations for both a web-based UI client (supplied by the server) and a command-line client.
+
+## Integrating third-party applications and IoT devices
+
+To provision a new third-party application or IoT device for an existing user account for submission of coordinate data, run the following command.
+
+```bash
+./locviz create-device-token root "Some description for the device"
+```
+
+Replace `root` by the name of the user you want to provision the third-party application or device to. A device can only submit data as long as the user it is associated with / provisioned for has the `geodb-write` permission.
+
+This will return a device token in hexadecimal encoding, which the IoT device or third-party app can then use to submit data to an instance of `location-visualizer` running on a publicly-accessible server.
+
+Use the following endpoint to submit your data: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
+
+For example, when provisioning the *mandhak/gpslogger* app, you can use the following URI with placeholders: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=%TIME&latitude=%LAT&longitude=%LON`
+
+You can provision as many devices (generate as many device tokens) for a user as you want.
+
+Replace all the placeholders in square brackets with the appropriate values.
+
+You can list all device tokens currently associated with a user with the following command.
+
+```bash
+./locviz list-device-tokens root
+```
+
+This not only lists the tokens themselves (their hexadecimal values), but also the (UTC) time when they were generated and the description that was provided when they were generated.
+
+In case a device token gets compromised or a sensor gets decommissioned, you can remove (or dissociate) it from its user again.
+
+```bash
+./locviz remove-device-token root [the device token]
+```
+
+The capability to capture live sensor data, in conjunction with its multi-user capabilities, strong authentication, fine-grained access control and support for a multitude of standardized formats (including GNSS wire formats), make *location-visualizer* suitable for professional (commercial or government) applications, which involve capturing live data from sensors deployed in the field. The ability to provision device tokens extends the capability to submit coordinate data to third-party devices or applications, which do not implement the more secure challenge-response based authentication methods and application protocol, allowing for easy integratio of third-party sensors into your workflow. At the same time, access to these less secure types of sensors or applications is limited to submitting coordinates, keeping the collected data secure and the attack surface minimal.
 
 ## Q and A
 
