@@ -79,7 +79,7 @@ Commands:
 - `add-permission name permission`: Add the permission `permission` to the user `name`.
 - `cleanup-tiles`: Perform a cleanup of the tile database.
 - `clear-password name`: Set the password of user `name` to an empty string.
-- `create-device-token name`: Create a new device token associated with user `name`.
+- `create-device-token name description`: Create a new device token associated with user `name` and description `description`. (Hint: Put quotes around the description.)
 - `create-user name`: Create a new user `name`.
 - `export-tiles path/file.tar.gz`: Export map tiles from tile database to `path/file.tar.gz`.
 - `has-device-token name token`: Check if user `name` has device token `token` associated.
