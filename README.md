@@ -175,7 +175,7 @@ To provision a new third-party application or IoT device for an existing user ac
 
 Replace `root` by the name of the user you want to provision the third-party application or device to. A device can only submit data as long as the user it is associated with / provisioned for has the `geodb-write` permission.
 
-This will return a device token in hexadecimal encoding, which the IoT device or third-party app can then use to submit data to an instance of `location-visualizer` running on a publicly-accessible server.
+This will return a device token in hexadecimal encoding, which the IoT device or third-party app can then use to submit data to an instance of *location-visualizer* running on a publicly-accessible server.
 
 Use the following endpoint to submit your data: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
 
@@ -203,7 +203,7 @@ The capability to capture live sensor data, in conjunction with its multi-user c
 
 ## Public-key authentication
 
-Since v1.13.0, `location-visualizer` supports authentication using public-key cryptography, as is known from tools like SSH, etc.
+Since v1.13.0, *location-visualizer* supports authentication using public-key cryptography, as is known from tools like SSH, etc.
 
 Public-key authentication generally provides greater security than password-based authentication and is recommended for use in machine-to-machine communication and automated contexts (e. g. automated maintenance tasks), but also for privileged (e. g. administrative) accounts.
 
@@ -222,7 +222,7 @@ The public key must be associated on the server side with a user account to be u
 ./locviz add-public-key root "Some description for the key" client-public.pem
 ```
 
-The public key must be in `PKCS#1` or `PKIX` format.
+The public key must be in *PKCS#1* or *PKIX* format.
 
 Replace `root` with the name of your user and replace the description between the quotes with a custom description to help identify the key.
 
@@ -244,7 +244,7 @@ The leading `0:` is the index. If you have multiple keys associated with your ac
 
 The entry `2025-10-21T20:25:15Z` is the time stamp (in UTC) identifying the point in time when the key was added to the account.
 
-The entry `[PUBLIC KEY]` is the key type. This will be `[RSA PUBLIC KEY]` for an RSA public key according to `PKCS#1` and `[PUBLIC KEY]` for a public key according to `PKIX`. As a side note, it would be `[RSA PRIVATE KEY]` for an RSA private key according to `PKCS#1` and `[PRIVATE KEY]` for a private key according to `PKCS#8`, however, private keys for **client** authentication should **not** be stored on the server side.
+The entry `[PUBLIC KEY]` is the key type. This will be `[RSA PUBLIC KEY]` for an RSA public key according to *PKCS#1* and `[PUBLIC KEY]` for a public key according to *PKIX*. As a side note, it would be `[RSA PRIVATE KEY]` for an RSA private key according to *PKCS#1* and `[PRIVATE KEY]` for a private key according to *PKCS#8*, however, private keys for **client** authentication should **not** be stored on the server side.
 
 The long string `6YhYG71fEiEdxLIKQa733M8VgGNvnFIbjf5aLTAP2BOuQpM2Jua37sjEYtocYFhhbOEY2Mdfdys7z8Eck369MA==` is the SHA-512 hash of the binary (ASN.1 DER) key data and can be used to uniquely identify the key, for example to detect duplicates or reuse of the same key across accounts.
 
@@ -274,7 +274,7 @@ You can use the *location-visualizer* CLI client to authenticate using public-ke
 
 The key stored in `client-private.pem` must be an RSA key in either `PKCS#1` or `PKCS#8` format.
 
-`PKCS#1` is the older specification and is limited to RSA keys (both private and public keys), while `PKCS#8` is the more modern specification and can store different types of private keys, while `PKIX` is can store different public-keys. Since `location-visualizer` uses RSA-PSS is for user authentication, only RSA keys are supported and the client will exit with an error when a `PKCS#8` key for a different cryptosystem is supplied.
+*PKCS#1* is the older specification and is limited to RSA keys (both private and public keys), while *PKCS#8* is the more modern specification and can store different types of private keys, while *PKIX* is can store different public-keys. Since *location-visualizer* uses RSA-PSS is for user authentication, only RSA keys are supported and the client will exit with an error when a *PKCS#8* key for a different cryptosystem is supplied.
 
 The key must **not** be encrypted.
 
