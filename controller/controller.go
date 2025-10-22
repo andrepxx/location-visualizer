@@ -670,7 +670,95 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 
 	} else {
 		sm := this.sessionManager
-		t, err := sm.Response(name, hash)
+		t, err := sm.ResponseHash(name, hash)
+
+		/*
+		 * Check if session was created.
+		 */
+		if err != nil {
+			msg := err.Error()
+			reason := fmt.Sprintf("Failed to create session: %s", msg)
+
+			/*
+			 * Indicate failure.
+			 */
+			responseToken = webTokenStruct{
+
+				webResponseStruct: webResponseStruct{
+					Success: false,
+					Reason:  reason,
+				},
+
+				Token: "",
+			}
+
+		} else {
+			token := t.Token()
+			tokenSlice := token[:]
+			tokenString := enc.EncodeToString(tokenSlice)
+
+			/*
+			 * Create data structure for session token.
+			 */
+			responseToken = webTokenStruct{
+
+				webResponseStruct: webResponseStruct{
+					Success: true,
+					Reason:  "",
+				},
+
+				Token: tokenString,
+			}
+
+		}
+
+	}
+
+	mimeType, buffer := this.createJSON(responseToken)
+
+	/*
+	 * Create HTTP response.
+	 */
+	response := webserver.HttpResponse{
+		Header:     map[string]string{"Content-type": mimeType},
+		StatusCode: http.StatusOK,
+		Body:       buffer,
+	}
+
+	return response
+}
+
+/*
+ * Client sends public-key authentication response to obtain session token.
+ */
+func (this *controllerStruct) authResponsePublicKeyHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	enc := base64.StdEncoding
+	name := request.Params["name"]
+	signatureIn := request.Params["signature"]
+	responseToken := webTokenStruct{}
+	signature, err := enc.DecodeString(signatureIn)
+
+	/*
+	 * Check if hash could be decoded.
+	 */
+	if err != nil {
+
+		/*
+		 * Indicate failure.
+		 */
+		responseToken = webTokenStruct{
+
+			webResponseStruct: webResponseStruct{
+				Success: false,
+				Reason:  "Failed to decode hash value.",
+			},
+
+			Token: "",
+		}
+
+	} else {
+		sm := this.sessionManager
+		t, err := sm.ResponseSignature(name, signature)
 
 		/*
 		 * Check if session was created.
@@ -3190,6 +3278,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.authRequestHandler(request)
 	case "auth-response":
 		response = this.authResponseHandler(request)
+	case "auth-response-public-key":
+		response = this.authResponsePublicKeyHandler(request)
 	case "export-activity-csv":
 		response = this.exportActivityCsvHandler(request)
 	case "export-geodb-content":
@@ -3343,6 +3433,65 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "add-public-key":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 4 {
+				fmt.Printf("Command '%s' expects 3 additional arguments: name, description, path\n", cmd)
+			} else {
+				now := time.Now()
+				creationTime := now.UTC()
+				name := args[1]
+				description := args[2]
+				path := args[3]
+				mode := os.ModeExclusive | (os.ModePerm & PERMISSIONS_USERDB)
+				fd, err := os.OpenFile(path, os.O_RDONLY, mode)
+
+				/*
+				 * Check if file could be opened.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Failed to open file '%s': %s\n", path, msg)
+				} else {
+					data, err := io.ReadAll(fd)
+
+					/*
+					 * Check if file content could be read.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to read public key from file '%s': %s\n", path, msg)
+					} else {
+						err := umgr.AddPublicKey(name, creationTime, description, data)
+
+						/*
+						 * Check if something went wrong.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("Command '%s' failed: %s\n", cmd, msg)
+						} else {
+							err = this.syncUserDB()
+
+							/*
+							 * Check if something went wrong.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("%s\n", msg)
+							}
+
+						}
+
+					}
+
+				}
+
+			}
+
 		case "cleanup-tiles":
 
 			/*
@@ -3413,7 +3562,7 @@ func (this *controllerStruct) interpret(args []string) {
 			 * Check number of arguments.
 			 */
 			if numArgs != 3 {
-				fmt.Printf("Command '%s' expects 1 additional argument: name, description\n", cmd)
+				fmt.Printf("Command '%s' expects 2 additional arguments: name, description\n", cmd)
 			} else {
 				now := time.Now()
 				creationTime := now.UTC()
@@ -3683,6 +3832,45 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "list-public-keys":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 2 {
+				fmt.Printf("Command '%s' expects 1 additional argument: name\n", cmd)
+			} else {
+				name := args[1]
+				publicKeys, err := umgr.PublicKeys(name)
+
+				/*
+				 * Check if something went wrong.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Command '%s' failed: %s\n", cmd, msg)
+				} else {
+					encoding := base64.StdEncoding
+
+					/*
+					 * List each public key.
+					 */
+					for i, publicKey := range publicKeys {
+						t := publicKey.CreationTime()
+						timeString := t.Format(time.RFC3339)
+						description := publicKey.Description()
+						representation := publicKey.Representation()
+						representationString := representation.String()
+						hash := publicKey.Hash()
+						hashSlice := hash[:]
+						hashString := encoding.EncodeToString(hashSlice)
+						fmt.Printf("%d: %s [%s] %s %s\n", i, timeString, representationString, hashString, description)
+					}
+
+				}
+
+			}
+
 		case "list-permissions":
 
 			/*
@@ -3738,7 +3926,7 @@ func (this *controllerStruct) interpret(args []string) {
 			 * Check number of arguments.
 			 */
 			if numArgs < 7 {
-				fmt.Printf("Command '%s' expects at least 6 additional arguments: host, port, certificate, username, password, command [and possibly options]\n", cmd)
+				fmt.Printf("Command '%s' expects at least 6 additional arguments: host, port, certificate, username, password_or_key_file_path, command [and possibly options]\n", cmd)
 			} else {
 				cfg := this.config
 				webServerConfig := cfg.WebServer
@@ -3824,6 +4012,50 @@ func (this *controllerStruct) interpret(args []string) {
 
 			}
 
+		case "remove-public-key":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 3 {
+				fmt.Printf("Command '%s' expects 2 additional arguments: name, index\n", cmd)
+			} else {
+				name := args[1]
+				idxString := args[2]
+				idx, err := strconv.ParseUint(idxString, 16, 64)
+
+				/*
+				 * Check if index could be parsed.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Error parsing index: %s\n", msg)
+				} else {
+					err := umgr.RemovePublicKey(name, idx)
+
+					/*
+					 * Check if public key could be removed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to remove public key: %s\n", msg)
+					} else {
+						err = this.syncUserDB()
+
+						/*
+						 * Check if something went wrong.
+						 */
+						if err != nil {
+							msg := err.Error()
+							fmt.Printf("%s\n", msg)
+						}
+
+					}
+
+				}
+
+			}
+
 		case "remove-user":
 
 			/*
@@ -3883,6 +4115,55 @@ func (this *controllerStruct) interpret(args []string) {
 					if err != nil {
 						msg := err.Error()
 						fmt.Printf("%s\n", msg)
+					}
+
+				}
+
+			}
+
+		case "show-public-key":
+
+			/*
+			 * Check number of arguments.
+			 */
+			if numArgs != 3 {
+				fmt.Printf("Command '%s' expects 2 additional arguments: name, index\n", cmd)
+			} else {
+				name := args[1]
+				idxString := args[2]
+				idx, err := strconv.ParseUint(idxString, 16, 64)
+
+				/*
+				 * Check if index could be parsed.
+				 */
+				if err != nil {
+					msg := err.Error()
+					fmt.Printf("Error parsing index: %s\n", msg)
+				} else {
+					publicKeys, err := umgr.PublicKeys(name)
+
+					/*
+					 * Check if public key could be removed.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to retrieve public keys from user %s: %s\n", name, msg)
+					} else {
+						numPublicKeys := len(publicKeys)
+						numPublicKeys64 := uint64(numPublicKeys)
+
+						/*
+						 * Check if the index is within range.
+						 */
+						if idx >= numPublicKeys64 {
+							fmt.Printf("Failed to retrieve public keys #%d from user %s: Only has %d keys.\n", idx, name, numPublicKeys)
+						} else {
+							publicKey := publicKeys[idx]
+							pemData := publicKey.ExportPEM()
+							pemString := string(pemData)
+							fmt.Printf("%s", pemString)
+						}
+
 					}
 
 				}

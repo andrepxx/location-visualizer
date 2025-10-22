@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andrepxx/location-visualizer/auth/publickey"
 	"github.com/andrepxx/location-visualizer/auth/user"
 )
 
@@ -78,7 +79,8 @@ type managerStruct struct {
 type Manager interface {
 	CreateToken(token []byte) Token
 	Challenge(name string) (Challenge, error)
-	Response(name string, hash []byte) (Token, error)
+	ResponseHash(name string, response []byte) (Token, error)
+	ResponseSignature(name string, response []byte) (Token, error)
 	Terminate(token Token) error
 	UserName(token Token) (string, error)
 }
@@ -123,6 +125,7 @@ func (this *managerStruct) expire(id int64) {
  * The caller is expected to hold at least a read lock on the session list.
  */
 func (this *managerStruct) sessionIdFromToken(token [LENGTH]byte) int64 {
+	tokenSlice := token[:]
 	id := int64(-1)
 	sessions := this.sessions
 
@@ -131,7 +134,8 @@ func (this *managerStruct) sessionIdFromToken(token [LENGTH]byte) int64 {
 	 */
 	for i, session := range sessions {
 		other := session.token
-		c := subtle.ConstantTimeCompare(other[:], token[:])
+		otherSlice := other[:]
+		c := subtle.ConstantTimeCompare(otherSlice, tokenSlice)
 
 		/*
 		 * In case of a match, store session ID.
@@ -171,21 +175,23 @@ func (this *managerStruct) refresh(id int64, now time.Time) {
  */
 func (this *managerStruct) refreshOrExpire(id int64) (bool, time.Time) {
 	now := time.Now()
+	result := SESSION_EXPIRE
 	sessions := this.sessions
 	sessions[id].mutex.RLock()
-	lastAccess := sessions[id].lastAccess
+	session := sessions[id]
+	lastAccess := session.lastAccess
 	sessions[id].mutex.RUnlock()
 	period := now.Sub(lastAccess)
 	expiry := this.expiry
 
 	/*
-	 * Check if session should be expired or refreshed.
+	 * Check if session should be refreshed.
 	 */
 	if period < expiry {
-		return SESSION_REFRESH, now
-	} else {
-		return SESSION_EXPIRE, now
+		result = SESSION_REFRESH
 	}
+
+	return result, now
 }
 
 /*
@@ -238,7 +244,9 @@ func (this *managerStruct) Challenge(name string) (Challenge, error) {
 /*
  * Verify an authentication response for a user, given his / her name and the response hash.
  */
-func (this *managerStruct) Response(name string, response []byte) (Token, error) {
+func (this *managerStruct) ResponseHash(name string, reseponse []byte) (Token, error) {
+	result := Token(nil)
+	errResult := error(nil)
 	this.mutex.RLock()
 	mgr := this.userManager
 	nonce, errNonce := mgr.Nonce(name)
@@ -250,32 +258,35 @@ func (this *managerStruct) Response(name string, response []byte) (Token, error)
 	 * If user does not exist or has no hash set, abort with failure.
 	 */
 	if (errNonce != nil) || (errHash != nil) {
-		return nil, fmt.Errorf("User '%s' not found.", name)
+		errResult = fmt.Errorf("User '%s' not found.", name)
 	} else if hashSize == 0 {
-		return nil, fmt.Errorf("%s", "Authentication failed.")
+		errResult = fmt.Errorf("%s", "Authentication failed.")
 	} else {
-		nonceAndHash := append(nonce[:], hash...)
+		nonceSlice := nonce[:]
+		nonceAndHash := append(nonceSlice, hash...)
 		expected := sha512.Sum512(nonceAndHash)
-		c := subtle.ConstantTimeCompare(response, expected[:])
+		expectedSlice := expected[:]
+		c := subtle.ConstantTimeCompare(reseponse, expectedSlice)
 
 		/*
 		 * Check if the response matches.
 		 */
 		if c != CTC_EQUAL {
-			return nil, fmt.Errorf("%s", "Authentication failed.")
+			errResult = fmt.Errorf("%s", "Authentication failed.")
 		} else {
 			token := [LENGTH]byte{}
+			tokenSlice := token[:]
 			rng := this.prng
-			numBytes, err := rng.Read(token[:])
+			numBytes, err := rng.Read(tokenSlice)
 
 			/*
 			 * Check if token was generated and associate it to session.
 			 */
 			if err != nil {
 				msg := err.Error()
-				return nil, fmt.Errorf("Failed to generate session token: %s", msg)
+				errResult = fmt.Errorf("Failed to generate session token: %s", msg)
 			} else if numBytes != LENGTH {
-				return nil, fmt.Errorf("Failed to generate session token: Incorrect number of bytes read from PRNG: Expected %d, got %d.", LENGTH, numBytes)
+				errResult = fmt.Errorf("Failed to generate session token: Incorrect number of bytes read from PRNG: Expected %d, got %d.", LENGTH, numBytes)
 			} else {
 				now := time.Now()
 
@@ -288,7 +299,8 @@ func (this *managerStruct) Response(name string, response []byte) (Token, error)
 					lastAccess: now,
 				}
 
-				copy(s.token[:], token[:])
+				sessionToken := s.token[:]
+				copy(sessionToken, tokenSlice)
 				this.mutex.Lock()
 				mgr.RegenerateNonce(name)
 				sessions := this.sessions
@@ -303,19 +315,117 @@ func (this *managerStruct) Response(name string, response []byte) (Token, error)
 					token: token,
 				}
 
-				return &t, nil
+				result = &t
 			}
 
 		}
 
 	}
 
+	return result, errResult
+}
+
+/*
+ * Verify an authentication response for a user, given his / her name and the response signature.
+ */
+func (this *managerStruct) ResponseSignature(name string, response []byte) (Token, error) {
+	result := Token(nil)
+	errResult := error(nil)
+	this.mutex.RLock()
+	mgr := this.userManager
+	nonce, errNonce := mgr.Nonce(name)
+	publicKeys, errPublicKeys := mgr.PublicKeys(name)
+	this.mutex.RUnlock()
+
+	/*
+	 * If user does not exist, abort with failure.
+	 */
+	if (errNonce != nil) || (errPublicKeys != nil) {
+		errResult = fmt.Errorf("User '%s' not found.", name)
+	} else {
+		nonceSlice := nonce[:]
+		valid := false
+
+		/*
+		 * Verify RSA PSS signature against every public key.
+		 */
+		for _, publicKey := range publicKeys {
+			keyData := publicKey.KeyData()
+			representation := publicKey.Representation()
+			rsaPublicKey, err := publickey.LoadRSAPublicKey(keyData, representation)
+
+			/*
+			 * Check if key could be loaded.
+			 */
+			if err == nil {
+				valid = publickey.VerifyPSS(nonceSlice, response, rsaPublicKey) || valid
+			}
+
+		}
+
+		/*
+		 * Check if signature validated successfully against one of the public
+		 * keys.
+		 */
+		if !valid {
+			errResult = fmt.Errorf("%s", "Signature verification failed.")
+		} else {
+			token := [LENGTH]byte{}
+			tokenSlice := token[:]
+			rng := this.prng
+			numBytes, err := rng.Read(tokenSlice)
+
+			/*
+			 * Check if token was generated and associate it to session.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to generate session token: %s", msg)
+			} else if numBytes != LENGTH {
+				errResult = fmt.Errorf("Failed to generate session token: Incorrect number of bytes read from PRNG: Expected %d, got %d.", LENGTH, numBytes)
+			} else {
+				now := time.Now()
+
+				/*
+				 * Create session.
+				 */
+				s := sessionStruct{
+					token:      [LENGTH]byte{},
+					name:       name,
+					lastAccess: now,
+				}
+
+				sessionToken := s.token[:]
+				copy(sessionToken, tokenSlice)
+				this.mutex.Lock()
+				mgr.RegenerateNonce(name)
+				sessions := this.sessions
+				sessions = append(sessions, &s)
+				this.sessions = sessions
+				this.mutex.Unlock()
+
+				/*
+				 * Create session token.
+				 */
+				t := tokenStruct{
+					token: token,
+				}
+
+				result = &t
+			}
+
+		}
+
+	}
+
+	return result, errResult
 }
 
 /*
  * Terminate a session given a session token, logging out the corresponding user.
  */
 func (this *managerStruct) Terminate(token Token) error {
+	errResult := error(nil)
 	t := token.Token()
 	this.mutex.Lock()
 	sid := this.sessionIdFromToken(t)
@@ -341,20 +451,21 @@ func (this *managerStruct) Terminate(token Token) error {
 	 * If a session with this token exists, terminate it.
 	 */
 	if sid < 0 {
-		this.mutex.Unlock()
-		return fmt.Errorf("%s", "No session with this token found.")
+		errResult = fmt.Errorf("%s", "No session with this token found.")
 	} else {
 		this.expire(sid)
-		this.mutex.Unlock()
-		return nil
 	}
 
+	this.mutex.Unlock()
+	return errResult
 }
 
 /*
  * Returns the name of the user associated with a session token.
  */
 func (this *managerStruct) UserName(token Token) (string, error) {
+	result := ""
+	errResult := error(nil)
 	t := token.Token()
 	this.mutex.RLock()
 	sid := this.sessionIdFromToken(t)
@@ -363,8 +474,7 @@ func (this *managerStruct) UserName(token Token) (string, error) {
 	 * Check if session with this token exists.
 	 */
 	if sid < 0 {
-		this.mutex.RUnlock()
-		return "", fmt.Errorf("%s", "No session with this token found.")
+		errResult = fmt.Errorf("%s", "No session with this token found.")
 	} else {
 		roe, now := this.refreshOrExpire(sid)
 
@@ -376,9 +486,7 @@ func (this *managerStruct) UserName(token Token) (string, error) {
 			this.refresh(sid, now)
 			sessions := this.sessions
 			s := sessions[sid]
-			name := s.name
-			this.mutex.RUnlock()
-			return name, nil
+			result = s.name
 		case SESSION_EXPIRE:
 			this.mutex.RUnlock()
 			this.mutex.Lock()
@@ -392,14 +500,16 @@ func (this *managerStruct) UserName(token Token) (string, error) {
 			}
 
 			this.mutex.Unlock()
-			return "", fmt.Errorf("%s", "No session with this token found.")
+			this.mutex.RLock()
+			errResult = fmt.Errorf("%s", "No session with this token found.")
 		default:
-			this.mutex.RUnlock()
-			return "", fmt.Errorf("%s", "Something unexpected happened.")
+			errResult = fmt.Errorf("%s", "Something unexpected happened.")
 		}
 
 	}
 
+	this.mutex.RUnlock()
+	return result, errResult
 }
 
 /*

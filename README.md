@@ -10,7 +10,9 @@ Starting from v1.7.0, data can also be imported from CSV files as defined in RFC
 
 Starting from v1.9.0, data can also be imported from files in OpenGeoDB format. The OpenGeoDB format is used by *location-visualizer* for its internal storage, but also by some recent GNSS receiver / logger modules as their internal storage format or wire format that they use to send position information to a host, usually over a serial interface. Supporting this "native" / wire format directly in *location-visualizer* means that the output of some GNSS modules may be imported into *location-visualizer* directly or with little post-processing. Of course, it is still possible to turn the raw GNSS receiver output into a more structured and higher-level representation, like CSV or GPX, and then import it into *location-visualizer*.
 
-Data can also be streamed live from sensors deployed in a field or submitted by other applications. Especially, since v1.12.0, a token-based authentication method is allowed for data submission by third-party applications or IoT devices, such as field sensors, which do not implement the full challenge-response based authentication protocol, which is usually required for integration with *location-visualizer*.
+Data can also be streamed live from sensors deployed in the field or submitted by other applications. Especially, since v1.12.0, a token-based authentication method is allowed for data submission by third-party applications or IoT devices, such as field sensors, which do not implement the full challenge-response based authentication protocol, which is usually required for integration with *location-visualizer*.
+
+Since v1.13.0, challenge-response authentication based on public-key cryptography is supported, in addition to password-based challenge-respone authentication. This provides enhanced security, especially for privileged accounts carrying out administrative tasks, enables more flexible credential management and makes automated workflows easier.
 
 The software displays the aggregated location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
@@ -34,7 +36,7 @@ This will create an RSA key pair for the TLS connection between the user-interfa
 
 Location data will be stored in the file `data/locations.geodb`, while activity data is stored in `data/activitydb.json`, user account data is stored in `data/userdb.json`, and map data / tiles are cached in `data/tile.bin` and `data/tile.idx`. All these paths can be adjusted in `config/config.json`.
 
-*location-visualizer* is a scalable, high-performance software solution that not only supports private, single-user scenarios, but also larger, enterprise-grade deployments. Therefore, besides supporting state-of-the-art cryptography, like TLS 1.3 in combination with RSA, ECDH over Curve25519, ChaCha20 and Poly1305, it also features strong, challenge-response based user authentication and secure storage of passwords as salted hashes.
+*location-visualizer* is a scalable, high-performance software solution that not only supports private, single-user scenarios, but also larger, enterprise-grade deployments. Therefore, besides supporting state-of-the-art cryptography, like TLS 1.3 in combination with RSA, ECDH over Curve25519, ChaCha20 and Poly1305, it also features strong, challenge-response based user authentication (password-based or public-key based) and secure storage of passwords as salted hashes. The public-key user authentication is based on RSA-PSS.
 
 Therefore, before the software can be used, at least one user account has to be created. Then, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
@@ -77,6 +79,7 @@ Log in with the user name and password defined above, in our example, these were
 Commands:
 
 - `add-permission name permission`: Add the permission `permission` to the user `name`.
+- `add-public-key name description path/key_file.pem`: Add the public key stored in `path/key_file.pem` to the user `name` with description `description`. (Hint: Put quotes around the description.)
 - `cleanup-tiles`: Perform a cleanup of the tile database.
 - `clear-password name`: Set the password of user `name` to an empty string.
 - `create-device-token name description`: Create a new device token associated with user `name` and description `description`. (Hint: Put quotes around the description.)
@@ -87,12 +90,15 @@ Commands:
 - `import-tiles path/file.tar.gz`: Import map tiles to tile database from `path/file.tar.gz`.
 - `list-device-tokens name`: List all device tokens associated with user `name`, along with their creation time and an optional description.
 - `list-permissions name`: List all permissions of user `name`.
+- `list-public-keys name`: List all public keys of user `name`.
 - `list-users`: List all users.
-- `remote command host port certificate_file name password [...]`: Perform `command` on remote host `host` : `port`. Verify the server's certificate against `certificate_file` and authenticate as user `name` using `password`. (See command-line client section below.)
+- `remote command host port certificate_file_path name password_or_key_file_path [...]`: Perform `command` on remote host `host` : `port`. Verify the server's certificate against `certificate_file_path` and authenticate as user `name` using either a password or an RSA private key `password_or_key_file_path`. (See command-line client section below.)
 - `remove-device-token name token`: Remove the device token `token` from user `name`.
 - `remove-permission name permission`: Remove the permission `permission` from the user `name`.
+- `remove-public-key name index`: Remove the public key with index `index` (zero-based) from user `name`.
 - `remove-user name`: Remove the user `name`.
 - `set-password name password`: Set the password of user `name` to `password`.
+- `show-public-key name index`: Output the public key with index `index` (zero-based) from user `name` in PEM representation.
 
 ## Integration with a map service like OpenStreetMap
 
@@ -132,15 +138,20 @@ To upload geo data to the geo database, log in with a user account, which has at
 
 ## Interaction via command-line client
 
-Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote [...]`. Each command expects further parameters. The first five parameters (`host`, `port`, `certificate_file_path`, `name`, `password`) are required for connection and session establishment and are common to all commands.
+Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote [...]`. Each command expects further parameters. The first five parameters (`host`, `port`, `certificate_file_path`, `name`, `password_or_key_file_path`) are required for connection and session establishment and are common to all commands. Some commands require a password and some (the ones with "-pk" suffix) require the path to an RSA key file instead.
 
 The following commands are currently supported:
 
 - `export-activity-csv host port certificate_file_path name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
+- `export-activity-csv-pk host port certificate_file_path name key_file_path output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
 - `export-geodata host port certificate_file_path name password format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
+- `export-geodata-pk host port certificate_file_path name key_file_path format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
 - `import-geodata host port certificate_file_path name password format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+- `import-geodata-pk host port certificate_file_path name key_file_path format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
 
 The certificate file provided must be in PEM format. The certificate chain that the server provides is verified to match **exactly** against the one provided in the certificate file.
+
+The RSA key file for user authentication, if required, must be in PEM format and store an RSA private key, either following the `PKCS#1` or the `PKCS#8` standard.
 
 ## Clearing the geo database
 
@@ -189,6 +200,83 @@ In case a device token gets compromised or a sensor gets decommissioned, you can
 ```
 
 The capability to capture live sensor data, in conjunction with its multi-user capabilities, strong authentication, fine-grained access control and support for a multitude of standardized formats (including GNSS wire formats), make *location-visualizer* suitable for professional (commercial or government) applications, which involve capturing live data from sensors deployed in the field. The ability to provision device tokens extends the capability to submit coordinate data to third-party devices or applications, which do not implement the more secure challenge-response based authentication methods and application protocol, allowing for easy integration of third-party sensors into your workflow. At the same time, access to these less secure types of sensors or applications is limited to submitting coordinates, keeping the collected data secure and the attack surface minimal.
+
+## Public-key authentication
+
+Since v1.13.0, `location-visualizer` supports authentication using public-key cryptography, as is known from tools like SSH, etc.
+
+Public-key authentication generally provides greater security than password-based authentication and is recommended for use in machine-to-machine communication and automated contexts (e. g. automated maintenance tasks), but also for privileged (e. g. administrative) accounts.
+
+To use public-key authentication, generation of a key pair is required. Usually, a unique key pair will be generated for each client, e. g. using OpenSSL.
+
+```bash
+openssl genrsa -out client-private.pem 4096
+openssl rsa -in client-private.pem -pubout -out client-public.pem
+```
+
+This will generate an RSA key pair with a key strength of 4096 bits. The private key will be stored in `client-private.pem`, while the public key will be stored in `client-private.pem`.
+
+The public key must be associated on the server side with a user account to be used for authentication, while the private key must be kept secret and is used by the client during authentication.
+
+```bash
+./locviz add-public-key root "Some description for the key" client-public.pem
+```
+
+The public key must be in `PKCS#1` or `PKIX` format.
+
+Replace `root` with the name of your user and replace the description between the quotes with a custom description to help identify the key.
+
+You can show a summary of the keys associated with your user.
+
+```bash
+./locviz list-public-keys root
+```
+
+(Again, replace `root` with the name of the user.)
+
+Which will generate an output like this.
+
+```
+0: 2025-10-21T20:25:15Z [PUBLIC KEY] 6YhYG71fEiEdxLIKQa733M8VgGNvnFIbjf5aLTAP2BOuQpM2Jua37sjEYtocYFhhbOEY2Mdfdys7z8Eck369MA== Some description for the key
+```
+
+The leading `0:` is the index. If you have multiple keys associated with your account, they will display in individual lines with indices like `1:`, `2:`, etc.
+
+The entry `2025-10-21T20:25:15Z` is the time stamp (in UTC) identifying the point in time when the key was added to the account.
+
+The entry `[PUBLIC KEY]` is the key type. This will be `[RSA PUBLIC KEY]` for an RSA public key according to `PKCS#1` and `[PUBLIC KEY]` for a public key according to `PKIX`. As a side note, it would be `[RSA PRIVATE KEY]` for an RSA private key according to `PKCS#1` and `[PRIVATE KEY]` for a private key according to `PKCS#8`, however, private keys for **client** authentication should **not** be stored on the server side.
+
+The long string `6YhYG71fEiEdxLIKQa733M8VgGNvnFIbjf5aLTAP2BOuQpM2Jua37sjEYtocYFhhbOEY2Mdfdys7z8Eck369MA==` is the SHA-512 hash of the binary (ASN.1 DER) key data and can be used to uniquely identify the key, for example to detect duplicates or reuse of the same key across accounts.
+
+It is followed by the textual description, in this case `Some description for the key`.
+
+You can display the full key in PEM format using the following command.
+
+```bash
+./locviz show-public-key root 0
+```
+
+Replace `root` with the name of the user and `0` with the index of the public key to be displayed.
+
+To remove a public key, use the following command.
+
+```bash
+./locviz remove-public-key root 0
+```
+
+Replace `root` with the name of the user and `0` with the index of the public key to be removed.
+
+You can use the *location-visualizer* CLI client to authenticate using public-key cryptography and carry out operations on the server. For example, to connect to `localhost:8443`, validate the server certificate against `keys/public.pem`, authenticate as user `root` using public-key cryptography using the RSA public key stored in `client-private.pem`, download the full contents of the geographical database in CSV format and save it to the file `output.csv`, use could use the following command.
+
+```bash
+./locviz remote export-geodata-pk localhost 8443 keys/public.pem root client-private.pem csv output.csv
+```
+
+The key stored in `client-private.pem` must be an RSA key in either `PKCS#1` or `PKCS#8` format.
+
+`PKCS#1` is the older specification and is limited to RSA keys (both private and public keys), while `PKCS#8` is the more modern specification and can store different types of private keys, while `PKIX` is can store different public-keys. Since `location-visualizer` uses RSA-PSS is for user authentication, only RSA keys are supported and the client will exit with an error when a `PKCS#8` key for a different cryptosystem is supplied.
+
+The key must **not** be encrypted.
 
 ## Q and A
 

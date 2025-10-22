@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/andrepxx/location-visualizer/auth/publickey"
 )
 
 /*
@@ -45,6 +47,26 @@ type persistedDeviceTokenStruct struct {
 }
 
 /*
+ * A public key, as represented on disk.
+ */
+type persistedPublicKeyStruct struct {
+	CreationTime string
+	Description  string
+	Type         string
+	Key          string
+}
+
+/*
+ * A public key, as represented in memory.
+ */
+type publicKeyStruct struct {
+	creationTime   time.Time
+	description    string
+	representation publickey.Representation
+	keyData        []byte
+}
+
+/*
  * A user, as represented in memory.
  */
 type userStruct struct {
@@ -54,6 +76,7 @@ type userStruct struct {
 	nonce        [LENGTH]byte
 	permissions  []string
 	deviceTokens []deviceTokenStruct
+	publicKeys   []publicKeyStruct
 }
 
 /*
@@ -65,6 +88,7 @@ type persistedUserStruct struct {
 	Hash         string
 	Permissions  []string
 	DeviceTokens []persistedDeviceTokenStruct
+	PublicKeys   []persistedPublicKeyStruct
 }
 
 /*
@@ -87,10 +111,23 @@ type DeviceToken interface {
 }
 
 /*
+ * A public key.
+ */
+type PublicKey interface {
+	CreationTime() time.Time
+	Description() string
+	ExportPEM() []byte
+	Hash() [LENGTH]byte
+	KeyData() []byte
+	Representation() publickey.Representation
+}
+
+/*
  * A user manager.
  */
 type Manager interface {
 	AddPermission(name string, permission string) error
+	AddPublicKey(name string, creationTime time.Time, description string, pemData []byte) error
 	CreateDeviceToken(name string, creationTime time.Time, description string) (DeviceToken, error)
 	CreateUser(name string) error
 	DeviceTokens(name string) ([]DeviceToken, error)
@@ -101,9 +138,11 @@ type Manager interface {
 	Import(buf []byte) error
 	Nonce(name string) ([LENGTH]byte, error)
 	Permissions(name string) ([]string, error)
+	PublicKeys(name string) ([]PublicKey, error)
 	RegenerateNonce(name string) error
 	RemoveDeviceToken(name string, token uint64) error
 	RemovePermission(name string, permission string) error
+	RemovePublicKey(name string, idx uint64) error
 	RemoveUser(name string) error
 	Salt(name string) ([LENGTH]byte, error)
 	SetPassword(name string, password string) error
@@ -133,6 +172,60 @@ func (this *deviceTokenStruct) Description() string {
 func (this *deviceTokenStruct) Token() uint64 {
 	token := this.token
 	return token
+}
+
+/*
+ * Returns the creation time of this public key.
+ */
+func (this *publicKeyStruct) CreationTime() time.Time {
+	t := this.creationTime
+	return t
+}
+
+/*
+ * Returns the description of this public key.
+ */
+func (this *publicKeyStruct) Description() string {
+	desc := this.description
+	return desc
+}
+
+/*
+ * Returns the PEM representation of this public key.
+ */
+func (this *publicKeyStruct) ExportPEM() []byte {
+	representation := this.representation
+	keyData := this.keyData
+	result := publickey.EncodePEM(keyData, representation)
+	return result
+}
+
+/*
+ * Returns the SHA-512 hash of this public key.
+ */
+func (this *publicKeyStruct) Hash() [LENGTH]byte {
+	keyData := this.keyData
+	result := sha512.Sum512(keyData)
+	return result
+}
+
+/*
+ * Returns the ASN.1 representation of this public key.
+ */
+func (this *publicKeyStruct) KeyData() []byte {
+	keyData := this.keyData
+	sizeKeyData := len(keyData)
+	result := make([]byte, sizeKeyData)
+	copy(result, keyData)
+	return result
+}
+
+/*
+ * Returns the representation of this public key.
+ */
+func (this *publicKeyStruct) Representation() publickey.Representation {
+	representation := this.representation
+	return representation
 }
 
 /*
@@ -252,6 +345,53 @@ func (this *managerStruct) AddPermission(name string, permission string) error {
 }
 
 /*
+ * Adds a public key to a user.
+ */
+func (this *managerStruct) AddPublicKey(name string, creationTime time.Time, description string, pemData []byte) error {
+	errResult := error(nil)
+	this.mutex.Lock()
+	id := this.getUserId(name)
+
+	/*
+	 * Check if we have a user with the name provided to us.
+	 */
+	if id < 0 {
+		errResult = fmt.Errorf("User '%s' does not exist.", name)
+	} else {
+		users := this.users
+		user := users[id]
+		publicKeys := user.publicKeys
+		data, r, err := publickey.DecodePEM(pemData)
+
+		/*
+		 * Check if public key could be decoded.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to decode public key: %s", msg)
+		} else {
+
+			/*
+			 * Create public key.
+			 */
+			publicKey := publicKeyStruct{
+				creationTime:   creationTime,
+				description:    description,
+				representation: r,
+				keyData:        data,
+			}
+
+			publicKeys = append(publicKeys, publicKey)
+		}
+
+		this.users[id].publicKeys = publicKeys
+	}
+
+	this.mutex.Unlock()
+	return errResult
+}
+
+/*
  * Creates a new device token for a user.
  */
 func (this *managerStruct) CreateDeviceToken(name string, creationTime time.Time, description string) (DeviceToken, error) {
@@ -356,13 +496,17 @@ func (this *managerStruct) CreateUser(name string) error {
 				errResult = fmt.Errorf("User '%s' already exists.", name)
 			} else {
 				permissions := []string{}
+				deviceTokens := []deviceTokenStruct{}
+				publicKeys := []publicKeyStruct{}
 
 				/*
 				 * Create new user.
 				 */
 				userNew := userStruct{
-					name:        name,
-					permissions: permissions,
+					name:         name,
+					permissions:  permissions,
+					deviceTokens: deviceTokens,
+					publicKeys:   publicKeys,
 				}
 
 				users := this.users
@@ -422,6 +566,7 @@ func (this *managerStruct) Export() ([]byte, error) {
 	numUsers := len(users)
 	persistedUsers := make([]persistedUserStruct, numUsers)
 	encoding := base64.StdEncoding
+	timeFormat := time.RFC3339
 
 	/*
 	 * Iterate over all users and persist them.
@@ -453,7 +598,6 @@ func (this *managerStruct) Export() ([]byte, error) {
 		 */
 		for j, deviceToken := range deviceTokens {
 			creationTime := deviceToken.creationTime
-			timeFormat := time.RFC3339
 			creationTimeString := creationTime.Format(timeFormat)
 			descriptionString := deviceToken.description
 			token := deviceToken.token
@@ -471,6 +615,35 @@ func (this *managerStruct) Export() ([]byte, error) {
 			persistedDeviceTokens[j] = persistedDeviceToken
 		}
 
+		publicKeys := user.publicKeys
+		numPublicKeys := len(publicKeys)
+		persistedPublicKeys := make([]persistedPublicKeyStruct, numPublicKeys)
+
+		/*
+		 * Iterate over all public keys and persist them.
+		 */
+		for j, publicKey := range publicKeys {
+			creationTime := publicKey.creationTime
+			creationTimeString := creationTime.Format(timeFormat)
+			descriptionString := publicKey.description
+			representation := publicKey.representation
+			typeString := representation.String()
+			keyData := publicKey.keyData
+			keyString := encoding.EncodeToString(keyData)
+
+			/*
+			 * Create persisted public key.
+			 */
+			persistedPublicKey := persistedPublicKeyStruct{
+				CreationTime: creationTimeString,
+				Description:  descriptionString,
+				Type:         typeString,
+				Key:          keyString,
+			}
+
+			persistedPublicKeys[j] = persistedPublicKey
+		}
+
 		/*
 		 * Create persisted user.
 		 */
@@ -480,6 +653,7 @@ func (this *managerStruct) Export() ([]byte, error) {
 			Hash:         hashString,
 			Permissions:  permissionCopy,
 			DeviceTokens: persistedDeviceTokens,
+			PublicKeys:   persistedPublicKeys,
 		}
 
 		persistedUsers[i] = persistedUser
@@ -587,6 +761,7 @@ func (this *managerStruct) HasPermission(name string, permission string) (bool, 
 
 	}
 
+	this.mutex.RUnlock()
 	return result, errResult
 }
 
@@ -619,8 +794,6 @@ func (this *managerStruct) Import(buf []byte) error {
 			saltSize := len(salt)
 			hash, errHash := encoding.DecodeString(hashPersisted)
 			hashSize := len(hash)
-			persistedPermissions := persistedUser.Permissions
-			persistedDeviceTokens := persistedUser.DeviceTokens
 
 			/*
 			 * Check for pathological cases.
@@ -636,11 +809,16 @@ func (this *managerStruct) Import(buf []byte) error {
 			} else if hashSize != 0 && hashSize != LENGTH {
 				return fmt.Errorf("Password hash of user '%s' has incorrect size. Expected either 0 or %d bytes, found %d bytes.", userName, LENGTH, hashSize)
 			} else {
+				persistedPermissions := persistedUser.Permissions
+				persistedDeviceTokens := persistedUser.DeviceTokens
+				persistedPublicKeys := persistedUser.PublicKeys
 				numPermissions := len(persistedPermissions)
-				permissionsImported := make([]string, numPermissions)
-				copy(permissionsImported, persistedPermissions)
 				numDeviceTokens := len(persistedDeviceTokens)
+				numPublicKeys := len(persistedPublicKeys)
+				permissionsImported := make([]string, numPermissions)
 				deviceTokensImported := make([]deviceTokenStruct, numDeviceTokens)
+				publicKeysImported := make([]publicKeyStruct, numPublicKeys)
+				copy(permissionsImported, persistedPermissions)
 
 				/*
 				 * Iterate over all device tokens and make them usable from their persisted state.
@@ -676,12 +854,49 @@ func (this *managerStruct) Import(buf []byte) error {
 				}
 
 				/*
+				 * Iterate over all public keys and make them usable from their persisted state.
+				 */
+				for j, persistedPublicKey := range persistedPublicKeys {
+					creationTimeString := persistedPublicKey.CreationTime
+					creationTimeValue, errCreationTime := time.ParseInLocation(time.RFC3339, creationTimeString, time.UTC)
+					descriptionValue := persistedPublicKey.Description
+					keyType := persistedPublicKey.Type
+					representationValue := publickey.CreateRepresentation(keyType)
+					keyString := persistedPublicKey.Key
+					key, errKey := encoding.DecodeString(keyString)
+
+					/*
+					 * Check if creation time and token could be parsed.
+					 */
+					if errCreationTime != nil {
+						return fmt.Errorf("Failed to parse creation time of public key %d for user '%s'.", j, userName)
+					} else if errKey != nil {
+						return fmt.Errorf("Failed to parse key data of public key %d for user '%s'.", j, userName)
+					} else {
+
+						/*
+						 * Create device token.
+						 */
+						publicKey := publicKeyStruct{
+							creationTime:   creationTimeValue,
+							description:    descriptionValue,
+							representation: representationValue,
+							keyData:        key,
+						}
+
+						publicKeysImported[j] = publicKey
+					}
+
+				}
+
+				/*
 				 * Create imported user.
 				 */
 				user := userStruct{
 					name:         userName,
 					permissions:  permissionsImported,
 					deviceTokens: deviceTokensImported,
+					publicKeys:   publicKeysImported,
 				}
 
 				copy(user.salt[:], salt)
@@ -766,6 +981,41 @@ func (this *managerStruct) Permissions(name string) ([]string, error) {
 		numPermissions := len(permissions)
 		result := make([]string, numPermissions)
 		copy(result, permissions)
+	}
+
+	this.mutex.RUnlock()
+	return result, errResult
+}
+
+/*
+ * Returns public keys of a user.
+ */
+func (this *managerStruct) PublicKeys(name string) ([]PublicKey, error) {
+	result := []PublicKey(nil)
+	errResult := error(nil)
+	this.mutex.RLock()
+	id := this.getUserId(name)
+
+	/*
+	 * Check if we have a user with the name provided to us.
+	 */
+	if id < 0 {
+		errResult = fmt.Errorf("User '%s' does not exist.", name)
+	} else {
+		users := this.users
+		user := users[id]
+		publicKeys := user.publicKeys
+		numPublicKeys := len(publicKeys)
+		result = make([]PublicKey, numPublicKeys)
+
+		/*
+		 * Copy all public keys.
+		 */
+		for i, publicKey := range publicKeys {
+			publicKeyCopy := publicKey
+			result[i] = &publicKeyCopy
+		}
+
 	}
 
 	this.mutex.RUnlock()
@@ -899,6 +1149,43 @@ func (this *managerStruct) RemovePermission(name string, permission string) erro
 }
 
 /*
+ * Removes a public key from a user.
+ */
+func (this *managerStruct) RemovePublicKey(name string, idx uint64) error {
+	errResult := error(nil)
+	this.mutex.Lock()
+	id := this.getUserId(name)
+
+	/*
+	 * Check if we have a user with the name provided to us.
+	 */
+	if id < 0 {
+		errResult = fmt.Errorf("User '%s' does not exist.", name)
+	} else {
+		users := this.users
+		user := users[id]
+		publicKeys := user.publicKeys
+		numPublicKeys := len(publicKeys)
+
+		/*
+		 * Check if public key exists.
+		 */
+		if idx >= uint64(numPublicKeys) {
+			errResult = fmt.Errorf("Failed to remove public key #%d: User '%s' has %d public keys.", idx, name, numPublicKeys)
+		} else {
+			idxInc := idx + 1
+			publicKeys = append(publicKeys[:idx], publicKeys[idxInc:]...)
+			user.publicKeys = publicKeys
+			users[id] = user
+		}
+
+	}
+
+	this.mutex.Unlock()
+	return errResult
+}
+
+/*
  * Removes an existing user.
  */
 func (this *managerStruct) RemoveUser(name string) error {
@@ -950,6 +1237,7 @@ func (this *managerStruct) Salt(name string) ([LENGTH]byte, error) {
  * Changes the password of a user.
  */
 func (this *managerStruct) SetPassword(name string, password string) error {
+	errResult := error(nil)
 	this.mutex.Lock()
 	id := this.getUserId(name)
 
@@ -957,8 +1245,7 @@ func (this *managerStruct) SetPassword(name string, password string) error {
 	 * Check if we have a user with this ID.
 	 */
 	if id < 0 {
-		this.mutex.Unlock()
-		return fmt.Errorf("User '%s' does not exist.", name)
+		errResult = fmt.Errorf("User '%s' does not exist.", name)
 	} else {
 		prng := this.prng
 		salt := make([]byte, LENGTH)
@@ -968,11 +1255,9 @@ func (this *managerStruct) SetPassword(name string, password string) error {
 		 * Check if salt was generated.
 		 */
 		if err != nil {
-			this.mutex.Unlock()
-			return fmt.Errorf("Failed to generate salt for user '%s' password change.", name)
+			errResult = fmt.Errorf("Failed to generate salt for user '%s' password change.", name)
 		} else if numBytes != LENGTH {
-			this.mutex.Unlock()
-			return fmt.Errorf("Failed to generate salt for user '%s': Incorrect number of bytes read from PRNG: Expected %d, got %d.", name, LENGTH, numBytes)
+			errResult = fmt.Errorf("Failed to generate salt for user '%s': Incorrect number of bytes read from PRNG: Expected %d, got %d.", name, LENGTH, numBytes)
 		} else {
 			pwdBytes := []byte(password)
 			pwdHash := sha512.Sum512(pwdBytes)
@@ -981,12 +1266,12 @@ func (this *managerStruct) SetPassword(name string, password string) error {
 			finalHash := sha512.Sum512(saltAndHash)
 			users[id].hash = finalHash[:]
 			copy(users[id].salt[:], salt)
-			this.mutex.Unlock()
-			return nil
 		}
 
 	}
 
+	this.mutex.RUnlock()
+	return errResult
 }
 
 /*

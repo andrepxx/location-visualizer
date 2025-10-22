@@ -2,6 +2,7 @@ package remote
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
@@ -14,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/andrepxx/location-visualizer/auth/publickey"
+	"github.com/andrepxx/location-visualizer/auth/rand"
 	"github.com/andrepxx/location-visualizer/remote/multipart"
 )
 
@@ -277,6 +280,7 @@ func (this *sessionStruct) Logout() error {
  */
 type Connection interface {
 	Login(name string, password string) (Session, error)
+	LoginPrivateKey(name string, privateKey *rsa.PrivateKey) (Session, error)
 }
 
 /*
@@ -288,6 +292,7 @@ type connectionStruct struct {
 	client      *http.Client
 	endpointURI string
 	userAgent   string
+	csprng      io.Reader
 }
 
 /*
@@ -590,6 +595,89 @@ func (this *connectionStruct) authResponse(name string, hash [SIZE_KEY_BYTES]byt
 }
 
 /*
+ * Performs a public-key authentication response, establishing a session and returns a session token.
+ */
+func (this *connectionStruct) authResponsePublicKey(name string, signature []byte) ([SIZE_KEY_BYTES]byte, error) {
+	sessionToken := [SIZE_KEY_BYTES]byte{}
+	errResult := error(nil)
+	enc := base64.StdEncoding
+	encodedSignature := enc.EncodeToString(signature)
+	requestData := url.Values{}
+	requestData.Set("cgi", "auth-response-public-key")
+	requestData.Set("name", name)
+	requestData.Set("signature", encodedSignature)
+	response, err := this.request(requestData, CONTENT_TYPE_JSON)
+
+	/*
+	 * Check if an error occured during the request.
+	 */
+	if err != nil {
+		msg := err.Error()
+		errResult = fmt.Errorf("Error during TLS request: %s", msg)
+	} else {
+		responseData, err := io.ReadAll(response)
+
+		/*
+		 * Check if an error occured reading the response.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			token := webTokenStruct{}
+			err := json.Unmarshal(responseData, &token)
+
+			/*
+			 * Check if an error occured while parsing the response.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Error parsing response: %s", msg)
+			} else {
+				success := token.Success
+
+				/*
+				 * Check if login was successful.
+				 */
+				if !success {
+					reason := token.Reason
+					errResult = fmt.Errorf("Error during login process: %s", reason)
+				} else {
+					enc := base64.StdEncoding
+					tokenString := token.Token
+					tokenBytes, err := enc.DecodeString(tokenString)
+
+					/*
+					 * Check if session token could be decoded.
+					 */
+					if err != nil {
+						msg := err.Error()
+						errResult = fmt.Errorf("Error decoding session token: %s", msg)
+					} else {
+						sessionTokenSlice := sessionToken[:]
+						n := copy(sessionTokenSlice, tokenBytes)
+
+						/*
+						 * Check if session token was of expected length.
+						 */
+						if n != SIZE_KEY_BYTES {
+							errResult = fmt.Errorf("Session token was not of expected length: Expected %d bytes, got %d.", SIZE_KEY_BYTES, n)
+						}
+
+					}
+
+				}
+
+			}
+
+		}
+
+	}
+
+	return sessionToken, errResult
+}
+
+/*
  * Logs in at a remote host with user name and password, establishing an
  * authenticated session.
  */
@@ -641,9 +729,65 @@ func (this *connectionStruct) Login(name string, password string) (Session, erro
 }
 
 /*
+ * Logs in at a remote host with an RSA private key, establishing an
+ * authenticated session.
+ */
+func (this *connectionStruct) LoginPrivateKey(name string, privateKey *rsa.PrivateKey) (Session, error) {
+	session := Session(nil)
+	errResult := error(nil)
+	_, nonce, err := this.authRequest(name)
+
+	/*
+	 * Check if authentication request was successful.
+	 */
+	if err != nil {
+		msg := err.Error()
+		errResult = fmt.Errorf("Error during authentication request: %s", msg)
+	} else {
+		nonceSlice := nonce[:]
+		csprng := this.csprng
+		sig, err := publickey.SignPSS(nonceSlice, privateKey, csprng)
+
+		/*
+		 * Check if signature could be created.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to generate signature: %s", msg)
+		} else {
+			token, err := this.authResponsePublicKey(name, sig)
+
+			/*
+			 * Check if authentication response was successful and a session was established.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Error during authentication response: %s", msg)
+			} else {
+
+				/*
+				 * Create session.
+				 */
+				session = &sessionStruct{
+					connection: this,
+					token:      token,
+				}
+
+			}
+
+		}
+
+	}
+
+	return session, errResult
+}
+
+/*
  * Creates a new connection to a remote host, expecting a certain certificate chain.
  */
-func CreateConnection(host string, port uint16, userAgent string, certificateChain []byte) Connection {
+func CreateConnection(host string, port uint16, userAgent string, certificateChain []byte) (Connection, error) {
+	result := Connection(nil)
+	errResult := error(nil)
 
 	/*
 	 * Certificate verification function.
@@ -715,16 +859,42 @@ func CreateConnection(host string, port uint16, userAgent string, certificateCha
 		Transport: &transport,
 	}
 
+	r := rand.SystemPRNG()
+	seed := make([]byte, rand.SEED_SIZE)
+	_, err := r.Read(seed)
+
 	/*
-	 * Create new connection.
+	 * Check if seed could be read from system.
 	 */
-	conn := connectionStruct{
-		host:        host,
-		port:        port,
-		client:      client,
-		endpointURI: "/cgi-bin/locviz",
-		userAgent:   userAgent,
+	if err != nil {
+		errResult = fmt.Errorf("Failed to obtain entropy from system.")
+	} else {
+		prng, err := rand.CreatePRNG(seed)
+
+		/*
+		 * Check if PRNG could be created.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to create pseudo-random number generator: %s", msg)
+		} else {
+
+			/*
+			* Create new connection.
+			 */
+			conn := connectionStruct{
+				host:        host,
+				port:        port,
+				client:      client,
+				endpointURI: "/cgi-bin/locviz",
+				userAgent:   userAgent,
+				csprng:      prng,
+			}
+
+			result = &conn
+		}
+
 	}
 
-	return &conn
+	return result, errResult
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/andrepxx/location-visualizer/auth/publickey"
 	"github.com/andrepxx/location-visualizer/remote"
 )
 
@@ -29,6 +30,9 @@ type controllerStruct struct {
 	userAgent string
 }
 
+/*
+ * Loads a certificate from a path.
+ */
 func (this *controllerStruct) loadCertificate(path string) ([]byte, error) {
 	result := []byte(nil)
 	certificateBytes, err := os.ReadFile(path)
@@ -45,9 +49,52 @@ func (this *controllerStruct) loadCertificate(path string) ([]byte, error) {
 }
 
 /*
+ * Login to a remote server using RSA authentication.
+ */
+func (this *controllerStruct) loginPrivateKey(conn remote.Connection, user string, keyFilePath string) (remote.Session, error) {
+	result := remote.Session(nil)
+	errResult := error(nil)
+	pemData, err := os.ReadFile(keyFilePath)
+
+	/*
+	 * Check if private key could be loaded.
+	 */
+	if err != nil {
+		msg := err.Error()
+		errResult = fmt.Errorf("Failed to load private key: %s", msg)
+	} else {
+		keyData, representation, err := publickey.DecodePEM(pemData)
+
+		/*
+		 * Check if private key could be decoded.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to decode private key: %s", msg)
+		} else {
+			rsaPrivateKey, err := publickey.LoadRSAPrivateKey(keyData, representation)
+
+			/*
+			 * Check if private key could be loaded.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to load private key: %s", msg)
+			} else {
+				result, errResult = conn.LoginPrivateKey(user, rsaPrivateKey)
+			}
+
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
  * Export activities from remote server into a CSV file.
  */
-func (this *controllerStruct) exportActivityCsv(args []string) {
+func (this *controllerStruct) exportActivityCsv(args []string, useKeyFile bool) {
 	const EXPECTED_NUMBER_OF_ARGS = 8
 	numArgs := len(args)
 
@@ -61,7 +108,7 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
 		portString := args[3]
 		certificatePath := args[4]
 		user := args[5]
-		password := args[6]
+		passwordOrKeyFilePath := args[6]
 		path := args[7]
 		port, errPort := strconv.ParseUint(portString, 10, 16)
 		certificate, errCertificate := this.loadCertificate(certificatePath)
@@ -76,58 +123,77 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
-			sess, err := conn.Login(user, password)
+			conn, err := remote.CreateConnection(host, portValue, userAgent, certificate)
 
 			/*
-			 * Check if session could be established.
+			 * Check if connection could be established.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Failed to establish session: %s\n", msg)
+				fmt.Printf("Failed to establish connection: %s\n", msg)
 			} else {
-				flags := int(os.O_CREATE | os.O_EXCL | os.O_WRONLY)
-				fd, err := os.OpenFile(path, flags, DEFAULT_FILE_MODE)
+				sess := remote.Session(nil)
 
 				/*
-				 * Check if file could be created.
+				 * Login using password or private key.
+				 */
+				if useKeyFile {
+					sess, err = this.loginPrivateKey(conn, user, passwordOrKeyFilePath)
+				} else {
+					sess, err = conn.Login(user, passwordOrKeyFilePath)
+				}
+
+				/*
+				 * Check if session could be established.
 				 */
 				if err != nil {
 					msg := err.Error()
-					fmt.Printf("Failed to create output file: %s\n", msg)
+					fmt.Printf("Failed to establish session: %s\n", msg)
 				} else {
-					fdRemote, err := sess.ExportActivityCsv()
+					flags := int(os.O_CREATE | os.O_EXCL | os.O_WRONLY)
+					fd, err := os.OpenFile(path, flags, DEFAULT_FILE_MODE)
 
 					/*
-					 * Check if error occured during export call.
+					 * Check if file could be created.
 					 */
 					if err != nil {
 						msg := err.Error()
-						fmt.Printf("Failed to export activity data: %s\n", msg)
+						fmt.Printf("Failed to create output file: %s\n", msg)
 					} else {
-						buf := make([]byte, DEFAULT_BUFFER_SIZE)
-						_, err := io.CopyBuffer(fd, fdRemote, buf)
+						fdRemote, err := sess.ExportActivityCsv()
 
 						/*
-						 * Check if error occured during export process.
+						 * Check if error occured during export call.
 						 */
 						if err != nil {
 							msg := err.Error()
-							fmt.Printf("Error reading from remote connection: %s\n", msg)
+							fmt.Printf("Failed to export activity data: %s\n", msg)
+						} else {
+							buf := make([]byte, DEFAULT_BUFFER_SIZE)
+							_, err := io.CopyBuffer(fd, fdRemote, buf)
+
+							/*
+							 * Check if error occured during export process.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("Error reading from remote connection: %s\n", msg)
+							}
+
 						}
 
 					}
 
-				}
+					err = sess.Logout()
 
-				err = sess.Logout()
+					/*
+					* Check if session could be terminated.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to terminate session: %s\n", msg)
+					}
 
-				/*
-				 * Check if session could be terminated.
-				 */
-				if err != nil {
-					msg := err.Error()
-					fmt.Printf("Failed to terminate session: %s\n", msg)
 				}
 
 			}
@@ -141,7 +207,7 @@ func (this *controllerStruct) exportActivityCsv(args []string) {
 /*
  * Export geo data from remote server into a file of the selected format.
  */
-func (this *controllerStruct) exportGeodata(args []string) {
+func (this *controllerStruct) exportGeodata(args []string, useKeyFile bool) {
 	const EXPECTED_NUMBER_OF_ARGS = 9
 	numArgs := len(args)
 
@@ -155,7 +221,7 @@ func (this *controllerStruct) exportGeodata(args []string) {
 		portString := args[3]
 		certificatePath := args[4]
 		user := args[5]
-		password := args[6]
+		passwordOrKeyFilePath := args[6]
 		format := args[7]
 		path := args[8]
 		port, errPort := strconv.ParseUint(portString, 10, 16)
@@ -171,58 +237,77 @@ func (this *controllerStruct) exportGeodata(args []string) {
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
-			sess, err := conn.Login(user, password)
+			conn, err := remote.CreateConnection(host, portValue, userAgent, certificate)
 
 			/*
-			 * Check if session could be established.
+			 * Check if connection could be established.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Failed to establish session: %s\n", msg)
+				fmt.Printf("Failed to establish connection: %s\n", msg)
 			} else {
-				flags := int(os.O_CREATE | os.O_EXCL | os.O_WRONLY)
-				fd, err := os.OpenFile(path, flags, DEFAULT_FILE_MODE)
+				sess := remote.Session(nil)
 
 				/*
-				 * Check if file could be created.
+				 * Login using password or private key.
+				 */
+				if useKeyFile {
+					sess, err = this.loginPrivateKey(conn, user, passwordOrKeyFilePath)
+				} else {
+					sess, err = conn.Login(user, passwordOrKeyFilePath)
+				}
+
+				/*
+				 * Check if session could be established.
 				 */
 				if err != nil {
 					msg := err.Error()
-					fmt.Printf("Failed to create output file: %s\n", msg)
+					fmt.Printf("Failed to establish session: %s\n", msg)
 				} else {
-					fdRemote, err := sess.ExportGeodata(format)
+					flags := int(os.O_CREATE | os.O_EXCL | os.O_WRONLY)
+					fd, err := os.OpenFile(path, flags, DEFAULT_FILE_MODE)
 
 					/*
-					 * Check if error occured during export call.
+					 * Check if file could be created.
 					 */
 					if err != nil {
 						msg := err.Error()
-						fmt.Printf("Failed to export geo data: %s\n", msg)
+						fmt.Printf("Failed to create output file: %s\n", msg)
 					} else {
-						buf := make([]byte, DEFAULT_BUFFER_SIZE)
-						_, err := io.CopyBuffer(fd, fdRemote, buf)
+						fdRemote, err := sess.ExportGeodata(format)
 
 						/*
-						 * Check if error occured during export process.
+						 * Check if error occured during export call.
 						 */
 						if err != nil {
 							msg := err.Error()
-							fmt.Printf("Error reading from remote connection: %s\n", msg)
+							fmt.Printf("Failed to export geo data: %s\n", msg)
+						} else {
+							buf := make([]byte, DEFAULT_BUFFER_SIZE)
+							_, err := io.CopyBuffer(fd, fdRemote, buf)
+
+							/*
+							* Check if error occured during export process.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("Error reading from remote connection: %s\n", msg)
+							}
+
 						}
 
 					}
 
-				}
+					err = sess.Logout()
 
-				err = sess.Logout()
+					/*
+					 * Check if session could be terminated.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to terminate session: %s\n", msg)
+					}
 
-				/*
-				 * Check if session could be terminated.
-				 */
-				if err != nil {
-					msg := err.Error()
-					fmt.Printf("Failed to terminate session: %s\n", msg)
 				}
 
 			}
@@ -236,7 +321,7 @@ func (this *controllerStruct) exportGeodata(args []string) {
 /*
  * Import geo data to remote server from a file of the selected format.
  */
-func (this *controllerStruct) importGeodata(args []string) {
+func (this *controllerStruct) importGeodata(args []string, useKeyFile bool) {
 	const EXPECTED_NUMBER_OF_ARGS = 10
 	numArgs := len(args)
 
@@ -250,7 +335,7 @@ func (this *controllerStruct) importGeodata(args []string) {
 		portString := args[3]
 		certificatePath := args[4]
 		user := args[5]
-		password := args[6]
+		passwordOrKeyFilePath := args[6]
 		format := args[7]
 		strategy := args[8]
 		path := args[9]
@@ -267,57 +352,76 @@ func (this *controllerStruct) importGeodata(args []string) {
 		} else {
 			portValue := uint16(port)
 			userAgent := this.userAgent
-			conn := remote.CreateConnection(host, portValue, userAgent, certificate)
-			sess, err := conn.Login(user, password)
+			conn, err := remote.CreateConnection(host, portValue, userAgent, certificate)
 
 			/*
-			 * Check if session could be established.
+			 * Check if connection could be established.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Failed to establish session: %s\n", msg)
+				fmt.Printf("Failed to establish connection: %s\n", msg)
 			} else {
-				fd, err := os.Open(path)
+				sess := remote.Session(nil)
 
 				/*
-				 * Check if file could be created.
+				 * Login using password or private key.
+				 */
+				if useKeyFile {
+					sess, err = this.loginPrivateKey(conn, user, passwordOrKeyFilePath)
+				} else {
+					sess, err = conn.Login(user, passwordOrKeyFilePath)
+				}
+
+				/*
+				 * Check if session could be established.
 				 */
 				if err != nil {
 					msg := err.Error()
-					fmt.Printf("Failed to open input file: %s\n", msg)
+					fmt.Printf("Failed to establish session: %s\n", msg)
 				} else {
-					r, err := sess.ImportGeodata(format, strategy, fd)
+					fd, err := os.Open(path)
 
 					/*
-					 * Check if error occured during import call.
+					 * Check if file could be created.
 					 */
 					if err != nil {
 						msg := err.Error()
-						fmt.Printf("Failed to import geo data: %s\n", msg)
-					} else if r != nil {
-						_, err := io.Copy(os.Stdout, r)
+						fmt.Printf("Failed to open input file: %s\n", msg)
+					} else {
+						r, err := sess.ImportGeodata(format, strategy, fd)
 
 						/*
-						 * Check if error occured reading response.
+						 * Check if error occured during import call.
 						 */
 						if err != nil {
 							msg := err.Error()
-							fmt.Printf("Failed to read response: %s\n", msg)
+							fmt.Printf("Failed to import geo data: %s\n", msg)
+						} else if r != nil {
+							_, err := io.Copy(os.Stdout, r)
+
+							/*
+							 * Check if error occured reading response.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("Failed to read response: %s\n", msg)
+							}
+
+							fmt.Printf("%s\n", "")
 						}
 
-						fmt.Printf("%s\n", "")
 					}
 
-				}
+					err = sess.Logout()
 
-				err = sess.Logout()
+					/*
+					 * Check if session could be terminated.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Failed to terminate session: %s\n", msg)
+					}
 
-				/*
-				 * Check if session could be terminated.
-				 */
-				if err != nil {
-					msg := err.Error()
-					fmt.Printf("Failed to terminate session: %s\n", msg)
 				}
 
 			}
@@ -347,11 +451,17 @@ func (this *controllerStruct) Interpret(args []string) {
 		 */
 		switch cmd {
 		case "export-activity-csv":
-			this.exportActivityCsv(args)
+			this.exportActivityCsv(args, false)
+		case "export-activity-csv-pk":
+			this.exportActivityCsv(args, true)
 		case "export-geodata":
-			this.exportGeodata(args)
+			this.exportGeodata(args, false)
+		case "export-geodata-pk":
+			this.exportGeodata(args, true)
 		case "import-geodata":
-			this.importGeodata(args)
+			this.importGeodata(args, false)
+		case "import-geodata-pk":
+			this.importGeodata(args, true)
 		default:
 			fmt.Printf("Unknown command: %s\n", cmd)
 		}
