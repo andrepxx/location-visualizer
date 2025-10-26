@@ -274,7 +274,7 @@ You can use the *location-visualizer* CLI client to authenticate using public-ke
 
 The key stored in `client-private.pem` must be an RSA key in either `PKCS#1` or `PKCS#8` format.
 
-*PKCS#1* is the older specification and is limited to RSA keys (both private and public keys), while *PKCS#8* is the more modern specification and can store different types of private keys, while *PKIX* is can store different public-keys. Since *location-visualizer* uses RSA-PSS is for user authentication, only RSA keys are supported and the client will exit with an error when a *PKCS#8* key for a different cryptosystem is supplied.
+*PKCS#1* is the older specification and is limited to RSA keys (both private and public keys), while *PKCS#8* is the more modern specification and can store different types of private keys, while *PKIX* can store different public-keys. Since *location-visualizer* uses RSA-PSS is for user authentication, only RSA keys are supported and the client will exit with an error when a *PKCS#8* key for a different cryptosystem is supplied.
 
 The key must **not** be encrypted.
 
