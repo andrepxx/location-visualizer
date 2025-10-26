@@ -214,7 +214,7 @@ openssl genrsa -out client-private.pem 4096
 openssl rsa -in client-private.pem -pubout -out client-public.pem
 ```
 
-This will generate an RSA key pair with a key strength of 4096 bits. The private key will be stored in `client-private.pem`, while the public key will be stored in `client-private.pem`.
+This will generate an RSA key pair with a key strength of 4096 bits. The private key will be stored in `client-private.pem`, while the public key will be stored in `client-public.pem`.
 
 The public key must be associated on the server side with a user account to be used for authentication, while the private key must be kept secret and is used by the client during authentication.
 
