@@ -482,7 +482,7 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 							n, err := io.CopyBuffer(w, lengthField, buf)
 
 							/*
-							* Check if length field was copied successfully.
+							 * Check if length field was copied successfully.
 							 */
 							if err != nil {
 								errResult = fmt.Errorf("Failed to copy length field from offset %d (0x%016x) to offset %d (0x%08x).", offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite)
@@ -493,8 +493,8 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 								offsetInSection, err := section.Seek(0, io.SeekStart)
 
 								/*
-								* Check if an error occured while seeking back
-								* to beginning of the section.
+								 * Check if an error occured while seeking back
+								 * to beginning of the section.
 								 */
 								if err != nil {
 									errResult = fmt.Errorf("Failed to seek back to start of section.")
@@ -505,7 +505,7 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 									n, err := io.CopyBuffer(w, section, buf)
 
 									/*
-									* Check if section was copied successfully.
+									 * Check if section was copied successfully.
 									 */
 									if err != nil {
 										errResult = fmt.Errorf("Failed to copy section of size %d (0x%016x) from offset %d (0x%016x) to offset %d (0x%08x).", sizeSection, sizeSection, offsetSectionStart, offsetSectionStart, offsetWrite, offsetWrite)
@@ -538,7 +538,7 @@ func (this *imageDatabaseStruct) Cleanup(keep func(ImageHandle) bool) error {
 		err := fd.Truncate(offsetWrite)
 
 		/*
-		* Check if file got truncated correctly.
+		 * Check if file got truncated correctly.
 		 */
 		if err != nil {
 			errResult = fmt.Errorf("Failed to truncate image database to size %d (0x%016x).", offsetWrite, offsetWrite)
@@ -1515,7 +1515,7 @@ func (this *indexDatabaseSorterStruct) Less(i int, j int) bool {
 					errJ := db.readEntry(fd, j64, &entryJ)
 
 					/*
-					* Make sure that we read both values.
+					 * Make sure that we read both values.
 					 */
 					if errI != nil {
 						msg := errI.Error()

@@ -187,7 +187,7 @@ func (this *controllerStruct) exportActivityCsv(args []string, useKeyFile bool) 
 					err = sess.Logout()
 
 					/*
-					* Check if session could be terminated.
+					 * Check if session could be terminated.
 					 */
 					if err != nil {
 						msg := err.Error()
@@ -287,7 +287,7 @@ func (this *controllerStruct) exportGeodata(args []string, useKeyFile bool) {
 							_, err := io.CopyBuffer(fd, fdRemote, buf)
 
 							/*
-							* Check if error occured during export process.
+							 * Check if error occured during export process.
 							 */
 							if err != nil {
 								msg := err.Error()
