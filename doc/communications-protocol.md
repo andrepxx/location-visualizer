@@ -86,7 +86,7 @@ As an alternative to the password-based authentication protocol, clients can als
 
 **Step 2: Calculate the authentication response**
 
-The authentication response will be `SignPSS(nonce, pk)`, using SHA-512 as the hash function, with `pk` being the RSA public key.
+The authentication response will be `SignPSS(nonce, pk)`, using SHA-512 as the hash function, with `pk` being the RSA private key.
 
 **Step 3: Send the authentication response to the server**
 
