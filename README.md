@@ -12,7 +12,7 @@ Starting from v1.9.0, data can also be imported from files in OpenGeoDB format. 
 
 Data can also be streamed live from sensors deployed in the field or submitted by other applications. Especially, since v1.12.0, a token-based authentication method is allowed for data submission by third-party applications or IoT devices, such as field sensors, which do not implement the full challenge-response based authentication protocol, which is usually required for integration with *location-visualizer*.
 
-Since v1.13.0, challenge-response authentication based on public-key cryptography is supported, in addition to password-based challenge-respone authentication. This provides enhanced security, especially for privileged accounts carrying out administrative tasks, enables more flexible credential management and makes automated workflows easier.
+Since v1.13.0, challenge-response authentication based on public-key cryptography is supported, in addition to password-based challenge-response authentication. This provides enhanced security, especially for privileged accounts carrying out administrative tasks, enables more flexible credential management and makes automated workflows easier.
 
 The software displays the aggregated location data as an interactive plot that you can navigate with either mouse and scroll wheel on your computer or with touch input on a mobile device.
 
