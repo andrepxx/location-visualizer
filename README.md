@@ -179,7 +179,7 @@ This will return a device token in hexadecimal encoding, which the IoT device or
 
 Use the following endpoint to submit your data: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
 
-For example, when provisioning the *mandhak/gpslogger* app, you can use the following URI with placeholders: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=%TIME&latitude=%LAT&longitude=%LON`
+For example, when provisioning the *mendhak/gpslogger* app, you can use the following URI with placeholders: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=%TIME&latitude=%LAT&longitude=%LON`
 
 You can provision as many devices (generate as many device tokens) for a user as you want.
 
