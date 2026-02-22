@@ -42,7 +42,14 @@ func (this *controllerStruct) loadCertificate(path string) ([]byte, error) {
 	 */
 	if err == nil {
 		block, _ := pem.Decode(certificateBytes)
-		result = block.Bytes
+
+		/*
+		 * The block may be nil on decoding errors.
+		 */
+		if block != nil {
+			result = block.Bytes
+		}
+
 	}
 
 	return result, err
