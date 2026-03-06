@@ -2581,8 +2581,7 @@ function UI() {
 	};
 
 	/*
-	 * Fetches a of tiles from the server and notifies listener
-	 * about update.
+	 * Fetches a tile from the server and notifies listener about update.
 	 */
 	this.fetchTile = function(token, tileDescriptor, listener) {
 		const x = tileDescriptor.osmX;
