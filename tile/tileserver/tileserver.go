@@ -120,7 +120,7 @@ func (this *osmTileServerStruct) getTile(id tile.Id) *bytes.Reader {
 				resp, err := client.Do(req)
 
 				/*
-				 * Check if we got a response and store it in cache.
+				 * Check if we got a response.
 				 */
 				if err == nil {
 					body := resp.Body
