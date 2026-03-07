@@ -1270,7 +1270,7 @@ func (this *managerStruct) SetPassword(name string, password string) error {
 
 	}
 
-	this.mutex.RUnlock()
+	this.mutex.Unlock()
 	return errResult
 }
 
