@@ -389,7 +389,7 @@ func (this *controllerStruct) importGeodata(args []string, useKeyFile bool) {
 					fd, err := os.Open(path)
 
 					/*
-					 * Check if file could be created.
+					 * Check if file could be opened.
 					 */
 					if err != nil {
 						msg := err.Error()
