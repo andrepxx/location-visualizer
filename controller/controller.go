@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"
@@ -12,9 +11,11 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/andrepxx/location-visualizer/auth/rand"
@@ -4230,16 +4231,10 @@ func (this *controllerStruct) runServer() {
 			go worker(requests)
 		}
 
-		stdin := os.Stdin
-		scanner := bufio.NewScanner(stdin)
-
-		/*
-		 * Read from standard input forever.
-		 */
-		for {
-			scanner.Scan()
-		}
-
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		<-c
+		fmt.Printf("%s\n", "Exiting ...")
 	}
 
 }
