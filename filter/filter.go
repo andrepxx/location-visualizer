@@ -37,7 +37,7 @@ func getValue(values []string, idx int, d string) string {
 	/*
 	 * If index is out of range, return default value.
 	 */
-	if idx > numValues {
+	if idx >= numValues {
 		return d
 	} else {
 		value := values[idx]

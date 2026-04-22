@@ -3927,7 +3927,7 @@ func (this *controllerStruct) interpret(args []string) {
 			 * Check number of arguments.
 			 */
 			if numArgs < 7 {
-				fmt.Printf("Command '%s' expects at least 6 additional arguments: host, port, certificate, username, password_or_key_file_path, command [and possibly options]\n", cmd)
+				fmt.Printf("Command '%s' expects at least 6 additional arguments: command, host, port, certificate, username, password_or_key_file_path, [and possibly other options]\n", cmd)
 			} else {
 				cfg := this.config
 				webServerConfig := cfg.WebServer
