@@ -1,3 +1,5 @@
+![location-visualizer](logo.svg)
+
 # location-visualizer
 
 This software allows you to perform fitness / activity and location tracking, as well as visualization of that data, on your own infrastructure.
