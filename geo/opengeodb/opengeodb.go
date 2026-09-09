@@ -151,21 +151,6 @@ func (this *databaseStruct) LocationAt(idx int) (geo.Location, error) {
 			}
 
 			base += SIZE_TIMESTAMP
-			longitude := uint32(0)
-
-			/*
-			 * Read longitude.
-			 */
-			for i := 0; i < SIZE_COORDINATE; i++ {
-				offs := base + i
-				byt := entry[offs]
-				byt32 := uint32(byt)
-				longitude <<= BITS_PER_BYTE
-				longitude |= byt32
-			}
-
-			longitudeSigned := int32(longitude)
-			base += SIZE_COORDINATE
 			latitude := uint32(0)
 
 			/*
@@ -181,6 +166,21 @@ func (this *databaseStruct) LocationAt(idx int) (geo.Location, error) {
 
 			latitudeSigned := int32(latitude)
 			base += SIZE_COORDINATE
+			longitude := uint32(0)
+
+			/*
+			 * Read longitude.
+			 */
+			for i := 0; i < SIZE_COORDINATE; i++ {
+				offs := base + i
+				byt := entry[offs]
+				byt32 := uint32(byt)
+				longitude <<= BITS_PER_BYTE
+				longitude |= byt32
+			}
+
+			longitudeSigned := int32(longitude)
+			base += SIZE_COORDINATE
 
 			/*
 			 * Check if we arrive at desired entry size.
@@ -194,8 +194,8 @@ func (this *databaseStruct) LocationAt(idx int) (geo.Location, error) {
 			 */
 			loc := locationStruct{
 				timestampMs: timestamp,
-				latitudeE7:  longitudeSigned,
-				longitudeE7: latitudeSigned,
+				latitudeE7:  latitudeSigned,
+				longitudeE7: longitudeSigned,
 			}
 
 			return &loc, nil

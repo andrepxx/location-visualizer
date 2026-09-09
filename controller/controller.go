@@ -413,8 +413,8 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 			cyclingDurationIn := request.Params["cyclingduration"]
 			cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
 			cyclingDistanceKM := request.Params["cyclingdistancekm"]
-			cycingEnergyKJIn := request.Params["cyclingenergykj"]
-			cyclingEnergyKJ, _ := strconv.ParseUint(cycingEnergyKJIn, 10, 64)
+			cyclingEnergyKJIn := request.Params["cyclingenergykj"]
+			cyclingEnergyKJ, _ := strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
 			otherEnergyKJIn := request.Params["otherenergykj"]
 			otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
 
@@ -2545,7 +2545,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 			 */
 			wr = webResponseStruct{
 				Success: false,
-				Reason:  "Failed to remove activity: Invalid revision number.",
+				Reason:  "Failed to replace activity: Invalid revision number.",
 			}
 
 		} else {

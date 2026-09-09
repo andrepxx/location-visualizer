@@ -428,6 +428,7 @@ func (this *managerStruct) CreateDeviceToken(name string, creationTime time.Time
 			 */
 			for collision && (errResult == nil) {
 				numBytes, err = prng.Read(token)
+				tokenValue = endian.Uint64(token)
 
 				/*
 				 * Check if token was successfully created.
@@ -979,7 +980,7 @@ func (this *managerStruct) Permissions(name string) ([]string, error) {
 		user := users[id]
 		permissions := user.permissions
 		numPermissions := len(permissions)
-		result := make([]string, numPermissions)
+		result = make([]string, numPermissions)
 		copy(result, permissions)
 	}
 

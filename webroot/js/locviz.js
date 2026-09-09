@@ -40,7 +40,7 @@ function Storage() {
 	/*
 	 * Fetch a value from a key inside an element.
 	 */
-	this.get = function(elem, key, value) {
+	this.get = function(elem, key) {
 		const map = g_map.get(elem);
 
 		/*

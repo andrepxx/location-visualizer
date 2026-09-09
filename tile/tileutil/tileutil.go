@@ -583,6 +583,15 @@ func (this *tileUtilStruct) Import(r io.Reader) error {
 			}
 
 			hdr, errNext = tr.Next()
+
+			/*
+			 * Check if error occurred advancing to next file.
+			 */
+			if errNext != nil {
+				msg := errNext.Error()
+				errResult = fmt.Errorf("Failed to advance to next file in tarball: %s", msg)
+			}
+
 		}
 
 		this.mutex.Unlock()

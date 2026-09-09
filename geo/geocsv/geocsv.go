@@ -152,7 +152,7 @@ func (this *databaseStruct) parseLongitude(longitudeString string) (int32, error
 		 * Check that the format is as expected.
 		 */
 		if sign == 0 {
-			errResult = fmt.Errorf("Failed to parse longitude: Expected 'N', 'S', 'n' or 's' at offset %d.", posDirection)
+			errResult = fmt.Errorf("Failed to parse longitude: Expected 'E', 'W', 'e' or 'w' at offset %d.", posDirection)
 		} else if dot != '.' {
 			errResult = fmt.Errorf("Failed to parse longitude: Expected dot at offset %d.", posDot)
 		} else {

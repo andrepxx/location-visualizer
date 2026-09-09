@@ -244,7 +244,7 @@ func (this *managerStruct) Challenge(name string) (Challenge, error) {
 /*
  * Verify an authentication response for a user, given his / her name and the response hash.
  */
-func (this *managerStruct) ResponseHash(name string, reseponse []byte) (Token, error) {
+func (this *managerStruct) ResponseHash(name string, response []byte) (Token, error) {
 	result := Token(nil)
 	errResult := error(nil)
 	this.mutex.RLock()
@@ -266,7 +266,7 @@ func (this *managerStruct) ResponseHash(name string, reseponse []byte) (Token, e
 		nonceAndHash := append(nonceSlice, hash...)
 		expected := sha512.Sum512(nonceAndHash)
 		expectedSlice := expected[:]
-		c := subtle.ConstantTimeCompare(reseponse, expectedSlice)
+		c := subtle.ConstantTimeCompare(response, expectedSlice)
 
 		/*
 		 * Check if the response matches.

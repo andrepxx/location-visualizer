@@ -2120,7 +2120,7 @@ func (this *databaseXmlSerializerStruct) generateXML() error {
 		if err != nil {
 			msg := err.Error()
 			errResult = fmt.Errorf("Error generating entry: %s", msg)
-			state = JSON_STREAM_ERROR
+			state = XML_STREAM_ERROR
 		} else {
 			moreAvailable := this.hasMoreEntries()
 

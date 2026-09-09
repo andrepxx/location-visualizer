@@ -154,7 +154,14 @@ func LoadRSAPrivateKey(keyData []byte, representation Representation) (*rsa.Priv
 
 	case REPRESENTATION_RSA_PRIVATE_KEY_PKCS8:
 		privateKey, err := x509.ParsePKCS8PrivateKey(keyData)
-		rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+		rsaPrivateKey, ok := (*rsa.PrivateKey)(nil), false
+
+		/*
+		 * Nil-check.
+		 */
+		if privateKey != nil {
+			rsaPrivateKey, ok = privateKey.(*rsa.PrivateKey)
+		}
 
 		/*
 		 * Check if an error occurred decoding the key.
@@ -203,7 +210,14 @@ func LoadRSAPublicKey(keyData []byte, representation Representation) (*rsa.Publi
 
 	case REPRESENTATION_RSA_PUBLIC_KEY_PKIX:
 		publicKey, err := x509.ParsePKIXPublicKey(keyData)
-		rsaPublicKey, ok := publicKey.(*rsa.PublicKey)
+		rsaPublicKey, ok := (*rsa.PublicKey)(nil), false
+
+		/*
+		 * Nil-check.
+		 */
+		if publicKey != nil {
+			rsaPublicKey, ok = publicKey.(*rsa.PublicKey)
+		}
 
 		/*
 		 * Check if an error occurred decoding the key.
