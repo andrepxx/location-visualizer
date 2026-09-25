@@ -179,13 +179,24 @@ Replace `root` by the name of the user you want to provision the third-party app
 
 This will return a device token in hexadecimal encoding, which the IoT device or third-party app can then use to submit data to an instance of *location-visualizer* running on a publicly-accessible server.
 
-Use the following endpoint to submit your data: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
+Use the following endpoint to submit your data: `https://[hostname]:[port]/cgi-bin/locviz`
 
-For example, when provisioning the *mendhak/gpslogger* app, you can use the following URI with placeholders: `https://[hostname]:[port]/cgi-bin/locviz?cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=%TIME&latitude=%LAT&longitude=%LON`
+Use the HTTP method `POST`.
+
+Use the following HTTP header: `Content-Type: application/x-www-form-urlencoded`
+
+And the following HTTP body: `cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=[timestamp]&latitude=[latitude]&longitude=[longitude]`
+
+For example, when provisioning the *mendhak/gpslogger* app, you can configure it as follows.
+
+- URL: `https://[hostname]:[port]/cgi-bin/locviz`
+- HTTP Body: `cgi=submit-coordinates&name=[your username]&devicetoken=[the device token]&time=%TIME&latitude=%LAT&longitude=%LON`
+- HTTP Headers: `Content-Type: application/x-www-form-urlencoded`
+- HTTP Method: `POST`
+
+Replace all the placeholders in square brackets with the actual values for the host name, port, user account and device token.
 
 You can provision as many devices (generate as many device tokens) for a user as you want.
-
-Replace all the placeholders in square brackets with the appropriate values.
 
 You can list all device tokens currently associated with a user with the following command.
 
