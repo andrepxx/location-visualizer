@@ -1063,7 +1063,7 @@ func (this *controllerStruct) adminShowPublicKey(args []string, useKeyFile bool)
 								if !success {
 									reason := webPublicKeyPemData.Reason
 									stderr := os.Stderr
-									fmt.Fprintf(stderr, "Failed to retrieve device tokens: %s\n", reason)
+									fmt.Fprintf(stderr, "Failed to retrieve public key: %s\n", reason)
 								} else {
 									pemData := webPublicKeyPemData.PemData
 									fmt.Printf("%s", pemData)
