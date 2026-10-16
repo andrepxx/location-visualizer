@@ -22,6 +22,7 @@ import (
 	"github.com/andrepxx/location-visualizer/auth/session"
 	"github.com/andrepxx/location-visualizer/auth/user"
 	"github.com/andrepxx/location-visualizer/controller/client"
+	"github.com/andrepxx/location-visualizer/controller/communication"
 	"github.com/andrepxx/location-visualizer/filter"
 	"github.com/andrepxx/location-visualizer/geo"
 	"github.com/andrepxx/location-visualizer/geo/geocsv"
@@ -61,18 +62,10 @@ const (
 )
 
 /*
- * Indicates whether a request was successful or not.
- */
-type webResponseStruct struct {
-	Success bool
-	Reason  string
-}
-
-/*
  * Web representation of an authentication challenge.
  */
 type webAuthChallengeStruct struct {
-	webResponseStruct
+	communication.WebResponseStruct
 	Nonce string
 	Salt  string
 }
@@ -81,7 +74,7 @@ type webAuthChallengeStruct struct {
  * Web representation of a session token.
  */
 type webTokenStruct struct {
-	webResponseStruct
+	communication.WebResponseStruct
 	Token string
 }
 
@@ -148,7 +141,7 @@ type webActivitiesStruct struct {
  * Web representation of a dataset modification report.
  */
 type webDatasetModificationReportStruct struct {
-	Status  webResponseStruct
+	Status  communication.WebResponseStruct
 	Before  webDatasetStatsStruct
 	After   webDatasetStatsStruct
 	Removed uint32
@@ -169,7 +162,7 @@ type webDatasetStatsStruct struct {
  * Web representation of a migration report.
  */
 type webMigrationReportStruct struct {
-	Status   webResponseStruct
+	Status   communication.WebResponseStruct
 	Before   webDatasetStatsStruct
 	Source   webDatasetStatsStruct
 	Imported webDatasetStatsStruct
@@ -383,7 +376,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 
 		return response
 	} else {
-		wr := webResponseStruct{}
+		wr := communication.WebResponseStruct{}
 		beginIn := request.Params["begin"]
 		begin, err := filter.ParseTime(beginIn, false, false)
 
@@ -396,7 +389,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 			/*
 			 * Indicate failure.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: false,
 				Reason:  reason,
 			}
@@ -448,7 +441,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 				/*
 				 * Indicate failure.
 				 */
-				wr = webResponseStruct{
+				wr = communication.WebResponseStruct{
 					Success: false,
 					Reason:  reason,
 				}
@@ -466,7 +459,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 					/*
 					 * Indicate failure.
 					 */
-					wr = webResponseStruct{
+					wr = communication.WebResponseStruct{
 						Success: false,
 						Reason:  reason,
 					}
@@ -476,7 +469,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 					/*
 					 * Indicate success.
 					 */
-					wr = webResponseStruct{
+					wr = communication.WebResponseStruct{
 						Success: true,
 						Reason:  "",
 					}
@@ -505,13 +498,735 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 }
 
 /*
+ * Returns the list of device tokens of a certain user.
+ */
+func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		um := this.userManager
+		deviceTokens, err := um.DeviceTokens(name)
+		success := true
+		reason := ""
+
+		/*
+		 * Check if permissions could get retrieved.
+		 */
+		if err != nil {
+			success = false
+			reason = err.Error()
+		}
+
+		numDeviceTokens := len(deviceTokens)
+		webDeviceTokens := make([]communication.WebDeviceTokenStruct, numDeviceTokens)
+
+		/*
+		 * Convert device tokens to strings.
+		 */
+		for i, deviceToken := range deviceTokens {
+			creationTime := deviceToken.CreationTime()
+			creationTimeString := creationTime.Format(time.RFC3339)
+			descriptionString := deviceToken.Description()
+			token := deviceToken.Token()
+			tokenString := fmt.Sprintf("%016x", token)
+
+			/*
+			 * Create web representation of device token.
+			 */
+			webDeviceToken := communication.WebDeviceTokenStruct{
+				CreationTime: creationTimeString,
+				Description:  descriptionString,
+				Token:        tokenString,
+			}
+
+			webDeviceTokens[i] = webDeviceToken
+		}
+
+		/*
+		 * Create data structure for web-based representation of device tokens.
+		 */
+		webDeviceTokensStruct := communication.WebDeviceTokensStruct{
+
+			WebResponseStruct: communication.WebResponseStruct{
+				Success: success,
+				Reason:  reason,
+			},
+
+			DeviceTokens: webDeviceTokens,
+		}
+
+		mimeType, buffer := this.createJSON(webDeviceTokensStruct)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Returns the list of permissions of a certain user.
+ */
+func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		um := this.userManager
+		permissions, err := um.Permissions(name)
+		reason := ""
+		success := err == nil
+
+		/*
+		 * Check if permissions could get retrieved.
+		 */
+		if !success {
+			reason = err.Error()
+		}
+
+		/*
+		 * Create data structure for web-based representation of permissions.
+		 */
+		webPermissions := communication.WebPermissionsStruct{
+
+			WebResponseStruct: communication.WebResponseStruct{
+				Success: success,
+				Reason:  reason,
+			},
+
+			Permissions: permissions,
+		}
+
+		mimeType, buffer := this.createJSON(webPermissions)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Returns the PEM representation of a particular public key of a certain user.
+ */
+func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		id := request.Params["id"]
+		errResult := error(nil)
+		idx, errKeyId := strconv.ParseUint(id, 10, 64)
+		pemDataString := ""
+
+		/*
+		 * Check if key id is valid.
+		 */
+		if errKeyId != nil {
+			msg := errKeyId.Error()
+			errResult = fmt.Errorf("Error parsing index: %s\n", msg)
+		} else {
+			um := this.userManager
+			publicKeys, err := um.PublicKeys(name)
+
+			/*
+			* Check if public keys could get retrieved.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to retrieve public keys from user %s: %s\n", name, msg)
+			}
+
+			numPublicKeys := len(publicKeys)
+			numPublicKeys64 := uint64(numPublicKeys)
+
+			/*
+			 * Check if index is in range.
+			 */
+			if idx >= numPublicKeys64 {
+				errResult = fmt.Errorf("Failed to retrieve public keys #%d from user %s: Only has %d keys.\n", idx, name, numPublicKeys)
+			} else {
+				publicKey := publicKeys[idx]
+				pemData := publicKey.ExportPEM()
+				pemDataString = string(pemData)
+			}
+
+		}
+
+		success := errResult == nil
+		reason := ""
+
+		/*
+		 * Include error message on error.
+		 */
+		if !success {
+			reason = errResult.Error()
+		}
+
+		/*
+		 * Create data structure for web-based representation of public keys.
+		 */
+		webPublicKeyPemDataStruct := communication.WebPublicKeyPemDataStruct{
+
+			WebResponseStruct: communication.WebResponseStruct{
+				Success: success,
+				Reason:  reason,
+			},
+
+			PemData: pemDataString,
+		}
+
+		mimeType, buffer := this.createJSON(webPublicKeyPemDataStruct)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Returns the list of public keys of a certain user.
+ */
+func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		um := this.userManager
+		publicKeys, err := um.PublicKeys(name)
+		success := err == nil
+		reason := ""
+
+		/*
+		 * Check if public keys could get retrieved.
+		 */
+		if !success {
+			reason = err.Error()
+		}
+
+		numPublicKeys := len(publicKeys)
+		webPublicKeys := make([]communication.WebPublicKeyStruct, numPublicKeys)
+		enc := base64.StdEncoding
+
+		/*
+		 * Create web representation for each public key.
+		 */
+		for i, publicKey := range publicKeys {
+			creationTime := publicKey.CreationTime()
+			creationTimeString := creationTime.Format(time.RFC3339)
+			descriptionString := publicKey.Description()
+			hash := publicKey.Hash()
+			hashBuffer := hash[:]
+			hashString := enc.EncodeToString(hashBuffer)
+			representation := publicKey.Representation()
+			representationString := representation.String()
+
+			/*
+			 * Create public key entry.
+			 */
+			webPublicKey := communication.WebPublicKeyStruct{
+				CreationTime:   creationTimeString,
+				Description:    descriptionString,
+				Hash:           hashString,
+				Representation: representationString,
+			}
+
+			webPublicKeys[i] = webPublicKey
+		}
+
+		/*
+		 * Create data structure for web-based representation of public keys.
+		 */
+		webPublicKeysStruct := communication.WebPublicKeysStruct{
+
+			WebResponseStruct: communication.WebResponseStruct{
+				Success: success,
+				Reason:  reason,
+			},
+
+			PublicKeys: webPublicKeys,
+		}
+
+		mimeType, buffer := this.createJSON(webPublicKeysStruct)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Returns the list of users on this server.
+ */
+func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		um := this.userManager
+		users := um.Users()
+		mimeType, buffer := this.createJSON(users)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Checks whether a certain user has a certain device token associated.
+ */
+func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		deviceTokenString := request.Params["devicetoken"]
+		deviceToken, errDeviceToken := strconv.ParseUint(deviceTokenString, 16, 64)
+		result := false
+		errResult := error(nil)
+
+		/*
+		 * Check if device token could be parsed.
+		 */
+		if errDeviceToken != nil {
+			errResult = fmt.Errorf("Failed to parse device token")
+		} else {
+			um := this.userManager
+			hasDeviceToken, err := um.HasDeviceToken(name, deviceToken)
+
+			/*
+			 * Check if device token could be checked.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to check for device token: %s", msg)
+			} else {
+				result = hasDeviceToken
+			}
+
+		}
+
+		success := errResult == nil
+		reason := ""
+
+		/*
+		 * If error occurred, determine reason.
+		 */
+		if !success {
+			reason = errResult.Error()
+		}
+
+		/*
+		 * Create web representation of boolean result.
+		 */
+		webBooleanResult := communication.WebBooleanResultStruct{
+			Success: success,
+			Reason:  reason,
+			Value:   result,
+		}
+
+		mimeType, buffer := this.createJSON(webBooleanResult)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
+ * Checks whether a certain user has a certain permission.
+ */
+func (this *controllerStruct) adminHasPermission(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "admin")
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+		return response
+	} else {
+		name := request.Params["name"]
+		permission := request.Params["permission"]
+		result := false
+		errResult := error(nil)
+		um := this.userManager
+		hasPermission, err := um.HasPermission(name, permission)
+
+		/*
+		 * Check if permission could be checked.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to check for permission: %s", msg)
+		} else {
+			result = hasPermission
+		}
+
+		success := errResult == nil
+		reason := ""
+
+		/*
+		 * If error occurred, determine reason.
+		 */
+		if !success {
+			reason = errResult.Error()
+		}
+
+		/*
+		 * Create web representation of boolean result.
+		 */
+		webBooleanResult := communication.WebBooleanResultStruct{
+			Success: success,
+			Reason:  reason,
+			Value:   result,
+		}
+
+		mimeType, buffer := this.createJSON(webBooleanResult)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response := webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+		return response
+	}
+
+}
+
+/*
  * Client requests to terminate a session.
  */
 func (this *controllerStruct) authLogoutHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	enc := base64.StdEncoding
 	tokenIn := request.Params["token"]
 	tokenBuffer, err := enc.DecodeString(tokenIn)
-	wr := webResponseStruct{}
+	wr := communication.WebResponseStruct{}
 
 	/*
 	 * Check if token could be decoded.
@@ -521,7 +1236,7 @@ func (this *controllerStruct) authLogoutHandler(request webserver.HttpRequest) w
 		/*
 		 * Indicate failure.
 		 */
-		wr = webResponseStruct{
+		wr = communication.WebResponseStruct{
 			Success: false,
 			Reason:  "Failed to decode session token.",
 		}
@@ -541,7 +1256,7 @@ func (this *controllerStruct) authLogoutHandler(request webserver.HttpRequest) w
 			/*
 			 * Indicate failure.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: false,
 				Reason:  reason,
 			}
@@ -551,7 +1266,7 @@ func (this *controllerStruct) authLogoutHandler(request webserver.HttpRequest) w
 			/*
 			 * Indicate success.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: true,
 				Reason:  "",
 			}
@@ -595,7 +1310,7 @@ func (this *controllerStruct) authRequestHandler(request webserver.HttpRequest) 
 		 */
 		wac = webAuthChallengeStruct{
 
-			webResponseStruct: webResponseStruct{
+			WebResponseStruct: communication.WebResponseStruct{
 				Success: false,
 				Reason:  reason,
 			},
@@ -616,7 +1331,7 @@ func (this *controllerStruct) authRequestHandler(request webserver.HttpRequest) 
 		 */
 		wac = webAuthChallengeStruct{
 
-			webResponseStruct: webResponseStruct{
+			WebResponseStruct: communication.WebResponseStruct{
 				Success: true,
 				Reason:  "",
 			},
@@ -661,7 +1376,7 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 		 */
 		responseToken = webTokenStruct{
 
-			webResponseStruct: webResponseStruct{
+			WebResponseStruct: communication.WebResponseStruct{
 				Success: false,
 				Reason:  "Failed to decode hash value.",
 			},
@@ -685,7 +1400,7 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 			 */
 			responseToken = webTokenStruct{
 
-				webResponseStruct: webResponseStruct{
+				WebResponseStruct: communication.WebResponseStruct{
 					Success: false,
 					Reason:  reason,
 				},
@@ -703,7 +1418,7 @@ func (this *controllerStruct) authResponseHandler(request webserver.HttpRequest)
 			 */
 			responseToken = webTokenStruct{
 
-				webResponseStruct: webResponseStruct{
+				WebResponseStruct: communication.WebResponseStruct{
 					Success: true,
 					Reason:  "",
 				},
@@ -749,7 +1464,7 @@ func (this *controllerStruct) authResponsePublicKeyHandler(request webserver.Htt
 		 */
 		responseToken = webTokenStruct{
 
-			webResponseStruct: webResponseStruct{
+			WebResponseStruct: communication.WebResponseStruct{
 				Success: false,
 				Reason:  "Failed to decode hash value.",
 			},
@@ -773,7 +1488,7 @@ func (this *controllerStruct) authResponsePublicKeyHandler(request webserver.Htt
 			 */
 			responseToken = webTokenStruct{
 
-				webResponseStruct: webResponseStruct{
+				WebResponseStruct: communication.WebResponseStruct{
 					Success: false,
 					Reason:  reason,
 				},
@@ -790,7 +1505,7 @@ func (this *controllerStruct) authResponsePublicKeyHandler(request webserver.Htt
 			 */
 			responseToken = webTokenStruct{
 
-				webResponseStruct: webResponseStruct{
+				WebResponseStruct: communication.WebResponseStruct{
 					Success: true,
 					Reason:  "",
 				},
@@ -1618,7 +2333,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 
 		return response
 	} else {
-		wr := webResponseStruct{}
+		wr := communication.WebResponseStruct{}
 		data := request.Params["data"]
 		this.activitiesLock.Lock()
 		activities := this.activities
@@ -1634,7 +2349,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 			/*
 			 * Indicate failure.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: false,
 				Reason:  reason,
 			}
@@ -1652,7 +2367,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 				/*
 				 * Indicate failure.
 				 */
-				wr = webResponseStruct{
+				wr = communication.WebResponseStruct{
 					Success: false,
 					Reason:  reason,
 				}
@@ -1662,7 +2377,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 				/*
 				 * Indicate success.
 				 */
-				wr = webResponseStruct{
+				wr = communication.WebResponseStruct{
 					Success: true,
 					Reason:  "",
 				}
@@ -1706,7 +2421,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 		/*
 		 * Indicate failure.
 		 */
-		status := webResponseStruct{
+		status := communication.WebResponseStruct{
 			Success: false,
 			Reason:  reason,
 		}
@@ -1717,7 +2432,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 		/*
 		 * Indicate failure.
 		 */
-		status := webResponseStruct{
+		status := communication.WebResponseStruct{
 			Success: false,
 			Reason:  "Forbidden!",
 		}
@@ -1734,7 +2449,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 			/*
 			 * Indicate failure.
 			 */
-			status := webResponseStruct{
+			status := communication.WebResponseStruct{
 				Success: false,
 				Reason:  "Field 'file' not defined as a multipart field.",
 			}
@@ -1751,7 +2466,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 				/*
 				 * Indicate failure.
 				 */
-				status := webResponseStruct{
+				status := communication.WebResponseStruct{
 					Success: false,
 					Reason:  "No file sent in request.",
 				}
@@ -1762,7 +2477,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 				/*
 				 * Indicate failure.
 				 */
-				status := webResponseStruct{
+				status := communication.WebResponseStruct{
 					Success: false,
 					Reason:  "Multiple files sent in request.",
 				}
@@ -1781,7 +2496,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 					/*
 					 * Indicate failure.
 					 */
-					status := webResponseStruct{
+					status := communication.WebResponseStruct{
 						Success: false,
 						Reason:  "Failed to read source file.",
 					}
@@ -1812,7 +2527,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 						/*
 						 * Indicate failure.
 						 */
-						status := webResponseStruct{
+						status := communication.WebResponseStruct{
 							Success: false,
 							Reason:  reason,
 						}
@@ -1849,7 +2564,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 							/*
 							 * Indicate failure.
 							 */
-							status := webResponseStruct{
+							status := communication.WebResponseStruct{
 								Success: false,
 								Reason:  reason,
 							}
@@ -2025,7 +2740,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 								/*
 								 * Indicate failure.
 								 */
-								status := webResponseStruct{
+								status := communication.WebResponseStruct{
 									Success: false,
 									Reason:  msg,
 								}
@@ -2036,7 +2751,7 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 								/*
 								 * Indicate success.
 								 */
-								status := webResponseStruct{
+								status := communication.WebResponseStruct{
 									Success: true,
 									Reason:  "",
 								}
@@ -2091,7 +2806,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 		/*
 		 * Report failure.
 		 */
-		report.Status = webResponseStruct{
+		report.Status = communication.WebResponseStruct{
 			Success: false,
 			Reason:  reason,
 		}
@@ -2103,7 +2818,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 		/*
 		 * Report failure.
 		 */
-		report.Status = webResponseStruct{
+		report.Status = communication.WebResponseStruct{
 			Success: false,
 			Reason:  reason,
 		}
@@ -2114,7 +2829,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 		/*
 		 * Report failure.
 		 */
-		report.Status = webResponseStruct{
+		report.Status = communication.WebResponseStruct{
 			Success: false,
 			Reason:  reason,
 		}
@@ -2141,7 +2856,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 				/*
 				 * Report failure.
 				 */
-				report.Status = webResponseStruct{
+				report.Status = communication.WebResponseStruct{
 					Success: false,
 					Reason:  reason,
 				}
@@ -2216,7 +2931,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 					/*
 					 * Report failure.
 					 */
-					report.Status = webResponseStruct{
+					report.Status = communication.WebResponseStruct{
 						Success: false,
 						Reason:  reason,
 					}
@@ -2234,7 +2949,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 						/*
 						 * Report failure.
 						 */
-						report.Status = webResponseStruct{
+						report.Status = communication.WebResponseStruct{
 							Success: false,
 							Reason:  reason,
 						}
@@ -2272,7 +2987,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 						/*
 						 * Report success.
 						 */
-						status := webResponseStruct{
+						status := communication.WebResponseStruct{
 							Success: true,
 							Reason:  "",
 						}
@@ -2358,7 +3073,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 
 		return response
 	} else {
-		wr := webResponseStruct{}
+		wr := communication.WebResponseStruct{}
 		revisionIn := request.Params["revision"]
 		revision, err := strconv.ParseUint(revisionIn, 10, 64)
 
@@ -2370,7 +3085,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 			/*
 			 * Indicate failure.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: false,
 				Reason:  "Failed to remove activity: Invalid revision number.",
 			}
@@ -2387,7 +3102,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 				/*
 				 * Indicate failure.
 				 */
-				wr = webResponseStruct{
+				wr = communication.WebResponseStruct{
 					Success: false,
 					Reason:  "Failed to remove activity: Invalid id.",
 				}
@@ -2406,7 +3121,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 					/*
 					 * Indicate failure.
 					 */
-					wr = webResponseStruct{
+					wr = communication.WebResponseStruct{
 						Success: false,
 						Reason:  "Failed to remove activity: Activity data was changed in the meantime.",
 					}
@@ -2424,7 +3139,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 						/*
 						 * Indicate failure.
 						 */
-						wr = webResponseStruct{
+						wr = communication.WebResponseStruct{
 							Success: false,
 							Reason:  reason,
 						}
@@ -2442,7 +3157,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 							/*
 							 * Indicate failure.
 							 */
-							wr = webResponseStruct{
+							wr = communication.WebResponseStruct{
 								Success: false,
 								Reason:  reason,
 							}
@@ -2452,7 +3167,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 							/*
 							 * Indicate success.
 							 */
-							wr = webResponseStruct{
+							wr = communication.WebResponseStruct{
 								Success: true,
 								Reason:  "",
 							}
@@ -2531,7 +3246,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 
 		return response
 	} else {
-		wr := webResponseStruct{}
+		wr := communication.WebResponseStruct{}
 		revisionIn := request.Params["revision"]
 		revision, err := strconv.ParseUint(revisionIn, 10, 64)
 
@@ -2543,7 +3258,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 			/*
 			 * Indicate failure.
 			 */
-			wr = webResponseStruct{
+			wr = communication.WebResponseStruct{
 				Success: false,
 				Reason:  "Failed to replace activity: Invalid revision number.",
 			}
@@ -2560,7 +3275,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 				/*
 				 * Indicate failure.
 				 */
-				wr = webResponseStruct{
+				wr = communication.WebResponseStruct{
 					Success: false,
 					Reason:  "Failed to replace activity: Invalid id.",
 				}
@@ -2579,7 +3294,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 					/*
 					 * Indicate failure.
 					 */
-					wr = webResponseStruct{
+					wr = communication.WebResponseStruct{
 						Success: false,
 						Reason:  reason,
 					}
@@ -2629,7 +3344,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 						/*
 						 * Indicate failure.
 						 */
-						wr = webResponseStruct{
+						wr = communication.WebResponseStruct{
 							Success: false,
 							Reason:  "Failed to replace activity: Activity data was changed in the meantime.",
 						}
@@ -2647,7 +3362,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 							/*
 							 * Indicate failure.
 							 */
-							wr = webResponseStruct{
+							wr = communication.WebResponseStruct{
 								Success: false,
 								Reason:  reason,
 							}
@@ -2665,7 +3380,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 								/*
 								 * Indicate failure.
 								 */
-								wr = webResponseStruct{
+								wr = communication.WebResponseStruct{
 									Success: false,
 									Reason:  reason,
 								}
@@ -2675,7 +3390,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 								/*
 								 * Indicate success.
 								 */
-								wr = webResponseStruct{
+								wr = communication.WebResponseStruct{
 									Success: true,
 									Reason:  "",
 								}
@@ -3273,6 +3988,20 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 	switch cgi {
 	case "add-activity":
 		response = this.addActivityHandler(request)
+	case "admin-get-device-tokens":
+		response = this.adminGetDeviceTokens(request)
+	case "admin-get-permissions":
+		response = this.adminGetPermissions(request)
+	case "admin-get-public-key":
+		response = this.adminGetPublicKey(request)
+	case "admin-get-public-keys":
+		response = this.adminGetPublicKeys(request)
+	case "admin-get-users":
+		response = this.adminGetUsers(request)
+	case "admin-has-device-token":
+		response = this.adminHasDeviceToken(request)
+	case "admin-has-permission":
+		response = this.adminHasPermission(request)
 	case "auth-logout":
 		response = this.authLogoutHandler(request)
 	case "auth-request":

@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/andrepxx/location-visualizer/auth/publickey"
@@ -63,6 +64,13 @@ type webTokenStruct struct {
  * An authenticated session on a remote host.
  */
 type Session interface {
+	AdminGetDeviceTokens(user string) (io.ReadCloser, error)
+	AdminGetPermissions(user string) (io.ReadCloser, error)
+	AdminGetPublicKey(user string, id uint64) (io.ReadCloser, error)
+	AdminGetPublicKeys(user string) (io.ReadCloser, error)
+	AdminGetUsers() (io.ReadCloser, error)
+	AdminHasDeviceToken(user string, deviceToken uint64) (io.ReadCloser, error)
+	AdminHasPermission(user string, permission string) (io.ReadCloser, error)
 	ExportActivityCsv() (io.ReadCloser, error)
 	ExportGeodata(format string) (io.ReadCloser, error)
 	ImportGeodata(format string, strategy string, data io.ReadSeekCloser) (io.ReadCloser, error)
@@ -75,6 +83,289 @@ type Session interface {
 type sessionStruct struct {
 	connection *connectionStruct
 	token      [SIZE_KEY_BYTES]byte
+}
+
+/*
+ * Provides an io.ReadCloser returning information about device tokens
+ * associated with a user as JSON structure.
+ */
+func (this *sessionStruct) AdminGetDeviceTokens(name string) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-get-device-tokens")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning information about user permissions as
+ * JSON structure.
+ */
+func (this *sessionStruct) AdminGetPermissions(name string) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-get-permissions")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning information about the PEM data
+ * associated with a particular public key or a user as JSON structure.
+ */
+func (this *sessionStruct) AdminGetPublicKey(name string, id uint64) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		idString := strconv.FormatUint(id, 10)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-get-public-key")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		requestData.Set("id", idString)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning information about public keys associated
+ * with a user as JSON structure.
+ */
+func (this *sessionStruct) AdminGetPublicKeys(name string) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-get-public-keys")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning a list of users as JSON.
+ */
+func (this *sessionStruct) AdminGetUsers() (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-get-users")
+		requestData.Set("token", encodedToken)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning information about whether a user has a
+ * particular device token associated as JSON structure.
+ */
+func (this *sessionStruct) AdminHasDeviceToken(name string, deviceToken uint64) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		deviceTokenString := fmt.Sprintf("%016x", deviceToken)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-has-device-token")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		requestData.Set("devicetoken", deviceTokenString)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
+}
+
+/*
+ * Provides an io.ReadCloser returning information about whether a user has a
+ * particular permission as JSON structure.
+ */
+func (this *sessionStruct) AdminHasPermission(name string, permission string) (io.ReadCloser, error) {
+	result := io.ReadCloser(nil)
+	errResult := error(nil)
+	connection := this.connection
+
+	/*
+	 * Check if session is still established.
+	 */
+	if connection == nil {
+		errResult = fmt.Errorf("%s", "No established session")
+	} else {
+		encoding := base64.StdEncoding
+		token := this.token
+		tokenSlice := token[:]
+		encodedToken := encoding.EncodeToString(tokenSlice)
+		requestData := url.Values{}
+		requestData.Set("cgi", "admin-has-permission")
+		requestData.Set("token", encodedToken)
+		requestData.Set("name", name)
+		requestData.Set("permission", permission)
+		response, err := connection.request(requestData, CONTENT_TYPE_JSON)
+
+		/*
+		 * Check if an error occured during the request.
+		 */
+		if err != nil {
+			msg := err.Error()
+			errResult = fmt.Errorf("Error during TLS request: %s", msg)
+		} else {
+			result = response
+		}
+
+	}
+
+	return result, errResult
 }
 
 /*

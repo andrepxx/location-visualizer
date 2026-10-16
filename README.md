@@ -42,7 +42,7 @@ Location data will be stored in the file `data/locations.geodb`, while activity 
 
 Therefore, before the software can be used, at least one user account has to be created. Then, set a password and add permissions to fetch tiles, render data overlays, read and write activity data, read from and write to the geographical database, as well as download its contents.
 
-**HINT:** These commands are to be executed in a shell when the server does **not** run. User management is currently completely "offline". This is mainly a security measure since we do not want user or permissions management to be available remotely, even in the case of a "privileged" account getting compromised. However, we do consider adding some form of "dynamic", on-demand user management at a later point in time for improved maintenance and scalability.
+**HINT:** These commands are to be executed in a shell when the server does **not** run. Initial user management is "offline", since there are no users who'd have the right to carry out authenticated tasks. "Offline" user management is also useful for disaster recovery. If you want, you can enable "online" user management for certain users by giving them the `admin` permission. "Online" user management is work-in-progress though. Currently, only read operations are supported for "online" user management.
 
 ```bash
 ./locviz create-user root
@@ -60,6 +60,12 @@ Optionally, if you want to allow clearing the geographical database, you can als
 
 ```bash
 ./locviz add-permission root geodb-clear
+```
+
+And if you want to allow remote administration of the server through this account, add the `admin` permission.
+
+```bash
+./locviz add-permission root admin
 ```
 
 Finally, run the server.
@@ -136,13 +142,15 @@ To reclaim storage occupied by outdated (unreferenced) images, you can run the `
 
 ## Uploading geo data
 
-To upload geo data to the geo database, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+To upload geo data to the geo database using the web UI, log in with a user account, which has at least `geodb-read` and `geodb-write` permissions. Open the sidebar, click on the *GeoDB* button, then choose the import and sort strategies from the dropdown. Afterwards, open a file explorer on your system and move the CSV, GPX or JSON files via drag and drop into the browser window. An import report will be displayed after the data has been imported.
+
+Upload of geo data is also possible via the CLI client. Refer to the section below for more details.
 
 ## Interaction via command-line client
 
 Starting from version v1.11.0, *location-visualizer* also implements a command-line client. It is accessed via the command `./locviz remote [...]`. Each command expects further parameters. The first five parameters (`host`, `port`, `certificate_file_path`, `name`, `password_or_key_file_path`) are required for connection and session establishment and are common to all commands. Some commands require a password and some (the ones with "-pk" suffix) require the path to an RSA key file instead.
 
-The following commands are currently supported:
+The following commands are currently supported for ingestion and extraction of data:
 
 - `export-activity-csv host port certificate_file_path name password output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
 - `export-activity-csv-pk host port certificate_file_path name key_file_path output_file_path`: Export activity CSV data to path `output_file_path`. (File must not exist!)
@@ -150,6 +158,21 @@ The following commands are currently supported:
 - `export-geodata-pk host port certificate_file_path name key_file_path format output_file_path`: Export data from the geographical database to path `output_file_path`. (File must not exist!) Use format `format`, which may be any of `opengeodb`, `csv`, `json`, `json-pretty`, `gpx` or `gpx-pretty`.
 - `import-geodata host port certificate_file_path name password format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
 - `import-geodata-pk host port certificate_file_path name key_file_path format strategy input_file_path`: Import data into the geographical database from path `input_file_path`. Use format `format`, which may be any of `opengeodb`, `csv`, `json` or `gpx`, and import strategy `strategy`, which may be any of `all`, `newer` or `none`.
+
+In addition, the following commands are currently supported for administrative tasks:
+
+- `admin-has-device-token host port certificate_file_path name password target_user device_token`: Checks whether user `target_user` has the device token `device_token` attached. The boolean result gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-has-device-token-pk host port certificate_file_path name key_file_path target_user device_token`: Checks whether user `target_user` has the device token `device_token` attached. The boolean result gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-has-permission host port certificate_file_path name password target_user device_token`: Checks whether user `target_user` has the permission `permission`. The boolean result gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-has-permission-pk host port certificate_file_path name key_file_path target_user device_token`: Checks whether user `target_user` has the permission `permission`. The boolean result gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-device-tokens host port certificate_file_path name password target_user`: Returns a list of device tokens of user `target_user` with each token on a separate line. Each line contains the token itself in hexadecimal representation, its creation time in RFC3339 representation, as well as its description. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-device-tokens-pk host port certificate_file_path name key_file_path target_user`: Returns a list of device tokens of user `target_user` with each token on a separate line. Each line contains the token itself in hexadecimal representation, its creation time in RFC3339 representation, as well as its description. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-permissions host port certificate_file_path name password target_user`: Returns a list of permissions of user `target_user` with each permission on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-permissions-pk host port certificate_file_path name key_file_path target_user`: Returns a list of permissions of user `target_user` with each permission on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-public-keys host port certificate_file_path name password target_user`: Returns a list of public keys of user `target_user` with each public key on a separate line. Each line starts with the index of the public key, followed by a colon. It then contains the time the public key was associated with the user account in RFC3999 representation, the key type in brackets, the Base64 representation of the SHA-512 hash of the raw ASN.1 key material, and finally the description for the key. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-public-keys-pk host port certificate_file_path name key_file_path target_user`: Returns a list of public keys of user `target_user` with each public key on a separate line. Each line starts with the index of the public key, followed by a colon. It then contains the time the public key was associated with the user account in RFC3999 representation, the key type in brackets, the Base64 representation of the SHA-512 hash of the raw ASN.1 key material, and finally the description for the key. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-users host port certificate_file_path name password`: Returns a list of the names of all users with each user on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-list-users-pk host port certificate_file_path name key_file_path`: Returns a list of the names of all users with each user on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
 
 The certificate file provided must be in PEM format. The certificate chain that the server provides is verified to match **exactly** against the one provided in the certificate file.
 
