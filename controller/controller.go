@@ -759,7 +759,7 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 		 */
 		if errKeyId != nil {
 			msg := errKeyId.Error()
-			errResult = fmt.Errorf("Error parsing index: %s\n", msg)
+			errResult = fmt.Errorf("Error parsing index: %s", msg)
 		} else {
 			um := this.userManager
 			publicKeys, err := um.PublicKeys(name)
@@ -769,21 +769,22 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 			 */
 			if err != nil {
 				msg := err.Error()
-				errResult = fmt.Errorf("Failed to retrieve public keys from user %s: %s\n", name, msg)
-			}
-
-			numPublicKeys := len(publicKeys)
-			numPublicKeys64 := uint64(numPublicKeys)
-
-			/*
-			 * Check if index is in range.
-			 */
-			if idx >= numPublicKeys64 {
-				errResult = fmt.Errorf("Failed to retrieve public keys #%d from user %s: Only has %d keys.\n", idx, name, numPublicKeys)
+				errResult = fmt.Errorf("Failed to retrieve public keys from user %s: %s", name, msg)
 			} else {
-				publicKey := publicKeys[idx]
-				pemData := publicKey.ExportPEM()
-				pemDataString = string(pemData)
+				numPublicKeys := len(publicKeys)
+				numPublicKeys64 := uint64(numPublicKeys)
+
+				/*
+				 * Check if index is in range.
+				 */
+				if idx >= numPublicKeys64 {
+					errResult = fmt.Errorf("Failed to retrieve public keys #%d from user %s: Only has %d keys.", idx, name, numPublicKeys)
+				} else {
+					publicKey := publicKeys[idx]
+					pemData := publicKey.ExportPEM()
+					pemDataString = string(pemData)
+				}
+
 			}
 
 		}
