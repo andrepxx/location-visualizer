@@ -48,7 +48,9 @@ func (this *controllerStruct) loadCertificate(path string) ([]byte, error) {
 		/*
 		 * The block may be nil on decoding errors.
 		 */
-		if block != nil {
+		if block == nil {
+			err = fmt.Errorf("%s", "Failed to decode PEM block")
+		} else {
 			result = block.Bytes
 		}
 
