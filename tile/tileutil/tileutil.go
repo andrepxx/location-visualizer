@@ -587,7 +587,7 @@ func (this *tileUtilStruct) Import(r io.Reader) error {
 			/*
 			 * Check if error occurred advancing to next file.
 			 */
-			if errNext != nil {
+			if (errNext != nil) && (errNext != io.EOF) {
 				msg := errNext.Error()
 				errResult = fmt.Errorf("Failed to advance to next file in tarball: %s", msg)
 			}
