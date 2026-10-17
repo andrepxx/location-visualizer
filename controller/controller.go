@@ -5320,9 +5320,10 @@ func (this *controllerStruct) Operate(args []string) {
 				if err != nil {
 					msg := err.Error()
 					fmt.Printf("Error loading activity data: %s\n", msg)
+				} else {
+					this.runServer()
 				}
 
-				this.runServer()
 			}
 
 		} else {
