@@ -3,7 +3,7 @@ LDFLAGS_RELEASE := 'all=-w -s'
 
 all: locviz locviz-debug
 
-.PHONY: clean fmt keys test
+.PHONY: clean fmt keys
 
 clean:
 	rm -rf dist/
