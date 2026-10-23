@@ -173,6 +173,8 @@ In addition, the following commands are currently supported for administrative t
 - `admin-list-public-keys-pk host port certificate_file_path name key_file_path target_user`: Returns a list of public keys of user `target_user` with each public key on a separate line. Each line starts with the index of the public key, followed by a colon. It then contains the time the public key was associated with the user account in RFC3999 representation, the key type in brackets, the Base64 representation of the SHA-512 hash of the raw ASN.1 key material, and finally the description for the key. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
 - `admin-list-users host port certificate_file_path name password`: Returns a list of the names of all users with each user on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
 - `admin-list-users-pk host port certificate_file_path name key_file_path`: Returns a list of the names of all users with each user on a separate line. The list gets written to `stdout`. In case an error occurs, it is reported to `stderr`.
+- `admin-show-public-key host port certificate_file_path name password target_user index`: Output the public key with index `index` (zero-based) from user `target_user` in PEM representation.
+- `admin-show-public-key-pk host port certificate_file_path name key_file_path target_user index`: Output the public key with index `index` (zero-based) from user `target_user` in PEM representation.
 
 The certificate file provided must be in PEM format. The certificate chain that the server provides is verified to match **exactly** against the one provided in the certificate file.
 
