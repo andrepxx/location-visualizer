@@ -1042,17 +1042,26 @@ function UI() {
 		buttonBack.className = 'button next';
 		const buttonBackCaption = document.createTextNode('Back');
 		buttonBack.appendChild(buttonBackCaption);
+		const mapDiv = document.getElementById('map_div');
+		const mapAttribution = document.getElementById('map_attribution');
+		const rightSidebar = document.getElementById('right_sidebar');
 
 		/*
 		 * This is called when the user clicks on the 'Back' button.
 		 */
 		buttonBack.onclick = function(e) {
+			mapDiv.style.display = '';
+			mapAttribution.style.display = '';
+			rightSidebar.style.display = 'block';
 			div.style.display = 'none';
 			helper.clearElement(div);
 		};
 
 		buttonDiv.appendChild(buttonBack);
 		div.appendChild(buttonDiv);
+		mapDiv.style.display = 'none';
+		mapAttribution.style.display = 'none';
+		rightSidebar.style.display = 'none';
 		div.style.display = 'block';
 		div.focus();
 	};
@@ -1198,6 +1207,8 @@ function UI() {
 		buttonCancel.className = 'button';
 		const buttonCancelCaption = document.createTextNode('Cancel');
 		buttonCancel.appendChild(buttonCancelCaption);
+		const activitiesDiv = document.getElementById('activities');
+		activitiesDiv.inert = true;
 
 		/*
 		 * This is called when the user clicks on the 'Cancel' button.
@@ -1205,6 +1216,7 @@ function UI() {
 		buttonCancel.onclick = function(e) {
 			div.style.display = 'none';
 			helper.clearElement(innerDiv);
+			activitiesDiv.inert = false;
 		};
 
 		innerDiv.appendChild(buttonCancel);
@@ -1381,6 +1393,8 @@ function UI() {
 		buttonCancel.className = 'button';
 		const buttonCancelCaption = document.createTextNode('Cancel');
 		buttonCancel.appendChild(buttonCancelCaption);
+		const activitiesDiv = document.getElementById('activities');
+		activitiesDiv.inert = true;
 
 		/*
 		 * This is called when the user clicks on the 'Cancel' button.
@@ -1388,6 +1402,7 @@ function UI() {
 		buttonCancel.onclick = function(e) {
 			div.style.display = 'none';
 			helper.clearElement(innerDiv);
+			activitiesDiv.inert = false;
 		};
 
 		innerDiv.appendChild(buttonCancel);
@@ -1451,6 +1466,8 @@ function UI() {
 		buttonCancel.className = 'button';
 		const buttonCancelCaption = document.createTextNode('Cancel');
 		buttonCancel.appendChild(buttonCancelCaption);
+		const activitiesDiv = document.getElementById('activities');
+		activitiesDiv.inert = true;
 
 		/*
 		 * This is called when the user clicks on the 'Cancel' button.
@@ -1458,6 +1475,7 @@ function UI() {
 		buttonCancel.onclick = function(e) {
 			div.style.display = 'none';
 			helper.clearElement(innerDiv);
+			activitiesDiv.inert = false;
 		};
 
 		buttonsDiv.appendChild(buttonCancel);
@@ -2050,6 +2068,12 @@ function UI() {
 		 */
 		buttonBack.onclick = function(e) {
 			div.style.display = 'none';
+			const mapDiv = document.getElementById('map_div');
+			mapDiv.style.display = '';
+			const mapAttribution = document.getElementById('map_attribution');
+			mapAttribution.style.display = '';
+			const rightSidebar = document.getElementById('right_sidebar');
+			rightSidebar.style.display = 'block';
 		};
 
 		buttonDiv.appendChild(buttonBack);
@@ -2478,6 +2502,12 @@ function UI() {
 	 * Show the login window.
 	 */
 	this.showLogin = function() {
+		const mapDiv = document.getElementById('map_div');
+		mapDiv.style.display = 'none';
+		const mapAttribution = document.getElementById('map_attribution');
+		mapAttribution.style.display = 'none';
+		const rightSidebarOpener = document.getElementById('right_sidebar_opener');
+		rightSidebarOpener.style.display = 'none';
 		const loginDiv = document.getElementById('login');
 		loginDiv.style.display = 'block';
 		loginDiv.focus();
@@ -2489,6 +2519,12 @@ function UI() {
 	this.hideLogin = function() {
 		const loginDiv = document.getElementById('login');
 		loginDiv.style.display = 'none';
+		const mapDiv = document.getElementById('map_div');
+		mapDiv.style.display = '';
+		const mapAttribution = document.getElementById('map_attribution');
+		mapAttribution.style.display = '';
+		const rightSidebarOpener = document.getElementById('right_sidebar_opener');
+		rightSidebarOpener.style.display = 'block';
 	};
 
 	/*
@@ -3519,10 +3555,16 @@ function Handler() {
 		const mime = globals.mimeDefault;
 
 		/*
-		 * This is called when the server returns activities.
+		 * This is called when the server returns geo database statistics.
 		 */
 		const callback = function(content) {
 			const response = helper.parseJSON(content);
+			const mapDiv = document.getElementById('map_div');
+			mapDiv.style.display = 'none';
+			const mapAttribution = document.getElementById('map_attribution');
+			mapAttribution.style.display = 'none';
+			const right_sidebar = document.getElementById('right_sidebar');
+			right_sidebar.style.display = 'none';
 			const div = document.getElementById('geodb');
 			ui.displayGeoDBStats(div, response);
 		};
@@ -3610,6 +3652,7 @@ function Handler() {
 		div.appendChild(cvs);
 		ui.initializeSidebar();
 		ui.initializeLogin(self.loginSuccessful);
+		ui.showLogin();
 		helper.blockSite(false);
 	};
 
