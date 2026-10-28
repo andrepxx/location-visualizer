@@ -1063,6 +1063,7 @@ function UI() {
 		mapAttribution.style.display = 'none';
 		rightSidebar.style.display = 'none';
 		div.style.display = 'block';
+		div.inert = false;
 		div.focus();
 	};
 
@@ -1448,7 +1449,7 @@ function UI() {
 				const success = response.Success;
 
 				/*
-				 * Check if logout was successful.
+				 * Check if import was successful.
 				 */
 				if (success === true) {
 					div.style.display = 'none';
@@ -1466,8 +1467,6 @@ function UI() {
 		buttonCancel.className = 'button';
 		const buttonCancelCaption = document.createTextNode('Cancel');
 		buttonCancel.appendChild(buttonCancelCaption);
-		const activitiesDiv = document.getElementById('activities');
-		activitiesDiv.inert = true;
 
 		/*
 		 * This is called when the user clicks on the 'Cancel' button.
