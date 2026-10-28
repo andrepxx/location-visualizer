@@ -26,9 +26,10 @@ This will create an RSA key pair for the TLS connection between the user-interfa
 
 Default paths or file storage locations:
 
+- Configuration data: `config/config.json`
+- User account data: `data/userdb.json`
 - Location data: `data/locations.geodb`
 - Activity data: `data/activitydb.json`
-- User account data: `data/userdb.json`
 - Map data / tiles: `data/tile.bin` and `data/tile.idx`
 
 ## User account setup
