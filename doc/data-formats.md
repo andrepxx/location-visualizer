@@ -10,13 +10,25 @@ The following sections describe the data formats *location-visualizer* supports 
 
 ### OpenGeoDB (\*.geodb)
 
-The *OpenGeoDB* file format is a compact binary file format with an open specification that is used to store geographical data and enables fast (random) access. It is also the data format that *location-visualizer* uses internally for its geographical database.
+The *OpenGeoDB* file format is a compact binary file format with an open specification that is used to store geographical data and enables fast random access. It is also the data format that *location-visualizer* uses internally for its geographical database.
 
-Note that the format is neither proprietary nor limited to *location-visualizer*. The compactness, fixed-sized record structure and binary representation also make it well-suited as a so called *wire-format* for GNSS receivers, i. e. the data format that the receiver uses to send positional data to a receiving host (e. g. PC or microcontroller), for example over serial interfaces like I2C, RS232 or USB, or over network protocols like TCP or MQTT. In this sense, it can fulfil functions similar to what the NMEA 0183 protocol is doing. Similarly, the *OpenGeoDB* format can be used by hardware GNSS logging devices to store records in their internal memory, before they are potentially encoded into a different format and sent over the external interface. In fact, some positional devices use either the *OpenGeoDB* format, or a similar format derived from it, for exactly these purposes.
+Note that the format is neither proprietary nor limited to *location-visualizer*. The compactness, fixed-sized record structure and binary representation also make it well-suited as a so called *wire format* for GNSS receivers, i. e. the data format that the receiver uses to send positional data to a receiving host (e. g. PC or microcontroller), for example over serial interfaces like I2C, RS232 or USB, or over network protocols like TCP or MQTT. In this sense, it can fulfil functions similar to what the NMEA 0183 protocol is doing. Similarly, the *OpenGeoDB* format can be used by hardware GNSS logging devices to store records in their internal memory, before they are potentially encoded into a different format and sent over the external interface. In fact, some positional devices use either the *OpenGeoDB* format, or a similar format derived from it, for exactly these purposes.
 
 Also note that the *OpenGeoDB* file or wire format for storing and / or transmitting positional data is not related to the hierarchical location and postal code database of the same name.
 
 The file format has the capabilities to store versioning information. So far, there is only one version of the file format (version 1.0). The following sections therefore describe the format of files making use of that particular version of the file format. Care must be taken when encountering files with different version information, since these files may not follow the structure described in this document.
+
+#### Origins and governance
+
+The *OpenGeoDB* format was originally designed in the context of *location-visualizer* as a binary format for storing geographic position data. However, it was developed from the outset to support interoperability and applications beyond its initial use. In particular, it was designed for use as a *wire format* for GNSS receivers, potentially in conjunction with lower-level protocols for synchronization and error correction. Its design was informed by informal technical exchange and collaboration within the wider community, including participants involved in GNSS hardware development and related applications.
+
+The format is not limited to *location-visualizer*. It is an openly documented format intended to support independent implementations and use in other applications and devices. The specification is published as part of the project's source code under the same license terms as the rest of the project.
+
+There is currently no independent standards body governing *OpenGeoDB*. The specification maintained by *location-visualizer* serves as the primary reference for the documented format. The format may be submitted to an independent standards body for standardization in the future. Independent implementations and extensions may exist, and compatibility with the documented format should be verified rather than assumed.
+
+This specification does not maintain a list of hardware implementations. Manufacturers may independently choose whether to announce support for the format or treat it as an internal implementation detail.
+
+#### Protocol description
 
 An *OpenGeoDB* file consists of a 10 byte header followed by an arbitrary amount of 14 byte records. All numbers are stored in *big-endian* (most significant byte first) or *network byte order*.
 

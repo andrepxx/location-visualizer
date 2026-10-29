@@ -39,11 +39,20 @@ The response will be an "application/json", which looks like this:
 
 The reason will be different from "" if success == false and will contain a natural-language explanation of what went wrong.
 
+Server-side implementation detail: When multiple clients perform an `auth-request` for the same user, they will (usually) all obtain the same challenge. This prevents a denial-of-service scenario. If they were to obtain distinct challenges, then one of the following would have to be true.
+
+- Either the server would have to retain **all** challenges it ever handed out in order to accept a solution for **any** of them from a legitimate client, which would require unbounded storage.
+- Or the server would only accept the solution to the **most recent** challenge (or a limited set of the most recent N challenges), in which a "rogue client" could prevent a legitimate one from establishing a session by rapidly requesting more challenges.
+
+Instead, the server (atomically) chooses a new random challenge after the current one has been solved and a session established. This maintains the property that a solution can (with overwhelming probability) only be used once to obtain a valid session, while avoiding the DoS scenarios. It creates a subtle window for races between legitimate clients, which should be acceptable.
+
 **2. Calculate the authentication response**
 
 If your user entered a password, the authentication response will be H(nonce . H(salt . H(password))), where H is the SHA-512 function and "." is concatenation of the byte streams.
 
 Note that the nonce and salt come from the server Base64 encoded, but you will have to decode them and obtain the raw bytes before doing the above calculation / hashing. Calculate the resulting hash and Base64 encode it before sending it back to the server in an authentication response.
+
+Note that the design does not make use of "key stretching" through repeated iterations of a cryptographic function. This deliberately avoids consuming server resources on invalid authentication attempts.
 
 **3. Send the authentication response to the server**
 
@@ -79,6 +88,10 @@ Hopefully, this will return the following.
 	"Reason": ""
 }
 ```
+
+After this, the session token will be invalid and will no longer be accepted by the server.
+
+Server-side implementation-detail: Sessions can also expire by inactivity or through server restarts. Session expiry by inactivity can be configured in `config/config.json`. The default timeout is two hours. Presenting a well-formed request including a valid session token to the server refreshes the session and resets the expiry timer.
 
 ## Public-key cryptography authentication protocol
 
@@ -122,7 +135,7 @@ Device tokens are static secrets of (currently) 64 bit size, which are sent alon
 
 Device tokens are bound to the users, for which they are generated. Each user can have an arbitrary number of device tokens attached. *location-visualizer* stores metadata for each device token, such as its creation time and a textual description, which allows for identification of the device the token was issued for. Device tokens can be individually revoked (removed from the user account) in case they get compromised.
 
-A size of 64 bits is considered insufficient for cryptographic keys. However, device tokens only serve as a means of authenticating the submitting device or sensor to the data recipient. A rogue client submitting requests to an instance of *location-visualizer* every 5 milliseconds would need, on average, 35 billion years, to randomly guess a 64 bit token and successfully submit a fake measurement.
+A size of 64 bits is considered insufficient for cryptographic keys. However, device tokens only serve as a means of authenticating the submitting device or sensor to the data recipient. A rogue client submitting requests to an instance of *location-visualizer* every 5 milliseconds would need, on average, 1.5 billion years, to randomly guess a 64 bit token and successfully submit a fake measurement.
 
 To submit data to *location-visualizer* via a device token, send the following request to the API endpoint.
 
@@ -134,6 +147,6 @@ The device token must be transmitted in hexadecimal encoding.
 
 The timestamp must be in the format described by *RFC 3339* and has millisecond precision.
 
-Latitude and longitude values must be in decimal representation, using '.' as the decimal separator. Longitudes on the northern hemisphere (north of the equator) are considered "positive", while longitudes on the southern hemisphere (south of the equator) are considered "negative". Latitudes east of the zero meridian are considered "positive", while latitudes west of the zero meridian are considered "negative". Negative values are prefixed by unary minus (`-`), while positive values have no prefix. A zero longitude or latitude is, by convention, considered "positive".
+Latitude and longitude values must be in decimal representation, using '.' as the decimal separator. Latitudes on the northern hemisphere (north of the equator) are considered "positive", while latitudes on the southern hemisphere (south of the equator) are considered "negative". Longitures east of the zero meridian are considered "positive", while longitudes west of the zero meridian are considered "negative". Negative values are prefixed by unary minus (`-`), while positive values have no prefix. A zero latitude or longitude is, by convention, considered "positive".
 
-Longitudes and latitudes are stored with a resolution of $ 10^{-7} $ degrees. Values with less than seven digits after the decimal separator are filled up with zeros after their last digit. Values with more than seven digits after the decimal separator are truncated (**not** rounded) to a precision of seven digits after the decimal separator. To achieve optimal precision when submitting data to *location-visualizer*, consider rounding sensor data and storing the result in a fixed-point representation on your sensor platform.
+Latitudes and longitudes are stored with a resolution of $ 10^{-7} $ degrees. Values with less than seven digits after the decimal separator are filled up with zeros after their last digit. Values with more than seven digits after the decimal separator are truncated (**not** rounded) to a precision of seven digits after the decimal separator. To achieve optimal precision when submitting data to *location-visualizer*, consider rounding sensor data and storing the result in a fixed-point representation on your sensor platform.
