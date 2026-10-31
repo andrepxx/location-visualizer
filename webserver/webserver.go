@@ -137,11 +137,12 @@ func (this *webServerStruct) cgiHandler(writer http.ResponseWriter, request *htt
 	host := request.Host
 	params := make(map[string]string)
 	files := make(map[string][]multipart.File)
+	form := request.Form
 
 	/*
 	 * Iterate over all form values and parse parameters.
 	 */
-	for key, values := range request.Form {
+	for key, values := range form {
 		ps := strings.Join(values, ",")
 		params[key] = ps
 	}
@@ -320,9 +321,9 @@ func (this *webServerStruct) fileHandler(writer http.ResponseWriter, request *ht
 			hdr.Set("Content-type", mimetype)
 			modTime := time.Time{}
 			http.ServeContent(writer, request, path, modTime, fd)
+			fd.Close()
 		}
 
-		fd.Close()
 	}
 
 }

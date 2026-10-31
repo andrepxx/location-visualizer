@@ -532,29 +532,41 @@ func (this *sessionStruct) Logout() error {
 				msg := err.Error()
 				errResult = fmt.Errorf("Error during TLS request: %s", msg)
 			} else {
-				response := webResponseStruct{}
-				err := json.Unmarshal(responseData, &response)
+				err := response.Close()
 
 				/*
-				 * Check if an error occured while parsing the response.
+				 * Check if an error occured closing the response.
 				 */
 				if err != nil {
 					msg := err.Error()
-					errResult = fmt.Errorf("Error parsing response: %s", msg)
+					errResult = fmt.Errorf("Error during TLS request: %s", msg)
 				} else {
-					success := response.Success
+					responseStruct := webResponseStruct{}
+					err := json.Unmarshal(responseData, &responseStruct)
 
 					/*
-					 * If response was not successful, report error, otherwise
-					 * invalidate connection.
+					 * Check if an error occured while parsing the response.
 					 */
-					if !success {
-						reason := response.Reason
-						errResult = fmt.Errorf("Error during logout: %s", reason)
+					if err != nil {
+						msg := err.Error()
+						errResult = fmt.Errorf("Error parsing response: %s", msg)
 					} else {
-						this.connection = nil
-					}
+						success := responseStruct.Success
 
+						/*
+						 * If response was not successful, report error, otherwise
+						 * invalidate connection.
+						 */
+						if !success {
+							reason := responseStruct.Reason
+							errResult = fmt.Errorf("Error during logout: %s", reason)
+							fmt.Printf("%s", string(responseData)) // DEBUG!
+						} else {
+							this.connection = nil
+							this.token = [64]byte{}
+						}
+
+					}
 				}
 
 			}
@@ -731,51 +743,62 @@ func (this *connectionStruct) authRequest(name string) ([SIZE_KEY_BYTES]byte, [S
 			msg := err.Error()
 			errResult = fmt.Errorf("Error during TLS request: %s", msg)
 		} else {
-			authChallenge := webAuthChallengeStruct{}
-			err := json.Unmarshal(responseData, &authChallenge)
+			err := response.Close()
 
 			/*
-			 * Check if an error occured while parsing the response.
+			 * Check if an error occured closing the response.
 			 */
 			if err != nil {
 				msg := err.Error()
-				errResult = fmt.Errorf("Error parsing response: %s", msg)
+				errResult = fmt.Errorf("Error during TLS request: %s", msg)
 			} else {
-				success := authChallenge.Success
+				authChallenge := webAuthChallengeStruct{}
+				err := json.Unmarshal(responseData, &authChallenge)
 
 				/*
-				 * Check if challenge could be retrieved.
+				 * Check if an error occured while parsing the response.
 				 */
-				if !success {
-					reason := authChallenge.Reason
-					errResult = fmt.Errorf("Failed to retrieve challenge: %s", reason)
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Error parsing response: %s", msg)
 				} else {
-					enc := base64.StdEncoding
-					saltString := authChallenge.Salt
-					saltStringBytes := []byte(saltString)
-					saltSlice := salt[:]
-					n, err := enc.Decode(saltSlice, saltStringBytes)
+					success := authChallenge.Success
 
 					/*
-					 * Check if salt could be decoded.
+					 * Check if challenge could be retrieved.
 					 */
-					if err != nil {
-						errResult = fmt.Errorf("%s", "Failed to decode salt")
-					} else if n != SIZE_KEY_BYTES {
-						errResult = fmt.Errorf("Size of salt does not match: Expected %d, found %d", SIZE_KEY_BYTES, n)
+					if !success {
+						reason := authChallenge.Reason
+						errResult = fmt.Errorf("Failed to retrieve challenge: %s", reason)
 					} else {
-						nonceString := authChallenge.Nonce
-						nonceStringBytes := []byte(nonceString)
-						nonceSlice := nonce[:]
-						n, err := enc.Decode(nonceSlice, nonceStringBytes)
+						enc := base64.StdEncoding
+						saltString := authChallenge.Salt
+						saltStringBytes := []byte(saltString)
+						saltSlice := salt[:]
+						n, err := enc.Decode(saltSlice, saltStringBytes)
 
 						/*
-						 * Check if nonce could be decoded.
+						 * Check if salt could be decoded.
 						 */
 						if err != nil {
-							errResult = fmt.Errorf("%s", "Failed to decode nonce")
+							errResult = fmt.Errorf("%s", "Failed to decode salt")
 						} else if n != SIZE_KEY_BYTES {
-							errResult = fmt.Errorf("Size of nonce does not match: Expected %d, found %d", SIZE_KEY_BYTES, n)
+							errResult = fmt.Errorf("Size of salt does not match: Expected %d, found %d", SIZE_KEY_BYTES, n)
+						} else {
+							nonceString := authChallenge.Nonce
+							nonceStringBytes := []byte(nonceString)
+							nonceSlice := nonce[:]
+							n, err := enc.Decode(nonceSlice, nonceStringBytes)
+
+							/*
+							 * Check if nonce could be decoded.
+							 */
+							if err != nil {
+								errResult = fmt.Errorf("%s", "Failed to decode nonce")
+							} else if n != SIZE_KEY_BYTES {
+								errResult = fmt.Errorf("Size of nonce does not match: Expected %d, found %d", SIZE_KEY_BYTES, n)
+							}
+
 						}
 
 					}
@@ -786,19 +809,9 @@ func (this *connectionStruct) authRequest(name string) ([SIZE_KEY_BYTES]byte, [S
 
 		}
 
-		err = response.Close()
-
-		/*
-		 * Check if an error occured while closing the connection.
-		 */
-		if (err != nil) && (errResult == nil) {
-			msg := err.Error()
-			errResult = fmt.Errorf("Error during TLS request: %s", msg)
-		}
-
 	}
 
-	return salt, nonce, err
+	return salt, nonce, errResult
 }
 
 /*
@@ -832,44 +845,55 @@ func (this *connectionStruct) authResponse(name string, hash [SIZE_KEY_BYTES]byt
 			msg := err.Error()
 			errResult = fmt.Errorf("Error during TLS request: %s", msg)
 		} else {
-			token := webTokenStruct{}
-			err := json.Unmarshal(responseData, &token)
+			err := response.Close()
 
 			/*
-			 * Check if an error occured while parsing the response.
+			 * Check if an error occured closing the response.
 			 */
 			if err != nil {
 				msg := err.Error()
-				errResult = fmt.Errorf("Error parsing response: %s", msg)
+				errResult = fmt.Errorf("Error during TLS request: %s", msg)
 			} else {
-				success := token.Success
+				token := webTokenStruct{}
+				err := json.Unmarshal(responseData, &token)
 
 				/*
-				 * Check if login was successful.
+				 * Check if an error occured while parsing the response.
 				 */
-				if !success {
-					reason := token.Reason
-					errResult = fmt.Errorf("Error during login process: %s", reason)
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Error parsing response: %s", msg)
 				} else {
-					enc := base64.StdEncoding
-					tokenString := token.Token
-					tokenBytes, err := enc.DecodeString(tokenString)
+					success := token.Success
 
 					/*
-					 * Check if session token could be decoded.
+					 * Check if login was successful.
 					 */
-					if err != nil {
-						msg := err.Error()
-						errResult = fmt.Errorf("Error decoding session token: %s", msg)
+					if !success {
+						reason := token.Reason
+						errResult = fmt.Errorf("Error during login process: %s", reason)
 					} else {
-						sessionTokenSlice := sessionToken[:]
-						n := copy(sessionTokenSlice, tokenBytes)
+						enc := base64.StdEncoding
+						tokenString := token.Token
+						tokenBytes, err := enc.DecodeString(tokenString)
 
 						/*
-						 * Check if session token was of expected length.
+						 * Check if session token could be decoded.
 						 */
-						if n != SIZE_KEY_BYTES {
-							errResult = fmt.Errorf("Session token was not of expected length: Expected %d bytes, got %d.", SIZE_KEY_BYTES, n)
+						if err != nil {
+							msg := err.Error()
+							errResult = fmt.Errorf("Error decoding session token: %s", msg)
+						} else {
+							sessionTokenSlice := sessionToken[:]
+							n := copy(sessionTokenSlice, tokenBytes)
+
+							/*
+							 * Check if session token was of expected length.
+							 */
+							if n != SIZE_KEY_BYTES {
+								errResult = fmt.Errorf("Session token was not of expected length: Expected %d bytes, got %d.", SIZE_KEY_BYTES, n)
+							}
+
 						}
 
 					}
@@ -915,44 +939,56 @@ func (this *connectionStruct) authResponsePublicKey(name string, signature []byt
 			msg := err.Error()
 			errResult = fmt.Errorf("Error during TLS request: %s", msg)
 		} else {
-			token := webTokenStruct{}
-			err := json.Unmarshal(responseData, &token)
+			err := response.Close()
 
 			/*
-			 * Check if an error occured while parsing the response.
+			 * Check if an error occured closing the response.
 			 */
 			if err != nil {
 				msg := err.Error()
-				errResult = fmt.Errorf("Error parsing response: %s", msg)
+				errResult = fmt.Errorf("Error during TLS request: %s", msg)
 			} else {
-				success := token.Success
+
+				token := webTokenStruct{}
+				err := json.Unmarshal(responseData, &token)
 
 				/*
-				 * Check if login was successful.
+				 * Check if an error occured while parsing the response.
 				 */
-				if !success {
-					reason := token.Reason
-					errResult = fmt.Errorf("Error during login process: %s", reason)
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Error parsing response: %s", msg)
 				} else {
-					enc := base64.StdEncoding
-					tokenString := token.Token
-					tokenBytes, err := enc.DecodeString(tokenString)
+					success := token.Success
 
 					/*
-					 * Check if session token could be decoded.
+					 * Check if login was successful.
 					 */
-					if err != nil {
-						msg := err.Error()
-						errResult = fmt.Errorf("Error decoding session token: %s", msg)
+					if !success {
+						reason := token.Reason
+						errResult = fmt.Errorf("Error during login process: %s", reason)
 					} else {
-						sessionTokenSlice := sessionToken[:]
-						n := copy(sessionTokenSlice, tokenBytes)
+						enc := base64.StdEncoding
+						tokenString := token.Token
+						tokenBytes, err := enc.DecodeString(tokenString)
 
 						/*
-						 * Check if session token was of expected length.
+						 * Check if session token could be decoded.
 						 */
-						if n != SIZE_KEY_BYTES {
-							errResult = fmt.Errorf("Session token was not of expected length: Expected %d bytes, got %d.", SIZE_KEY_BYTES, n)
+						if err != nil {
+							msg := err.Error()
+							errResult = fmt.Errorf("Error decoding session token: %s", msg)
+						} else {
+							sessionTokenSlice := sessionToken[:]
+							n := copy(sessionTokenSlice, tokenBytes)
+
+							/*
+							 * Check if session token was of expected length.
+							 */
+							if n != SIZE_KEY_BYTES {
+								errResult = fmt.Errorf("Session token was not of expected length: Expected %d bytes, got %d.", SIZE_KEY_BYTES, n)
+							}
+
 						}
 
 					}
@@ -1171,7 +1207,7 @@ func CreateConnection(host string, port uint16, userAgent string, certificateCha
 		} else {
 
 			/*
-			* Create new connection.
+			 * Create new connection.
 			 */
 			conn := connectionStruct{
 				host:        host,

@@ -3312,8 +3312,8 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 					cyclingDurationIn := request.Params["cyclingduration"]
 					cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
 					cyclingDistanceKM := request.Params["cyclingdistancekm"]
-					cycingEnergyKJIn := request.Params["cyclingenergykj"]
-					cyclingEnergyKJ, _ := strconv.ParseUint(cycingEnergyKJIn, 10, 64)
+					cyclingEnergyKJIn := request.Params["cyclingenergykj"]
+					cyclingEnergyKJ, _ := strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
 					otherEnergyKJIn := request.Params["otherenergykj"]
 					otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
 
