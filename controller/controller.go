@@ -138,16 +138,6 @@ type webActivitiesStruct struct {
 }
 
 /*
- * Web representation of a dataset modification report.
- */
-type webDatasetModificationReportStruct struct {
-	Status  communication.WebResponseStruct
-	Before  webDatasetStatsStruct
-	After   webDatasetStatsStruct
-	Removed uint32
-}
-
-/*
  * Web representation of statistics about a data set.
  */
 type webDatasetStatsStruct struct {
@@ -156,6 +146,16 @@ type webDatasetStatsStruct struct {
 	OrderedStrict     bool
 	TimestampEarliest string
 	TimestampLatest   string
+}
+
+/*
+ * Web representation of a dataset modification report.
+ */
+type webDatasetModificationReportStruct struct {
+	Status  communication.WebResponseStruct
+	Before  webDatasetStatsStruct
+	After   webDatasetStatsStruct
+	Removed uint32
 }
 
 /*
@@ -265,37 +265,52 @@ func (this *controllerStruct) acquire(sem lsync.Semaphore) {
 func (this *controllerStruct) checkPermission(encodedToken string, permission string) (bool, error) {
 	enc := base64.StdEncoding
 	tokenBuffer, err := enc.DecodeString(encodedToken)
+	result := false
+	errResult := error(nil)
 
 	/*
 	 * Check if token could be decoded.
 	 */
 	if err != nil {
-		return false, fmt.Errorf("%s", "Failed to decode session token.")
+		errResult = fmt.Errorf("%s", "Failed to decode session token.")
 	} else {
 		sm := this.sessionManager
 		t := sm.CreateToken(tokenBuffer)
 		name, err := sm.UserName(t)
 
 		/*
-		 * Check if session could be found
+		 * Check if session could be found.
 		 */
 		if err != nil {
-			return false, err
+			msg := err.Error()
+			errResult = fmt.Errorf("Failed to obtain session: %s", msg)
 		} else {
 			um := this.userManager
 			permitted, err := um.HasPermission(name, permission)
-			return permitted, err
+
+			/*
+			 * Check if permission could be resolved.
+			 */
+			if err != nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to check permission: %s", msg)
+			} else {
+				result = permitted
+			}
+
 		}
 
 	}
 
+	return result, errResult
 }
 
 /*
  * Marshals an object into a JSON representation or an error.
  * Returns the appropriate MIME type and binary representation.
  */
-func (this *controllerStruct) createJSON(obj interface{}) (string, []byte) {
+func (this *controllerStruct) createJSON(obj any) (string, []byte) {
+	contentType := "application/json; charset=utf-8"
 	buffer, err := json.MarshalIndent(obj, "", "\t")
 
 	/*
@@ -304,15 +319,13 @@ func (this *controllerStruct) createJSON(obj interface{}) (string, []byte) {
 	if err != nil {
 		conf := this.config
 		confServer := conf.WebServer
-		contentType := confServer.ErrorMime
+		contentType = confServer.ErrorMime
 		errString := err.Error()
 		bufString := bytes.NewBufferString(errString)
-		bufBytes := bufString.Bytes()
-		return contentType, bufBytes
-	} else {
-		return "application/json; charset=utf-8", buffer
+		buffer = bufString.Bytes()
 	}
 
+	return contentType, buffer
 }
 
 /*
@@ -335,6 +348,7 @@ func (this *controllerStruct) release(sem lsync.Semaphore) {
 func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-write")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -351,13 +365,12 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -368,13 +381,12 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		wr := communication.WebResponseStruct{}
 		beginIn := request.Params["begin"]
@@ -397,46 +409,133 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		} else {
 			weightKG := request.Params["weightkg"]
 			runningDurationIn := request.Params["runningduration"]
-			runningDuration, _ := time.ParseDuration(runningDurationIn)
-			runningDistanceKM := request.Params["runningdistancekm"]
-			runningStepCountIn := request.Params["runningstepcount"]
-			runningStepCount, _ := strconv.ParseUint(runningStepCountIn, 10, 64)
-			runningEnergyKJIn := request.Params["runningenergykj"]
-			runningEnergyKJ, _ := strconv.ParseUint(runningEnergyKJIn, 10, 64)
-			cyclingDurationIn := request.Params["cyclingduration"]
-			cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
-			cyclingDistanceKM := request.Params["cyclingdistancekm"]
-			cyclingEnergyKJIn := request.Params["cyclingenergykj"]
-			cyclingEnergyKJ, _ := strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
-			otherEnergyKJIn := request.Params["otherenergykj"]
-			otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
+			runningDuration := time.Duration(0)
+			errRunningDuration := error(nil)
 
 			/*
-			 * Create activity info.
+			 * Parse running duration.
 			 */
-			info := meta.ActivityInfo{
-				Begin:             begin,
-				WeightKG:          weightKG,
-				RunningDuration:   runningDuration,
-				RunningDistanceKM: runningDistanceKM,
-				RunningStepCount:  runningStepCount,
-				RunningEnergyKJ:   runningEnergyKJ,
-				CyclingDuration:   cyclingDuration,
-				CyclingDistanceKM: cyclingDistanceKM,
-				CyclingEnergyKJ:   cyclingEnergyKJ,
-				OtherEnergyKJ:     otherEnergyKJ,
+			if runningDurationIn != "" {
+				runningDuration, errRunningDuration = time.ParseDuration(runningDurationIn)
 			}
 
-			this.activitiesLock.Lock()
-			activities := this.activities
-			err := activities.Add(&info)
+			runningDistanceKM := request.Params["runningdistancekm"]
+			runningStepCountIn := request.Params["runningstepcount"]
+			runningStepCount := uint64(0)
+			errRunningStepCount := error(nil)
 
 			/*
-			 * Check if activity was added.
+			 * Parse running step count.
 			 */
-			if err != nil {
-				msg := err.Error()
-				reason := fmt.Sprintf("Failed to add activity: %s", msg)
+			if runningStepCountIn != "" {
+				runningStepCount, errRunningStepCount = strconv.ParseUint(runningStepCountIn, 10, 64)
+			}
+
+			runningEnergyKJIn := request.Params["runningenergykj"]
+			runningEnergyKJ := uint64(0)
+			errRunningEnergyKJ := error(nil)
+
+			/*
+			 * Parse running energy.
+			 */
+			if runningEnergyKJIn != "" {
+				runningEnergyKJ, errRunningEnergyKJ = strconv.ParseUint(runningEnergyKJIn, 10, 64)
+			}
+
+			cyclingDurationIn := request.Params["cyclingduration"]
+			cyclingDuration := time.Duration(0)
+			errCyclingDuration := error(nil)
+
+			/*
+			 * Parse cycling duration.
+			 */
+			if cyclingDurationIn != "" {
+				cyclingDuration, errCyclingDuration = time.ParseDuration(cyclingDurationIn)
+			}
+
+			cyclingDistanceKM := request.Params["cyclingdistancekm"]
+			cyclingEnergyKJIn := request.Params["cyclingenergykj"]
+			cyclingEnergyKJ := uint64(0)
+			errCyclingEnergyKJ := error(nil)
+
+			/*
+			 * Parse cycling energy.
+			 */
+			if cyclingEnergyKJIn != "" {
+				cyclingEnergyKJ, errCyclingEnergyKJ = strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
+			}
+
+			otherEnergyKJIn := request.Params["otherenergykj"]
+			otherEnergyKJ := uint64(0)
+			errOtherEnergyKJ := error(nil)
+
+			/*
+			 * Parse other energy.
+			 */
+			if otherEnergyKJIn != "" {
+				otherEnergyKJ, errOtherEnergyKJ = strconv.ParseUint(otherEnergyKJIn, 10, 64)
+			}
+
+			/*
+			 * Check for parse errors.
+			 */
+			if errRunningDuration != nil {
+				reason := "Invalid value for running duration."
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = communication.WebResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else if errRunningStepCount != nil {
+				reason := "Invalid value for running step count."
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = communication.WebResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else if errRunningEnergyKJ != nil {
+				reason := "Invalid value for running energy."
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = communication.WebResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else if errCyclingDuration != nil {
+				reason := "Invalid value for cycling duration."
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = communication.WebResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else if errCyclingEnergyKJ != nil {
+				reason := "Invalid value for cycling energy."
+
+				/*
+				 * Indicate failure.
+				 */
+				wr = communication.WebResponseStruct{
+					Success: false,
+					Reason:  reason,
+				}
+
+			} else if errOtherEnergyKJ != nil {
+				reason := "Invalid value for other energy."
 
 				/*
 				 * Indicate failure.
@@ -447,14 +546,33 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 				}
 
 			} else {
-				err = this.syncActivityDB()
 
 				/*
-				 * Check if user database was synchronized.
+				 * Create activity info.
+				 */
+				info := meta.ActivityInfo{
+					Begin:             begin,
+					WeightKG:          weightKG,
+					RunningDuration:   runningDuration,
+					RunningDistanceKM: runningDistanceKM,
+					RunningStepCount:  runningStepCount,
+					RunningEnergyKJ:   runningEnergyKJ,
+					CyclingDuration:   cyclingDuration,
+					CyclingDistanceKM: cyclingDistanceKM,
+					CyclingEnergyKJ:   cyclingEnergyKJ,
+					OtherEnergyKJ:     otherEnergyKJ,
+				}
+
+				this.activitiesLock.Lock()
+				activities := this.activities
+				err := activities.Add(&info)
+
+				/*
+				 * Check if activity was added.
 				 */
 				if err != nil {
 					msg := err.Error()
-					reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+					reason := fmt.Sprintf("Failed to add activity: %s", msg)
 
 					/*
 					 * Indicate failure.
@@ -465,20 +583,40 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 					}
 
 				} else {
+					err = this.syncActivityDB()
 
 					/*
-					 * Indicate success.
+					 * Check if activity database was synchronized.
 					 */
-					wr = communication.WebResponseStruct{
-						Success: true,
-						Reason:  "",
+					if err != nil {
+						msg := err.Error()
+						reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else {
+
+						/*
+						 * Indicate success.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: true,
+							Reason:  "",
+						}
+
 					}
 
 				}
 
+				this.activitiesLock.Unlock()
 			}
 
-			this.activitiesLock.Unlock()
 		}
 
 		mimeType, buffer := this.createJSON(wr)
@@ -486,15 +624,15 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -503,6 +641,7 @@ func (this *controllerStruct) addActivityHandler(request webserver.HttpRequest) 
 func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -519,13 +658,12 @@ func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -536,13 +674,12 @@ func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		um := this.userManager
@@ -601,15 +738,15 @@ func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -618,6 +755,7 @@ func (this *controllerStruct) adminGetDeviceTokens(request webserver.HttpRequest
 func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -634,13 +772,12 @@ func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -651,13 +788,12 @@ func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		um := this.userManager
@@ -690,15 +826,15 @@ func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -707,6 +843,7 @@ func (this *controllerStruct) adminGetPermissions(request webserver.HttpRequest)
 func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -723,13 +860,12 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -740,13 +876,12 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		id := request.Params["id"]
@@ -817,15 +952,15 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -834,6 +969,7 @@ func (this *controllerStruct) adminGetPublicKey(request webserver.HttpRequest) w
 func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -850,13 +986,12 @@ func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -867,13 +1002,12 @@ func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		um := this.userManager
@@ -936,15 +1070,15 @@ func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -953,6 +1087,7 @@ func (this *controllerStruct) adminGetPublicKeys(request webserver.HttpRequest) 
 func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -969,13 +1104,12 @@ func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webse
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -986,13 +1120,12 @@ func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webse
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		um := this.userManager
 		users := um.Users()
@@ -1001,15 +1134,15 @@ func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webse
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -1018,6 +1151,7 @@ func (this *controllerStruct) adminGetUsers(request webserver.HttpRequest) webse
 func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -1034,13 +1168,12 @@ func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1051,13 +1184,12 @@ func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		deviceTokenString := request.Params["devicetoken"]
@@ -1110,15 +1242,15 @@ func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest)
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -1127,6 +1259,7 @@ func (this *controllerStruct) adminHasDeviceToken(request webserver.HttpRequest)
 func (this *controllerStruct) adminHasPermission(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "admin")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -1143,13 +1276,12 @@ func (this *controllerStruct) adminHasPermission(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1160,13 +1292,12 @@ func (this *controllerStruct) adminHasPermission(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		name := request.Params["name"]
 		permission := request.Params["permission"]
@@ -1209,15 +1340,15 @@ func (this *controllerStruct) adminHasPermission(request webserver.HttpRequest) 
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -1538,6 +1669,7 @@ func (this *controllerStruct) authResponsePublicKeyHandler(request webserver.Htt
 func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-read")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -1554,13 +1686,12 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1571,13 +1702,12 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		conf := this.config
 		confServer := conf.WebServer
@@ -1596,13 +1726,12 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 				Header:     map[string]string{"Content-type": contentType},
 				StatusCode: http.StatusInternalServerError,
 				Body:       []byte(msg),
 			}
 
-			return response
 		} else {
 
 			/*
@@ -1620,7 +1749,7 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 
 				Header: map[string]string{
 					"Content-disposition": disposition,
@@ -1630,11 +1759,11 @@ func (this *controllerStruct) exportActivityCsvHandler(request webserver.HttpReq
 				ContentReadSeekCloser: rsc,
 			}
 
-			return response
 		}
 
 	}
 
+	return response
 }
 
 /*
@@ -1645,6 +1774,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 	format := request.Params["format"]
 	permA, errA := this.checkPermission(token, "geodb-read")
 	permB, errB := this.checkPermission(token, "geodb-download")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -1661,13 +1791,12 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errB != nil {
 		msg := errB.Error()
 		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
@@ -1680,13 +1809,12 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !permA || !permB {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1697,13 +1825,12 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		customMsgBuf := bytes.NewBufferString("Database not accessible.")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1714,7 +1841,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 		/*
 		 * Create default HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusInternalServerError,
 			Body:       customMsgBytes,
@@ -1832,9 +1959,9 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -1843,6 +1970,7 @@ func (this *controllerStruct) exportGeoDBContentHandler(request webserver.HttpRe
 func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-read")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -1859,13 +1987,12 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -1876,13 +2003,12 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		this.activitiesLock.RLock()
 		activities := this.activities
@@ -2046,15 +2172,15 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -2063,6 +2189,7 @@ func (this *controllerStruct) getActivitiesHandler(request webserver.HttpRequest
 func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "geodb-read")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -2079,13 +2206,12 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -2096,13 +2222,12 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		datasetStats := webDatasetStatsStruct{}
 		gu := geoutil.Create()
@@ -2149,15 +2274,15 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -2166,6 +2291,7 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "get-tile")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -2182,13 +2308,12 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -2199,13 +2324,12 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		conf := this.config
 		useMap := conf.UseMap
@@ -2225,12 +2349,11 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 				Header: map[string]string{"Content-type": contentType},
 				Body:   customMsgBytes,
 			}
 
-			return response
 		} else {
 			xIn := request.Params["x"]
 			x64, _ := strconv.ParseUint(xIn, 10, 32)
@@ -2260,31 +2383,30 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 				/*
 				 * Create HTTP response.
 				 */
-				response := webserver.HttpResponse{
+				response = webserver.HttpResponse{
 					Header:     map[string]string{"Content-type": contentType},
 					StatusCode: http.StatusInternalServerError,
 					Body:       customMsgBytes,
 				}
 
-				return response
 			} else {
 
 				/*
 				 * Create HTTP response.
 				 */
-				response := webserver.HttpResponse{
+				response = webserver.HttpResponse{
 					Header:                map[string]string{"Content-type": "image/png"},
 					StatusCode:            http.StatusOK,
 					ContentReadSeekCloser: t,
 				}
 
-				return response
 			}
 
 		}
 
 	}
 
+	return response
 }
 
 /*
@@ -2293,6 +2415,7 @@ func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webs
 func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-write")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -2309,13 +2432,12 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -2326,13 +2448,12 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		wr := communication.WebResponseStruct{}
 		data := request.Params["data"]
@@ -2359,7 +2480,7 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 			err = this.syncActivityDB()
 
 			/*
-			 * Check if user database was synchronized.
+			 * Check if activity database was synchronized.
 			 */
 			if err != nil {
 				msg := err.Error()
@@ -2393,15 +2514,15 @@ func (this *controllerStruct) importActivityCsvHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -3033,6 +3154,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 func (this *controllerStruct) removeActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-write")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -3049,13 +3171,12 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -3066,13 +3187,12 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		wr := communication.WebResponseStruct{}
 		revisionIn := request.Params["revision"]
@@ -3149,7 +3269,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 						err = this.syncActivityDB()
 
 						/*
-						 * Check if user database was synchronized.
+						 * Check if activity database was synchronized.
 						 */
 						if err != nil {
 							msg := err.Error()
@@ -3189,15 +3309,15 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -3206,6 +3326,7 @@ func (this *controllerStruct) removeActivityHandler(request webserver.HttpReques
 func (this *controllerStruct) replaceActivityHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "activity-write")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -3222,13 +3343,12 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -3239,13 +3359,12 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		wr := communication.WebResponseStruct{}
 		revisionIn := request.Params["revision"]
@@ -3303,80 +3422,186 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 				} else {
 					weightKG := request.Params["weightkg"]
 					runningDurationIn := request.Params["runningduration"]
-					runningDuration, _ := time.ParseDuration(runningDurationIn)
-					runningDistanceKM := request.Params["runningdistancekm"]
-					runningStepCountIn := request.Params["runningstepcount"]
-					runningStepCount, _ := strconv.ParseUint(runningStepCountIn, 10, 64)
-					runningEnergyKJIn := request.Params["runningenergykj"]
-					runningEnergyKJ, _ := strconv.ParseUint(runningEnergyKJIn, 10, 64)
-					cyclingDurationIn := request.Params["cyclingduration"]
-					cyclingDuration, _ := time.ParseDuration(cyclingDurationIn)
-					cyclingDistanceKM := request.Params["cyclingdistancekm"]
-					cyclingEnergyKJIn := request.Params["cyclingenergykj"]
-					cyclingEnergyKJ, _ := strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
-					otherEnergyKJIn := request.Params["otherenergykj"]
-					otherEnergyKJ, _ := strconv.ParseUint(otherEnergyKJIn, 10, 64)
+					runningDuration := time.Duration(0)
+					errRunningDuration := error(nil)
 
 					/*
-					 * Create activity info.
+					 * Parse running duration.
 					 */
-					info := meta.ActivityInfo{
-						Begin:             begin,
-						WeightKG:          weightKG,
-						RunningDuration:   runningDuration,
-						RunningDistanceKM: runningDistanceKM,
-						RunningStepCount:  runningStepCount,
-						RunningEnergyKJ:   runningEnergyKJ,
-						CyclingDuration:   cyclingDuration,
-						CyclingDistanceKM: cyclingDistanceKM,
-						CyclingEnergyKJ:   cyclingEnergyKJ,
-						OtherEnergyKJ:     otherEnergyKJ,
+					if runningDurationIn != "" {
+						runningDuration, errRunningDuration = time.ParseDuration(runningDurationIn)
 					}
 
-					this.activitiesLock.Lock()
-					activities := this.activities
-					currentRevision := activities.Revision()
+					runningDistanceKM := request.Params["runningdistancekm"]
+					runningStepCountIn := request.Params["runningstepcount"]
+					runningStepCount := uint64(0)
+					errRunningStepCount := error(nil)
 
 					/*
-					 * Make sure that revision information matches.
+					 * Parse running step count.
 					 */
-					if revision != currentRevision {
+					if runningStepCountIn != "" {
+						runningStepCount, errRunningStepCount = strconv.ParseUint(runningStepCountIn, 10, 64)
+					}
+
+					runningEnergyKJIn := request.Params["runningenergykj"]
+					runningEnergyKJ := uint64(0)
+					errRunningEnergyKJ := error(nil)
+
+					/*
+					 * Parse running energy.
+					 */
+					if runningEnergyKJIn != "" {
+						runningEnergyKJ, errRunningEnergyKJ = strconv.ParseUint(runningEnergyKJIn, 10, 64)
+					}
+
+					cyclingDurationIn := request.Params["cyclingduration"]
+					cyclingDuration := time.Duration(0)
+					errCyclingDuration := error(nil)
+
+					/*
+					 * Parse cycling duration.
+					 */
+					if cyclingDurationIn != "" {
+						cyclingDuration, errCyclingDuration = time.ParseDuration(cyclingDurationIn)
+					}
+
+					cyclingDistanceKM := request.Params["cyclingdistancekm"]
+					cyclingEnergyKJIn := request.Params["cyclingenergykj"]
+					cyclingEnergyKJ := uint64(0)
+					errCyclingEnergyKJ := error(nil)
+
+					/*
+					 * Parse cycling energy.
+					 */
+					if cyclingEnergyKJIn != "" {
+						cyclingEnergyKJ, errCyclingEnergyKJ = strconv.ParseUint(cyclingEnergyKJIn, 10, 64)
+					}
+
+					otherEnergyKJIn := request.Params["otherenergykj"]
+					otherEnergyKJ := uint64(0)
+					errOtherEnergyKJ := error(nil)
+
+					/*
+					 * Parse other energy.
+					 */
+					if otherEnergyKJIn != "" {
+						otherEnergyKJ, errOtherEnergyKJ = strconv.ParseUint(otherEnergyKJIn, 10, 64)
+					}
+
+					/*
+					 * Check for parse errors.
+					 */
+					if errRunningDuration != nil {
+						reason := "Invalid value for running duration."
 
 						/*
 						 * Indicate failure.
 						 */
 						wr = communication.WebResponseStruct{
 							Success: false,
-							Reason:  "Failed to replace activity: Activity data was changed in the meantime.",
+							Reason:  reason,
+						}
+
+					} else if errRunningStepCount != nil {
+						reason := "Invalid value for running step count."
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else if errRunningEnergyKJ != nil {
+						reason := "Invalid value for running energy."
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else if errCyclingDuration != nil {
+						reason := "Invalid value for cycling duration."
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else if errCyclingEnergyKJ != nil {
+						reason := "Invalid value for cycling energy."
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
+						}
+
+					} else if errOtherEnergyKJ != nil {
+						reason := "Invalid value for other energy."
+
+						/*
+						 * Indicate failure.
+						 */
+						wr = communication.WebResponseStruct{
+							Success: false,
+							Reason:  reason,
 						}
 
 					} else {
-						err := activities.Replace(id, &info)
 
 						/*
-						 * Check if activity was replaced.
+						 * Create activity info.
 						 */
-						if err != nil {
-							msg := err.Error()
-							reason := fmt.Sprintf("Failed to replace activity: %s", msg)
+						info := meta.ActivityInfo{
+							Begin:             begin,
+							WeightKG:          weightKG,
+							RunningDuration:   runningDuration,
+							RunningDistanceKM: runningDistanceKM,
+							RunningStepCount:  runningStepCount,
+							RunningEnergyKJ:   runningEnergyKJ,
+							CyclingDuration:   cyclingDuration,
+							CyclingDistanceKM: cyclingDistanceKM,
+							CyclingEnergyKJ:   cyclingEnergyKJ,
+							OtherEnergyKJ:     otherEnergyKJ,
+						}
+
+						this.activitiesLock.Lock()
+						activities := this.activities
+						currentRevision := activities.Revision()
+
+						/*
+						 * Make sure that revision information matches.
+						 */
+						if revision != currentRevision {
 
 							/*
 							 * Indicate failure.
 							 */
 							wr = communication.WebResponseStruct{
 								Success: false,
-								Reason:  reason,
+								Reason:  "Failed to replace activity: Activity data was changed in the meantime.",
 							}
 
 						} else {
-							err = this.syncActivityDB()
+							err := activities.Replace(id, &info)
 
 							/*
-							 * Check if user database was synchronized.
+							 * Check if activity was replaced.
 							 */
 							if err != nil {
 								msg := err.Error()
-								reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+								reason := fmt.Sprintf("Failed to replace activity: %s", msg)
 
 								/*
 								 * Indicate failure.
@@ -3387,13 +3612,33 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 								}
 
 							} else {
+								err = this.syncActivityDB()
 
 								/*
-								 * Indicate success.
+								 * Check if activity database was synchronized.
 								 */
-								wr = communication.WebResponseStruct{
-									Success: true,
-									Reason:  "",
+								if err != nil {
+									msg := err.Error()
+									reason := fmt.Sprintf("Failed to synchronize activity database: %s", msg)
+
+									/*
+									 * Indicate failure.
+									 */
+									wr = communication.WebResponseStruct{
+										Success: false,
+										Reason:  reason,
+									}
+
+								} else {
+
+									/*
+									 * Indicate success.
+									 */
+									wr = communication.WebResponseStruct{
+										Success: true,
+										Reason:  "",
+									}
+
 								}
 
 							}
@@ -3414,15 +3659,15 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": mimeType},
 			StatusCode: http.StatusOK,
 			Body:       buffer,
 		}
 
-		return response
 	}
 
+	return response
 }
 
 /*
@@ -3431,6 +3676,7 @@ func (this *controllerStruct) replaceActivityHandler(request webserver.HttpReque
 func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webserver.HttpResponse {
 	token := request.Params["token"]
 	perm, err := this.checkPermission(token, "render")
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -3447,13 +3693,12 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -3464,13 +3709,12 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		xresIn := request.Params["xres"]
 		xres64, _ := strconv.ParseUint(xresIn, 10, 16)
@@ -3514,13 +3758,12 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 				Header:     map[string]string{"Content-type": contentType},
 				StatusCode: http.StatusBadRequest,
 				Body:       msgBytes,
 			}
 
-			return response
 		} else {
 			xposIn := request.Params["xpos"]
 			xpos, _ := strconv.ParseFloat(xposIn, 64)
@@ -3659,13 +3902,12 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 				/*
 				 * Create HTTP response.
 				 */
-				response := webserver.HttpResponse{
+				response = webserver.HttpResponse{
 					Header:     map[string]string{"Content-type": contentType},
 					StatusCode: http.StatusInternalServerError,
 					Body:       customMsgBytes,
 				}
 
-				return response
 			} else {
 
 				/*
@@ -3693,26 +3935,24 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 					/*
 					 * Create HTTP response.
 					 */
-					response := webserver.HttpResponse{
+					response = webserver.HttpResponse{
 						Header:     map[string]string{"Content-type": contentType},
 						StatusCode: http.StatusInternalServerError,
 						Body:       customMsgBytes,
 					}
 
-					return response
 				} else {
 					bufBytes := buf.Bytes()
 
 					/*
 					 * Create HTTP response.
 					 */
-					response := webserver.HttpResponse{
+					response = webserver.HttpResponse{
 						Header:     map[string]string{"Content-type": "image/png"},
 						StatusCode: http.StatusOK,
 						Body:       bufBytes,
 					}
 
-					return response
 				}
 
 			}
@@ -3721,6 +3961,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 
 	}
 
+	return response
 }
 
 /*
@@ -3740,6 +3981,7 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 	timestamp, errTimestamp := time.ParseInLocation(time.RFC3339, timeString, loc)
 	latitude, errLatitude := lmath.ParseFixed32(latitudeString, DECIMAL_PLACES_COORDINATES)
 	longitude, errLongitude := lmath.ParseFixed32(longitudeString, DECIMAL_PLACES_COORDINATES)
+	response := webserver.HttpResponse{}
 
 	/*
 	 * Check permissions.
@@ -3756,13 +3998,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errPerm != nil {
 		msg := errPerm.Error()
 		customMsg := fmt.Sprintf("Failed to check permission: %s", msg)
@@ -3775,13 +4016,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !perm {
 		customMsgBuf := bytes.NewBufferString("Forbidden!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -3792,13 +4032,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errToken != nil {
 		msg := errToken.Error()
 		customMsg := fmt.Sprintf("Failed to validate device token: %s", msg)
@@ -3811,13 +4050,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if !tokenValid {
 		customMsgBuf := bytes.NewBufferString("Invalid device token!")
 		customMsgBytes := customMsgBuf.Bytes()
@@ -3828,13 +4066,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errTimestamp != nil {
 		msg := errTimestamp.Error()
 		customMsg := fmt.Sprintf("Failed to parse timestamp: %s", msg)
@@ -3847,13 +4084,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errLatitude != nil {
 		msg := errLatitude.Error()
 		customMsg := fmt.Sprintf("Failed to parse latitude: %s", msg)
@@ -3866,13 +4102,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else if errLongitude != nil {
 		msg := errLongitude.Error()
 		customMsg := fmt.Sprintf("Failed to parse longitude: %s", msg)
@@ -3885,13 +4120,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		/*
 		 * Create HTTP response.
 		 */
-		response := webserver.HttpResponse{
+		response = webserver.HttpResponse{
 			Header:     map[string]string{"Content-type": contentType},
 			StatusCode: http.StatusForbidden,
 			Body:       customMsgBytes,
 		}
 
-		return response
 	} else {
 		ts := timestamp.UnixMilli()
 		ts64 := uint64(ts)
@@ -3923,13 +4157,12 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 				Header:     map[string]string{"Content-type": contentType},
 				StatusCode: http.StatusInternalServerError,
 				Body:       customMsgBytes,
 			}
 
-			return response
 		} else {
 			customMsgBuf := bytes.NewBufferString("OK")
 			customMsgBytes := customMsgBuf.Bytes()
@@ -3940,17 +4173,17 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 			/*
 			 * Create HTTP response.
 			 */
-			response := webserver.HttpResponse{
+			response = webserver.HttpResponse{
 				Header:     map[string]string{"Content-type": contentType},
 				StatusCode: http.StatusOK,
 				Body:       customMsgBytes,
 			}
 
-			return response
 		}
 
 	}
 
+	return response
 }
 
 /*
