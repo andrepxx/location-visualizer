@@ -31,6 +31,7 @@ import (
 	"github.com/andrepxx/location-visualizer/geo/geoutil"
 	"github.com/andrepxx/location-visualizer/geo/gpx"
 	"github.com/andrepxx/location-visualizer/geo/opengeodb"
+	"github.com/andrepxx/location-visualizer/live"
 	lmath "github.com/andrepxx/location-visualizer/math"
 	"github.com/andrepxx/location-visualizer/meta"
 	lsync "github.com/andrepxx/location-visualizer/sync"
@@ -170,6 +171,26 @@ type webMigrationReportStruct struct {
 }
 
 /*
+ * Web representation of live sensor position.
+ */
+type webSensorPositionStruct struct {
+	Timestamp   string
+	Latitude    string
+	LatitudeE7  int64
+	Longitude   string
+	LongitudeE7 int64
+}
+
+/*
+ * Web representation of live sensor state.
+ */
+type webSensorStateStruct struct {
+	Id          string
+	Description string
+	Position    *webSensorPositionStruct
+}
+
+/*
  * Provides a no-op Close method for an io.ReadSeeker.
  */
 type readSeekerWithNopCloserStruct struct {
@@ -221,6 +242,7 @@ type controllerStruct struct {
 	imageDatabase       tiledb.ImageDatabase
 	indexDatabase       tiledb.IndexDatabase
 	locationDB          geodb.Database
+	positionManager     live.PositionManager
 	tileServer          tileserver.OSMTileServer
 	tileUtil            tileutil.TileUtil
 	userDBPath          string
@@ -2286,6 +2308,128 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 }
 
 /*
+ * Obtains the live position of sensors.
+ */
+func (this *controllerStruct) getLivePositionHandler(request webserver.HttpRequest) webserver.HttpResponse {
+	token := request.Params["token"]
+	perm, err := this.checkPermission(token, "get-live-position")
+	response := webserver.HttpResponse{}
+
+	/*
+	 * Check permissions.
+	 */
+	if err != nil {
+		msg := err.Error()
+		customMsg := fmt.Sprintf("Failed to check permission: %s\n", msg)
+		customMsgBuf := bytes.NewBufferString(customMsg)
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response = webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+	} else if !perm {
+		customMsgBuf := bytes.NewBufferString("Forbidden!")
+		customMsgBytes := customMsgBuf.Bytes()
+		conf := this.config
+		confServer := conf.WebServer
+		contentType := confServer.ErrorMime
+
+		/*
+		 * Create HTTP response.
+		 */
+		response = webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": contentType},
+			StatusCode: http.StatusForbidden,
+			Body:       customMsgBytes,
+		}
+
+	} else {
+		positionManager := this.positionManager
+		users := positionManager.Users()
+		sensorStates := []webSensorStateStruct{}
+
+		/*
+		 * Iterate over all users.
+		 */
+		for _, user := range users {
+			userName := user.Name()
+			devices := user.Devices()
+
+			/*
+			 * Iterate over all devices.
+			 */
+			for i, device := range devices {
+				deviceId := fmt.Sprintf("%s/%d", userName, i)
+				description := device.Description()
+				position := device.Position()
+				sensorPosition := (*webSensorPositionStruct)(nil)
+
+				/*
+				 * Check if device has a known position.
+				 */
+				if position != nil {
+					timestamp := position.Timestamp()
+					timestampString := timestamp.String()
+					latitude := position.Latitude()
+					latitudeE7 := latitude.DegreesE7()
+					latitudeString := latitude.String()
+					longitude := position.Longitude()
+					longitudeE7 := longitude.DegreesE7()
+					longitudeString := longitude.String()
+
+					/*
+					 * Create sensor position.
+					 */
+					sensorPosition = &webSensorPositionStruct{
+						Timestamp:   timestampString,
+						Latitude:    latitudeString,
+						LatitudeE7:  latitudeE7,
+						Longitude:   longitudeString,
+						LongitudeE7: longitudeE7,
+					}
+
+				}
+
+				/*
+				 * Create sensor state.
+				 */
+				sensorState := webSensorStateStruct{
+					Id:          deviceId,
+					Description: description,
+					Position:    sensorPosition,
+				}
+
+				sensorStates = append(sensorStates, sensorState)
+			}
+
+		}
+
+		mimeType, buffer := this.createJSON(sensorStates)
+
+		/*
+		 * Create HTTP response.
+		 */
+		response = webserver.HttpResponse{
+			Header:     map[string]string{"Content-type": mimeType},
+			StatusCode: http.StatusOK,
+			Body:       buffer,
+		}
+
+	}
+
+	return response
+}
+
+/*
  * Render a map tile.
  */
 func (this *controllerStruct) getTileHandler(request webserver.HttpRequest) webserver.HttpResponse {
@@ -4164,19 +4308,73 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 			}
 
 		} else {
-			customMsgBuf := bytes.NewBufferString("OK")
-			customMsgBytes := customMsgBuf.Bytes()
-			conf := this.config
-			confServer := conf.WebServer
-			contentType := confServer.ErrorMime
+			positionManager := this.positionManager
+			user, err := positionManager.User(name)
 
 			/*
-			 * Create HTTP response.
+			 * Check if user for live position could be found.
 			 */
-			response = webserver.HttpResponse{
-				Header:     map[string]string{"Content-type": contentType},
-				StatusCode: http.StatusOK,
-				Body:       customMsgBytes,
+			if err != nil {
+				msg := err.Error()
+				customMsg := fmt.Sprintf("Failed to update live position: %s", msg)
+				customMsgBuf := bytes.NewBufferString(customMsg)
+				customMsgBytes := customMsgBuf.Bytes()
+				conf := this.config
+				confServer := conf.WebServer
+				contentType := confServer.ErrorMime
+
+				/*
+				 * Create HTTP response.
+				 */
+				response = webserver.HttpResponse{
+					Header:     map[string]string{"Content-type": contentType},
+					StatusCode: http.StatusInternalServerError,
+					Body:       customMsgBytes,
+				}
+
+			} else {
+				device, err := user.Device(deviceToken)
+
+				/*
+				 * Check if device for live position could be found.
+				 */
+				if err != nil {
+					msg := err.Error()
+					customMsg := fmt.Sprintf("Failed to update live position: %s", msg)
+					customMsgBuf := bytes.NewBufferString(customMsg)
+					customMsgBytes := customMsgBuf.Bytes()
+					conf := this.config
+					confServer := conf.WebServer
+					contentType := confServer.ErrorMime
+
+					/*
+					 * Create HTTP response.
+					 */
+					response = webserver.HttpResponse{
+						Header:     map[string]string{"Content-type": contentType},
+						StatusCode: http.StatusInternalServerError,
+						Body:       customMsgBytes,
+					}
+
+				} else {
+					device.SetPosition(ts64, latitude, longitude)
+					customMsgBuf := bytes.NewBufferString("OK")
+					customMsgBytes := customMsgBuf.Bytes()
+					conf := this.config
+					confServer := conf.WebServer
+					contentType := confServer.ErrorMime
+
+					/*
+					 * Create HTTP response.
+					 */
+					response = webserver.HttpResponse{
+						Header:     map[string]string{"Content-type": contentType},
+						StatusCode: http.StatusOK,
+						Body:       customMsgBytes,
+					}
+
+				}
+
 			}
 
 		}
@@ -4252,6 +4450,8 @@ func (this *controllerStruct) dispatch(request webserver.HttpRequest) webserver.
 		response = this.getActivitiesHandler(request)
 	case "get-geodb-stats":
 		response = this.getGeoDBStatsHandler(request)
+	case "get-live-position":
+		response = this.getLivePositionHandler(request)
 	case "get-tile":
 		sem := this.semTile
 		this.acquire(sem)
@@ -5323,6 +5523,72 @@ func (this *controllerStruct) initializeUserDB() error {
 }
 
 /*
+ * Initialize position manager.
+ */
+func (this *controllerStruct) initializePositionManager() error {
+	errResult := error(nil)
+	manager := live.CreatePositionManager()
+	userManager := this.userManager
+	users := userManager.Users()
+
+	/*
+	 * Iterate over all users.
+	 */
+	for _, name := range users {
+		manager.AddUser(name)
+		user, err := manager.User(name)
+
+		/*
+		 * Check if we have a valid user.
+		 */
+		if err != nil {
+
+			/*
+			 * Check if this is the first error encountered.
+			 */
+			if errResult == nil {
+				msg := err.Error()
+				errResult = fmt.Errorf("Failed to retrieve user '%s': %s", name, msg)
+			}
+
+		} else {
+			deviceTokens, err := userManager.DeviceTokens(name)
+
+			/*
+			 * Check if we have the device tokens.
+			 */
+			if err != nil {
+
+				/*
+				 * Check if this is the first error encountered.
+				 */
+				if errResult == nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Failed to retrieve device tokens for user '%s': %s", name, msg)
+				}
+
+			} else {
+
+				/*
+				 * Iterate over all device tokens.
+				 */
+				for _, deviceToken := range deviceTokens {
+					description := deviceToken.Description()
+					token := deviceToken.Token()
+					user.AddDevice(token, description)
+				}
+
+			}
+
+		}
+
+	}
+
+	this.positionManager = manager
+	return errResult
+}
+
+/*
  * Initialize geographical database with location data.
  */
 func (this *controllerStruct) initializeLocationData() error {
@@ -5535,6 +5801,7 @@ func (this *controllerStruct) Operate(args []string) {
 				fmt.Printf("Error loading location data: %s\n", msg)
 			}
 
+			this.initializePositionManager()
 			this.initializeTileServer()
 			err = this.initializeTileDatabase()
 

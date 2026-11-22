@@ -45,6 +45,7 @@ Therefore, before the software can be used, at least one user account has to be 
 ./locviz set-password root secret
 ./locviz add-permission root get-tile
 ./locviz add-permission root render
+./locviz add-permission root get-live-position
 ./locviz add-permission root activity-read
 ./locviz add-permission root activity-write
 ./locviz add-permission root geodb-read

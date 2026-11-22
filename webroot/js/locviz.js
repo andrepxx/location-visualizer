@@ -2087,6 +2087,64 @@ function UI() {
 	};
 
 	/*
+	 * Display live positions.
+	 */
+	this.displayLivePositions = function(sensors) {
+		const div = document.getElementById('activitiesdialog');
+		const innerDiv = document.getElementById('activitiesdialog_content');
+		const positionsArea = document.createElement('textarea');
+		positionsArea.className = 'textarea';
+		positionsArea.readOnly = true;
+		const numSensors = sensors.length;
+
+		/*
+		 * Iterate over all sensors.
+		 */
+		for (let i = 0; i < numSensors; i++) {
+			let sensorText = '';
+			const sensor = sensors[i];
+			const sensorId = sensor.Id;
+			sensorText += 'Sensor ID: ' + sensorId + '\n';
+			const sensorDescription = sensor.Description;
+			sensorText += 'Description: ' + sensorDescription + '\n';
+			const position = sensor.Position;
+
+			/*
+			 * Check if sensor has a known position.
+			 */
+			if (position != null) {
+				const timestamp = position.Timestamp;
+				sensorText += 'Timestamp: ' + timestamp + '\n';
+				const latitude = position.Latitude;
+				const longitude = position.Longitude;
+				sensorText += 'Coordinates: ' + latitude + ', ' + longitude + '\n';
+			}
+
+			positionsArea.value += sensorText + '\n';
+		}
+
+		innerDiv.appendChild(positionsArea);
+		const buttonsDiv = document.createElement('div');
+		const buttonClose = document.createElement('button');
+		buttonClose.className = 'button';
+		const buttonCloseCaption = document.createTextNode('Close');
+		buttonClose.appendChild(buttonCloseCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Close' button.
+		 */
+		buttonClose.onclick = function(e) {
+			div.style.display = 'none';
+			helper.clearElement(innerDiv);
+		};
+
+		buttonsDiv.appendChild(buttonClose);
+		innerDiv.appendChild(buttonsDiv);
+		div.style.display = 'block';
+		positionsArea.focus();
+	};
+
+	/*
 	 * Initializes the (right) side bar of the user interface.
 	 */
 	this.initializeSidebar = function() {
@@ -2247,7 +2305,7 @@ function UI() {
 
 		elemButtonsA.appendChild(buttonLogout);
 		sidebar.appendChild(elemButtonsA);
-		const elemButtonsB = this.createElement('');
+		const elemButtonsB = this.createElement('', null);
 		const buttonGeoDB = document.createElement('button');
 		buttonGeoDB.className = 'button';
 		const buttonGeoDBCaption = document.createTextNode('GeoDB');
@@ -2261,6 +2319,19 @@ function UI() {
 		};
 
 		elemButtonsB.appendChild(buttonGeoDB);
+		const buttonLive = document.createElement('button');
+		buttonLive.className = 'button next';
+		const buttonLiveCaption = document.createTextNode('Live');
+		buttonLive.appendChild(buttonLiveCaption);
+
+		/*
+		 * This is called when the user clicks on the 'Live' button.
+		 */
+		buttonLive.onclick = function(e) {
+			handler.showLivePositions();
+		};
+
+		elemButtonsB.appendChild(buttonLive);
 		const buttonFullscreen = document.createElement('button');
 		buttonFullscreen.className = 'button next';
 		const buttonFullscreenCaption = document.createTextNode('Fullscreen');
@@ -3566,6 +3637,30 @@ function Handler() {
 			right_sidebar.style.display = 'none';
 			const div = document.getElementById('geodb');
 			ui.displayGeoDBStats(div, response);
+		};
+
+		ajax.request('POST', cgi, data, mime, callback, false);
+	};
+
+	/*
+	 * This is called when the user clicks on the 'Live' button.
+	 */
+	this.showLivePositions = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'get-live-position');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
+
+		/*
+		 * This is called when the server returns live positions.
+		 */
+		const callback = function(content) {
+			const response = helper.parseJSON(content);
+			ui.displayLivePositions(response);
 		};
 
 		ajax.request('POST', cgi, data, mime, callback, false);
