@@ -260,6 +260,40 @@ function Helper() {
 	};
 
 	/*
+	 * Project a geographic position into the canvas coordinate system.
+	 */
+	this.projectToCanvas = function(latitude, longitude, xres, yres, xpos, ypos, zoom) {
+		const twoPi = 2.0 * Math.PI;
+		const quarterPi = 0.25 * Math.PI;
+		const latitudeRadians = latitude * (Math.PI / 180.0);
+		const halfLatitudeRadians = 0.5 * latitudeRadians;
+		const mercatorX = longitude / 360.0;
+		const mercatorY = Math.log(Math.tan(quarterPi + halfLatitudeRadians)) / twoPi;
+		const zoomExp = 0.2 * zoom;
+		const zoomFac = Math.pow(2.0, zoomExp);
+		const zoomFacInv = 1.0 / zoomFac;
+		const halfWidth = 0.5 * zoomFacInv;
+		const aspectRatio = yres / xres;
+		const halfHeight = aspectRatio * halfWidth;
+		const minX = xpos - halfWidth;
+		// const maxX = xpos + halfWidth;
+		// const minY = ypos - halfHeight;
+		const maxY = ypos + halfHeight;
+		const resultX = xres * ((mercatorX - minX) * zoomFac);
+		const resultY = xres * ((maxY - mercatorY) * zoomFac);
+
+		/*
+		 * This is the result.
+		 */
+		const result = {
+			x: resultX,
+			y: resultY,
+		};
+
+		return result;
+	}
+
+	/*
 	 * Decode an image from a data URL.
 	 */
 	this.loadImageAsync = function(data, callback) {
@@ -2087,62 +2121,123 @@ function UI() {
 	};
 
 	/*
-	 * Display live positions.
+	 * Fetch live positions and redraw the canvas overlay.
 	 */
-	this.displayLivePositions = function(sensors) {
-		const div = document.getElementById('activitiesdialog');
-		const innerDiv = document.getElementById('activitiesdialog_content');
-		const positionsArea = document.createElement('textarea');
-		positionsArea.className = 'textarea';
-		positionsArea.readOnly = true;
-		const numSensors = sensors.length;
+	this.fetchLivePositions = function() {
+		const cvs = document.getElementById('map_canvas');
+		const token = storage.get(cvs, 'token');
+		const cgi = globals.cgi;
+		const request = new Request();
+		request.append('cgi', 'get-live-position');
+		request.append('token', token);
+		const data = request.getData();
+		const mime = globals.mimeDefault;
 
 		/*
-		 * Iterate over all sensors.
+		 * This is called when the server returns live positions.
 		 */
-		for (let i = 0; i < numSensors; i++) {
-			let sensorText = '';
-			const sensor = sensors[i];
-			const sensorId = sensor.Id;
-			sensorText += 'Sensor ID: ' + sensorId + '\n';
-			const sensorDescription = sensor.Description;
-			sensorText += 'Description: ' + sensorDescription + '\n';
-			const position = sensor.Position;
-
-			/*
-			 * Check if sensor has a known position.
-			 */
-			if (position != null) {
-				const timestamp = position.Timestamp;
-				sensorText += 'Timestamp: ' + timestamp + '\n';
-				const latitude = position.Latitude;
-				const longitude = position.Longitude;
-				sensorText += 'Coordinates: ' + latitude + ', ' + longitude + '\n';
-			}
-
-			positionsArea.value += sensorText + '\n';
-		}
-
-		innerDiv.appendChild(positionsArea);
-		const buttonsDiv = document.createElement('div');
-		const buttonClose = document.createElement('button');
-		buttonClose.className = 'button';
-		const buttonCloseCaption = document.createTextNode('Close');
-		buttonClose.appendChild(buttonCloseCaption);
-
-		/*
-		 * This is called when the user clicks on the 'Close' button.
-		 */
-		buttonClose.onclick = function(e) {
-			div.style.display = 'none';
-			helper.clearElement(innerDiv);
+		const callback = function(content) {
+			const response = helper.parseJSON(content);
+			storage.put(cvs, 'liveSensors', response);
+			self.updateTiles();
 		};
 
-		buttonsDiv.appendChild(buttonClose);
-		innerDiv.appendChild(buttonsDiv);
-		div.style.display = 'block';
-		positionsArea.focus();
+		ajax.request('POST', cgi, data, mime, callback, false);
 	};
+
+	/*
+	 * Selects or deselects a live sensor marker.
+	 */
+	this.selectLiveSensorAt = function (xpos, ypos) {
+		const cvs = document.getElementById('map_canvas');
+		const enabled = storage.get(cvs, 'liveEnabled');
+		const sensors = storage.get(cvs, 'liveSensors');
+
+		/*
+		 * Check if sensors are available.
+		 */
+		if ((enabled !== true) || (sensors == null)) {
+			return false;
+		} else {
+			const xres = cvs.scrollWidth;
+			const yres = cvs.scrollHeight;
+			const posX = storage.get(cvs, 'posX');
+			const posY = storage.get(cvs, 'posY');
+			const zoom = storage.get(cvs, 'zoomLevel');
+			const hitRadius = 12;
+			const hitRadiusSquared = hitRadius * hitRadius;
+			let selectedSensorIdx = -1;
+
+			/*
+			 * Check if we hit any sensor.
+			 */
+			for (let i = 0; i < sensors.length; i++) {
+				const sensor = sensors[i];
+				const position = sensor.Position;
+
+				/*
+				 * Only consider sensors that have a known position.
+				 */
+				if (position != null) {
+					const latitudeE7 = position.LatitudeE7;
+					const latitude = latitudeE7 * 1.0e-7;
+					const longitudeE7 = position.LongitudeE7;
+					const longitude = longitudeE7 * 1.0e-7;
+					const coordinates = helper.projectToCanvas(latitude, longitude, xres, yres, posX, posY, zoom);
+					const x = coordinates.x;
+					const y = coordinates.y;
+					const dx = xpos - x;
+					const dxSquared = dx * dx;
+					const dy = ypos - y;
+					const dySquared = dy * dy;
+					const squaredSum = dxSquared + dySquared;
+					
+					/*
+					 * Check if click lands within hit radius.
+					 */
+					if (squaredSum <= hitRadiusSquared) {
+						selectedSensorIdx = i;
+					}
+
+				}
+
+			}
+
+			let stateChanged = false;
+
+			/*
+			 * If we found a matching sensor, select it, otherwise check if we
+			 * currently have a selected sensor and have to "deselect" it.
+			 */
+			if (selectedSensorIdx != -1) {
+				const sensor = sensors[selectedSensorIdx];
+				const sensorId = sensor.Id;
+				storage.put(cvs, 'selectedSensorId', sensorId);
+				stateChanged = true;
+			} else {
+				const selectedSensorId =  storage.get(cvs, 'selectedSensorId');
+
+				/*
+				 * If there was currently a selected sensor, "deselect" it.
+				 */
+				if (selectedSensorId != null) {
+					storage.put(cvs, 'selectedSensorId', null);
+					stateChanged = true;
+				}
+
+			}
+
+			/*
+			 * Perform a redraw if selection changed.
+			 */
+			if (stateChanged) {
+				this.updateTiles();
+			}
+
+			return stateChanged;
+		}
+
+	}
 
 	/*
 	 * Initializes the (right) side bar of the user interface.
@@ -2319,19 +2414,20 @@ function UI() {
 		};
 
 		elemButtonsB.appendChild(buttonGeoDB);
-		const buttonLive = document.createElement('button');
-		buttonLive.className = 'button next';
-		const buttonLiveCaption = document.createTextNode('Live');
-		buttonLive.appendChild(buttonLiveCaption);
+		const buttonSensors = document.createElement('button');
+		buttonSensors.className = 'button next';
+		buttonSensors.id = 'button_sensors';
+		const buttonSensorsCaption = document.createTextNode('Sensors');
+		buttonSensors.appendChild(buttonSensorsCaption);
 
 		/*
-		 * This is called when the user clicks on the 'Live' button.
+		 * This is called when the user clicks on the 'Sensors' button.
 		 */
-		buttonLive.onclick = function(e) {
-			handler.showLivePositions();
+		buttonSensors.onclick = function(e) {
+			handler.toggleLivePositions(buttonSensors);
 		};
 
-		elemButtonsB.appendChild(buttonLive);
+		elemButtonsB.appendChild(buttonSensors);
 		const buttonFullscreen = document.createElement('button');
 		buttonFullscreen.className = 'button next';
 		const buttonFullscreenCaption = document.createTextNode('Fullscreen');
@@ -2728,7 +2824,6 @@ function UI() {
 	this.processTile = function(img, colorScale) {
 		const width = img.width;
 		const height = img.height;
-		const scale = 0.1 * colorScale;
 		const cvs = new OffscreenCanvas(width, height);
 		const ctx = cvs.getContext('2d');
 		ctx.drawImage(img, 0, 0);
@@ -2815,9 +2910,150 @@ function UI() {
 	};
 
 	/*
+	 * Draws live sensor markers and popup overlays onto the map canvas.
+	 */
+	this.drawLivePositions = function() {
+		const cvs = document.getElementById('map_canvas');
+		const enabled = storage.get(cvs, 'liveEnabled');
+		const sensors = storage.get(cvs, 'liveSensors');
+
+		/*
+		 * Check if live positions are enabled and sensor data is available.
+		 */
+		if ((enabled === true) || (sensors != null)) {
+			const selectedId = storage.get(cvs, 'selectedSensorId');
+			const ctx = cvs.getContext('2d');
+			const xres = cvs.scrollWidth;
+			const yres = cvs.scrollHeight;
+			const posX = storage.get(cvs, 'posX');
+			const posY = storage.get(cvs, 'posY');
+			const zoom = storage.get(cvs, 'zoomLevel');
+			let selectedSensor = null;
+			let selectedCoordinates = null;
+			ctx.save();
+
+			/*
+			 * Draw markers.
+			 */
+			for (let i = 0; i < sensors.length; i++) {
+				const sensor = sensors[i];
+				const pos = sensor.Position;
+
+				/*
+				 * Check if position is available.
+				 */
+				if (pos != null) {
+					const latitudeE7 = pos.LatitudeE7;
+					const latitude = latitudeE7 * 1.0e-7;
+					const longitudeE7 = pos.LongitudeE7;
+					const longitude = longitudeE7 * 1.0e-7;
+					const coordinates = helper.projectToCanvas(latitude, longitude, xres, yres, posX, posY, zoom);
+					const x = coordinates.x;
+					const y = coordinates.y;
+					let radius = 6;
+					let colour = '#ff3333';
+					const sensorId = sensor.Id;
+					const isSelected = (sensorId === selectedId);
+
+					/*
+					 * Check if sensor is selected.
+					 */
+					if (isSelected) {
+						selectedSensor = sensor;
+						selectedCoordinates = coordinates;
+						radius = 8;
+						colour = '#00cc66';
+					}
+
+					ctx.beginPath();
+					ctx.arc(x, y, radius, 0, 2.0 * Math.PI);
+					ctx.fillStyle = colour;
+					ctx.fill();
+					ctx.lineWidth = 2;
+					ctx.strokeStyle = '#ffffff';
+					ctx.stroke();
+				}
+
+			}
+
+			/*
+			 * Draw popup with sensor info for selected sensor.
+			 */
+			if ((selectedSensor != null) && (selectedCoordinates != null)) {
+				const sensorId = selectedSensor.Id;
+				const description = selectedSensor.Description;
+				const position = selectedSensor.Position;
+				const timestamp = position.Timestamp;
+				const latitude = position.Latitude;
+				const longitude = position.Longitude;
+				ctx.font = '12px sans-serif';
+				ctx.textBaseline = 'top';
+
+				/*
+				 * Lines of text.
+				 */
+				const lines = [
+					'Sensor ID: ' + sensorId,
+					'Description: ' + description,
+					'Timestamp: ' + timestamp,
+					'Coordinates: ' + latitude + ', ' + longitude
+				];
+
+				const padding = 6;
+				const lineHeight = 15;
+				let maxTextWidth = 0;
+
+				/*
+				 * Iterate over all text lines and find largest width.
+				 */
+				for (let j = 0; j < lines.length; j++) {
+					const currentLine = lines[j];
+					const w = ctx.measureText(currentLine).width;
+
+					/*
+					 * Check if we found a greater width.
+					 */
+					if (w > maxTextWidth) {
+						maxTextWidth = w;
+					}
+
+				}
+
+				const boxWidth = maxTextWidth + (2 * padding);
+				const boxHeight = (lines.length * lineHeight) + (2 * padding);
+				const selectedX = selectedCoordinates.x;
+				const selectedY = selectedCoordinates.y;
+				const boxX = selectedX - (0.5 * boxWidth);
+				const boxY = selectedY - (boxHeight + 14);
+				ctx.fillStyle = '#222222';
+				ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = '#888888';
+				ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+				ctx.fillStyle = '#ffffff';
+				const textX = boxX + padding;
+				const textOffsetY = boxY + padding;
+
+				/*
+				 * Draw all text lines.
+				 */
+				for (let j = 0; j < lines.length; j++) {
+					const currentLine = lines[j];
+					const textY = textOffsetY + (j * lineHeight);
+					ctx.fillText(currentLine, textX, textY);
+				}
+
+			}
+
+			ctx.restore();
+		}
+
+	}
+
+	/*
 	 * This is called when a new map tile has been fetched.
 	 */
-	this.updateTiles = function(tileDescriptors) {
+	this.updateTiles = function() {
 		const cvs = document.getElementById('map_canvas');
 		const width = cvs.scrollWidth;
 		const height = cvs.scrollHeight;
@@ -2857,6 +3093,7 @@ function UI() {
 			ctx.drawImage(img, 0, 0);
 		}
 
+		this.drawLivePositions();
 	};
 
 	/*
@@ -3054,6 +3291,8 @@ function UI() {
 					ctx.drawImage(img, 0, 0);
 				}
 
+				self.drawLivePositions();
+
 				/*
 				 * Check if we should use OSM tiles.
 				 */
@@ -3078,6 +3317,29 @@ function UI() {
 
 		ajax.requestImage(cgi, data, callback, true, currentRequestId);
 	};
+
+	/*
+	 * Perform cleanup on data structures used for live sensor position
+	 * tracking and reset "Live" button to inactive.
+	 */
+	this.cleanupLiveSensors = function() {
+		const cvs = document.getElementById('map_canvas');
+		const timer = storage.get(cvs, 'liveTimer');
+
+		/*
+		 * Cleanup live timer.
+		 */
+		if (timer != null) {
+			window.clearInterval(timer);
+			storage.put(cvs, 'liveTimer', null);
+		}
+
+		storage.put(cvs, 'liveEnabled', false);
+		storage.put(cvs, 'liveSensors', null);
+		storage.put(cvs, 'selectedSensorId', null);
+		const buttonSensors = document.getElementById('button_sensors');
+		buttonSensors.classList.remove('buttonactive');
+	}
 
 }
 
@@ -3211,6 +3473,7 @@ function Handler() {
 			const x = coords.x;
 			const y = coords.y;
 			storage.put(cvs, 'mouseButton', true);
+			storage.put(cvs, 'dragging', false);
 			storage.put(cvs, 'dragInterrupted', false);
 			storage.put(cvs, 'touchStartX', x);
 			storage.put(cvs, 'touchStartY', y);
@@ -3220,6 +3483,7 @@ function Handler() {
 		} else if (multiTouch) {
 			const dist = self.touchEventToDistance(e);
 			storage.put(cvs, 'mouseButton', false);
+			storage.put(cvs, 'dragging', true);
 			storage.put(cvs, 'dragInterrupted', true);
 			storage.put(cvs, 'touchStartX', 0);
 			storage.put(cvs, 'touchStartY', 0);
@@ -3266,7 +3530,24 @@ function Handler() {
 					const startY = storage.get(cvs, 'touchStartY');
 					const relX = x - startX;
 					const relY = y - startY;
-					ui.moveMap(relX, relY);
+					const distanceSquared = (relX * relX) + (relY * relY);
+
+					/*
+					 * If we move the map a certain distance, enable dragging.
+					 */
+					if (distanceSquared > 64) {
+						storage.put(cvs, 'dragging', true);
+					}
+
+					const dragging = storage.get(cvs, 'dragging');
+
+					/*
+					 * Move map if we're in a drag gesture.
+					 */
+					if (dragging) {
+						ui.moveMap(relX, relY);
+					}
+
 				}
 
 			} else {
@@ -3336,26 +3617,36 @@ function Handler() {
 			 */
 			if (noMoreTouches) {
 				e.preventDefault();
+				const dragging = storage.get(cvs, 'dragging');
 				const x = storage.get(cvs, 'touchLastX');
 				const y = storage.get(cvs, 'touchLastY');
-				const startX = storage.get(cvs, 'touchStartX');
-				const startY = storage.get(cvs, 'touchStartY');
-				const relX = x - startX;
-				const relY = y - startY;
-				const zoom = storage.get(cvs, 'zoomLevel');
-				const width = cvs.scrollWidth;
-				const fracX = relX / width;
-				const fracY = relY / width;
-				const zoomFac = Math.pow(2.0, -0.2 * zoom);
-				const moveX = zoomFac * fracX;
-				const moveY = zoomFac * fracY;
-				let posX = storage.get(cvs, 'posX');
-				let posY = storage.get(cvs, 'posY');
-				posX -= moveX;
-				posY += moveY;
-				storage.put(cvs, 'posX', posX);
-				storage.put(cvs, 'posY', posY);
-				self.refresh();
+
+				/*
+				 * Either select sensors or end drag.
+				 */
+				if (dragging !== true) {
+					ui.selectLiveSensorAt(x, y);
+				} else {
+					const startX = storage.get(cvs, 'touchStartX');
+					const startY = storage.get(cvs, 'touchStartY');
+					const relX = x - startX;
+					const relY = y - startY;
+					const zoom = storage.get(cvs, 'zoomLevel');
+					const width = cvs.scrollWidth;
+					const fracX = relX / width;
+					const fracY = relY / width;
+					const zoomFac = Math.pow(2.0, -0.2 * zoom);
+					const moveX = zoomFac * fracX;
+					const moveY = zoomFac * fracY;
+					let posX = storage.get(cvs, 'posX');
+					let posY = storage.get(cvs, 'posY');
+					posX -= moveX;
+					posY += moveY;
+					storage.put(cvs, 'posX', posX);
+					storage.put(cvs, 'posY', posY);
+					self.refresh();
+				}
+
 			}
 
 		}
@@ -3407,6 +3698,7 @@ function Handler() {
 			storage.put(cvs, 'mouseButton', true);
 			storage.put(cvs, 'mouseStartX', x);
 			storage.put(cvs, 'mouseStartY', y);
+			storage.put(cvs, 'dragging', false);
 			storage.put(cvs, 'dragInterrupted', false);
 		}
 
@@ -3428,12 +3720,19 @@ function Handler() {
 			storage.put(cvs, 'mapBeforeMove', null);
 			storage.put(cvs, 'mouseButton', false);
 			const interrupted = storage.get(cvs, 'dragInterrupted');
+			const wasDragging = storage.get(cvs, 'dragging');
+			storage.put(cvs, 'dragging', false);
 
 			/*
-			 * Load a new position if drag was not interrupted.
+			 * Load a new position if we were dragging and the drag was not
+			 * interrupted.
+			 * 
+			 * If we were not dragging, the user may want to select a sensor.
 			 */
 			if (interrupted === true) {
 				ui.moveMap(0, 0);
+			} else if (wasDragging !== true) {
+				ui.selectLiveSensorAt(x, y);
 			} else {
 				const startX = storage.get(cvs, 'mouseStartX');
 				const startY = storage.get(cvs, 'mouseStartY');
@@ -3476,7 +3775,24 @@ function Handler() {
 			const startY = storage.get(cvs, 'mouseStartY');
 			const relX = x - startX;
 			const relY = y - startY;
-			ui.moveMap(relX, relY);
+			const distanceSquared = (relX * relX) + (relY * relY);
+
+			/*
+			 * If we move the map a certain distance, enable dragging.
+			 */
+			if (distanceSquared > 64) {
+				storage.put(cvs, 'dragging', true);
+			}
+
+			const dragging = storage.get(cvs, 'dragging');
+
+			/*
+			 * Move map if we're in a drag gesture.
+			 */
+			if (dragging) {
+				ui.moveMap(relX, relY);
+			}
+
 		}
 
 	};
@@ -3643,28 +3959,38 @@ function Handler() {
 	};
 
 	/*
-	 * This is called when the user clicks on the 'Live' button.
+	 * Toggle live position updates on or off.
 	 */
-	this.showLivePositions = function() {
+	this.toggleLivePositions = function(elem) {
 		const cvs = document.getElementById('map_canvas');
-		const token = storage.get(cvs, 'token');
-		const cgi = globals.cgi;
-		const request = new Request();
-		request.append('cgi', 'get-live-position');
-		request.append('token', token);
-		const data = request.getData();
-		const mime = globals.mimeDefault;
+		const valueOld = storage.get(cvs, 'liveEnabled');
+		const valueNew = !valueOld;
+		storage.put(cvs, 'liveEnabled', valueNew);
+		elem.classList.toggle('buttonactive', valueNew);
+		const liveTimerOld = storage.get(cvs, 'liveTimer');
 
 		/*
-		 * This is called when the server returns live positions.
+		 * Remove any pre-existing timer.
 		 */
-		const callback = function(content) {
-			const response = helper.parseJSON(content);
-			ui.displayLivePositions(response);
-		};
+		if (liveTimerOld != null) {
+			window.clearInterval(liveTimerOld);
+			storage.put(cvs, 'liveTimer', null);
+		}
 
-		ajax.request('POST', cgi, data, mime, callback, false);
-	};
+		/*
+		 * Enable or disable live position updates.
+		 */
+		if (valueNew === true) {
+			ui.fetchLivePositions();
+			const liveTimer = window.setInterval(ui.fetchLivePositions, 30000);
+			storage.put(cvs, 'liveTimer', liveTimer);
+		} else {
+			storage.put(cvs, 'liveSensors', null);
+			storage.put(cvs, 'selectedSensorId', null);
+			ui.updateTiles();
+		}
+
+	}
 
 	/*
 	 * This is called when the user clicks on the 'Logout' button.
@@ -3691,6 +4017,7 @@ function Handler() {
 			 */
 			if (success === true) {
 				storage.put(cvs, 'token', null);
+				ui.cleanupLiveSensors();
 				ui.showLogin();
 				self.refresh();
 			}
@@ -3732,8 +4059,13 @@ function Handler() {
 		storage.put(cvs, 'touchLastY', 0);
 		storage.put(cvs, 'offsetX', 0);
 		storage.put(cvs, 'offsetY', 0);
+		storage.put(cvs, 'dragging', false);
 		storage.put(cvs, 'dragInterrupted', false);
 		storage.put(cvs, 'zooming', false);
+		storage.put(cvs, 'liveEnabled', false);
+		storage.put(cvs, 'liveSensors', null);
+		storage.put(cvs, 'liveTimer', null);
+		storage.put(cvs, 'selectedSensorId', null);
 		cvs.addEventListener('mousedown', self.mouseDown);
 		cvs.addEventListener('mouseup', self.mouseUp);
 		cvs.addEventListener('mousemove', self.mouseMove);

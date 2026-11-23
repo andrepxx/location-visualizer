@@ -118,6 +118,7 @@
 {
 	-moz-appearance: none;
 	-webkit-appearance: none;
+	appearance: none;
 	background-color: #333333;
 	border-color: #777777;
 	border-radius: 0px;
@@ -140,6 +141,19 @@
 {
 	background-color: #555555;
 	border-color: #999999;
+}
+
+.buttonactive
+{
+	background-color: #aaeeaa;
+	border-color: #77aa77;
+	color: #000000;
+}
+
+.buttonactive:hover
+{
+	background-color: #ccffcc;
+	border-color: #99cc99;
 }
 
 .buttonred
@@ -361,6 +375,7 @@
 {
 	-moz-appearance: none;
 	-webkit-appearance: none;
+	appearance: none;
 	background-color: #222222;
 	border-color: #666666;
 	border-radius: 0px;
@@ -384,6 +399,7 @@
 {
 	-moz-appearance: none;
 	-webkit-appearance: none;
+	appearance: none;
 	background-color: #111111;
 	border-color: #666666;
 	border-radius: 0px;
