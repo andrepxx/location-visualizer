@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	RFC3339_MILLI     = "2006-01-02T15:04:05.000Z07:00"
 	SCALING_FACTOR_E7 = 10000000
 )
 
@@ -169,8 +170,7 @@ func (this Timestamp) String() string {
 	value := int64(this)
 	t := time.UnixMilli(value)
 	utc := t.UTC()
-	layout := time.RFC3339Nano
-	result := utc.Format(layout)
+	result := utc.Format(RFC3339_MILLI)
 	return result
 }
 
