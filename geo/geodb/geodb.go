@@ -522,23 +522,31 @@ func (this *databaseStruct) Deduplicate() (uint32, error) {
 		}
 
 		/*
-		 * Make sure that we didn't skip more entries than are in the database.
+		 * Only perform truncation if we haven't encountered an error so far.
 		 */
-		if numSkipped > numEntries {
-			errResult = fmt.Errorf("Skipped more entries (%d) than there are in the database (%d).", numSkipped, numEntries)
-		} else {
-			numEntries -= numSkipped
-			this.locationCount = numEntries
-			numEntries64 := int64(numEntries)
-			fileSize := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * numEntries64)
-			err := fd.Truncate(fileSize)
+		if errResult == nil {
 
 			/*
-			 * Check if error occured during truncation.
+			 * Make sure that we didn't skip more entries than are in the
+			 * database.
 			 */
-			if err != nil {
-				msg := err.Error()
-				errResult = fmt.Errorf("Failed to truncate file to size 0x%016x (%d): %s", fileSize, fileSize, msg)
+			if numSkipped > numEntries {
+				errResult = fmt.Errorf("Skipped more entries (%d) than there are in the database (%d).", numSkipped, numEntries)
+			} else {
+				numEntries -= numSkipped
+				this.locationCount = numEntries
+				numEntries64 := int64(numEntries)
+				fileSize := SIZE_DATABASE_HEADER + (SIZE_DATABASE_ENTRY * numEntries64)
+				err := fd.Truncate(fileSize)
+
+				/*
+				 * Check if error occured during truncation.
+				 */
+				if err != nil {
+					msg := err.Error()
+					errResult = fmt.Errorf("Failed to truncate file to size 0x%016x (%d): %s", fileSize, fileSize, msg)
+				}
+
 			}
 
 		}

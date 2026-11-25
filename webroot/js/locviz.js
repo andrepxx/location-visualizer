@@ -2191,7 +2191,7 @@ function UI() {
 					const dy = ypos - y;
 					const dySquared = dy * dy;
 					const squaredSum = dxSquared + dySquared;
-					
+
 					/*
 					 * Check if click lands within hit radius.
 					 */
@@ -3726,7 +3726,7 @@ function Handler() {
 			/*
 			 * Load a new position if we were dragging and the drag was not
 			 * interrupted.
-			 * 
+			 *
 			 * If we were not dragging, the user may want to select a sensor.
 			 */
 			if (interrupted === true) {
