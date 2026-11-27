@@ -900,7 +900,7 @@ function UI() {
 					handler.showActivities();
 				};
 
-				ajax.request('POST', cgi, data, mime, callback, false);
+				ajax.request('POST', cgi, data, mime, callback, true);
 			};
 
 			removeElem.appendChild(removeLinkYes);
@@ -1221,20 +1221,27 @@ function UI() {
 			 */
 			const callback = function(content) {
 				const response = helper.parseJSON(content);
-				const success = response.Success;
 
 				/*
-				 * Check if logout was successful.
+				 * Check that we have a response.
 				 */
-				if (success === true) {
-					div.style.display = 'none';
-					helper.clearElement(innerDiv);
-					handler.showActivities();
+				if (response != null) {
+					const success = response.Success;
+
+					/*
+					 * Check if logout was successful.
+					 */
+					if (success === true) {
+						div.style.display = 'none';
+						helper.clearElement(innerDiv);
+						handler.showActivities();
+					}
+
 				}
 
 			};
 
-			ajax.request('POST', cgi, data, mime, callback, false);
+			ajax.request('POST', cgi, data, mime, callback, true);
 		};
 
 		innerDiv.appendChild(buttonAdd);
@@ -1407,20 +1414,27 @@ function UI() {
 			 */
 			const callback = function(content) {
 				const response = helper.parseJSON(content);
-				const success = response.Success;
 
 				/*
-				 * Check if logout was successful.
+				 * Check that we have a response.
 				 */
-				if (success === true) {
-					div.style.display = 'none';
-					helper.clearElement(innerDiv);
-					handler.showActivities();
+				if (response != null) {
+					const success = response.Success;
+
+					/*
+					 * Check if logout was successful.
+					 */
+					if (success === true) {
+						div.style.display = 'none';
+						helper.clearElement(innerDiv);
+						handler.showActivities();
+					}
+
 				}
 
 			};
 
-			ajax.request('POST', cgi, data, mime, callback, false);
+			ajax.request('POST', cgi, data, mime, callback, true);
 		};
 
 		innerDiv.appendChild(buttonEdit);
@@ -1480,20 +1494,27 @@ function UI() {
 			 */
 			const callback = function(content) {
 				const response = helper.parseJSON(content);
-				const success = response.Success;
 
 				/*
-				 * Check if import was successful.
+				 * Check that we have a response.
 				 */
-				if (success === true) {
-					div.style.display = 'none';
-					helper.clearElement(innerDiv);
-					handler.showActivities();
+				if (response != null) {
+					const success = response.Success;
+
+					/*
+					 * Check if import was successful.
+					 */
+					if (success === true) {
+						div.style.display = 'none';
+						helper.clearElement(innerDiv);
+						handler.showActivities();
+					}
+
 				}
 
 			};
 
-			ajax.request('POST', cgi, data, mime, callback, false);
+			ajax.request('POST', cgi, data, mime, callback, true);
 		};
 
 		buttonsDiv.appendChild(buttonImport);
@@ -1564,150 +1585,18 @@ function UI() {
 	 */
 	this.displayGeoDBDeduplicationStats = function(content) {
 		const response = helper.parseJSON(content);
-		const contentDiv = document.getElementById('geodbdialog_content');
-		helper.clearElement(contentDiv);
-		const tableDiv = document.createElement('div');
-		const table = document.createElement('table');
-		table.className = 'geodbtable';
-		const body = document.createElement('tbody');
-		const columnNames = ['Before', 'After'];
-		const rowNames = ['LocationCount', 'Ordered', 'OrderedStrict', 'TimestampEarliest', 'TimestampLatest'];
-		const rowLabels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
-		const headerRow = document.createElement('tr');
-		headerRow.className = 'geodbtablerow';
-		const emptyHeaderCell = document.createElement('td');
-		emptyHeaderCell.className = 'geodbtablecell tablehead';
-		headerRow.appendChild(emptyHeaderCell);
 
 		/*
-		 * Fill header row.
+		 * Check that we have a response.
 		 */
-		for (let i = 0; i < columnNames.length; i++) {
-			const headerCell = document.createElement('td');
-			headerCell.className = 'geodbtablecell tablehead';
-			const headerCellLabel = columnNames[i];
-			const headerCellNode = document.createTextNode(headerCellLabel);
-			headerCell.appendChild(headerCellNode);
-			headerRow.appendChild(headerCell);
-		}
-
-		body.appendChild(headerRow);
-
-		/*
-		 * Fill data rows.
-		 */
-		for (let i = 0; i < rowNames.length; i++) {
-			const dataRow = document.createElement('tr');
-			dataRow.className = 'geodbtablerow';
-			const rowName = rowNames[i];
-			const rowLabel = rowLabels[i];
-			const rowLabelCell = document.createElement('td');
-			rowLabelCell.className = 'geodbtablecell tablehead';
-			const rowLabelNode = document.createTextNode(rowLabel);
-			rowLabelCell.appendChild(rowLabelNode);
-			dataRow.appendChild(rowLabelCell)
-
-			/*
-			 * Fill data columns.
-			 */
-			for (let j = 0; j < columnNames.length; j++) {
-				const dataCell = document.createElement('td');
-				dataCell.className = 'geodbtablecell rightalign';
-				const columnName = columnNames[j];
-				const dataCellContent = response[columnName][rowName];
-				const dataCellContentString = dataCellContent.toString();
-				const dataCellNode = document.createTextNode(dataCellContentString);
-				dataCell.appendChild(dataCellNode);
-				dataRow.appendChild(dataCell);
-			}
-
-			body.appendChild(dataRow);
-		}
-
-		table.appendChild(body);
-		tableDiv.appendChild(table);
-		contentDiv.appendChild(tableDiv);
-		const spacerDivA = document.createElement('div');
-		spacerDivA.className = 'vspace';
-		contentDiv.appendChild(spacerDivA);
-		const removedDiv = document.createElement('div');
-		const removedLabelSpan = document.createElement('span');
-		const removedLabelTextNode = document.createTextNode('Removed: ');
-		removedLabelSpan.appendChild(removedLabelTextNode);
-		removedDiv.appendChild(removedLabelSpan);
-		const removedCountSpan = document.createElement('span');
-		const removedCount = response.Removed;
-		const removedCountString = removedCount.toString();
-		const removedCountTextNode = document.createTextNode(removedCountString);
-		removedCountSpan.appendChild(removedCountTextNode);
-		removedDiv.appendChild(removedCountSpan);
-		contentDiv.appendChild(removedDiv);
-		const successDiv = document.createElement('div');
-		const successLabelSpan = document.createElement('span');
-		const successLabelTextNode = document.createTextNode('Success: ');
-		successLabelSpan.appendChild(successLabelTextNode);
-		successDiv.appendChild(successLabelSpan);
-		const status = response.Status;
-		const success = status.Success;
-		let successValue = success.toString();
-
-		/*
-		 * If no success indicated, give reason.
-		 */
-		if (success !== true) {
-			const reason = status.Reason;
-			successValue += ' (' + reason + ')';
-		}
-
-		const successValueSpan = document.createElement('span');
-		const successValueTextNode = document.createTextNode(successValue);
-		successValueSpan.appendChild(successValueTextNode);
-		successDiv.appendChild(successValueSpan);
-		contentDiv.appendChild(successDiv);
-		const spacerDivB = document.createElement('div');
-		spacerDivB.className = 'vspace';
-		contentDiv.appendChild(spacerDivB);
-		const buttonDiv = document.createElement('div');
-		const buttonBack = document.createElement('button');
-		buttonBack.className = 'button';
-		const buttonBackCaption = document.createTextNode('Back');
-		buttonBack.appendChild(buttonBackCaption);
-
-		/*
-		 * This is called when the user clicks on the 'Back' button.
-		 */
-		buttonBack.onclick = function(e) {
-			div.style.display = 'none';
+		if (response != null) {
+			const contentDiv = document.getElementById('geodbdialog_content');
 			helper.clearElement(contentDiv);
-			handler.showGeoDB();
-		};
-
-		buttonDiv.appendChild(buttonBack);
-		contentDiv.appendChild(buttonDiv);
-		const div = document.getElementById('geodbdialog');
-		div.style.display = 'block';
-		buttonBack.focus();
-	};
-
-	/*
-	 * Parse GeoDB import stats and display them.
-	 */
-	this.displayGeoDBImportStats = function(content) {
-		const response = helper.parseJSON(content);
-		const contentDiv = document.getElementById('geodbdialog_content');
-		helper.clearElement(contentDiv);
-		const tableDiv = document.createElement('div');
-		const status = response.Status;
-		const success = status.Success;
-
-		/*
-		 * Only render table if import was successful.
-		 */
-		if (success === true) {
+			const tableDiv = document.createElement('div');
 			const table = document.createElement('table');
 			table.className = 'geodbtable';
 			const body = document.createElement('tbody');
-			const columnNames = ['Before', 'Source', 'Imported', 'After'];
+			const columnNames = ['Before', 'After'];
 			const rowNames = ['LocationCount', 'Ordered', 'OrderedStrict', 'TimestampEarliest', 'TimestampLatest'];
 			const rowLabels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
 			const headerRow = document.createElement('tr');
@@ -1763,29 +1652,175 @@ function UI() {
 
 			table.appendChild(body);
 			tableDiv.appendChild(table);
+			contentDiv.appendChild(tableDiv);
+			const spacerDivA = document.createElement('div');
+			spacerDivA.className = 'vspace';
+			contentDiv.appendChild(spacerDivA);
+			const removedDiv = document.createElement('div');
+			const removedLabelSpan = document.createElement('span');
+			const removedLabelTextNode = document.createTextNode('Removed: ');
+			removedLabelSpan.appendChild(removedLabelTextNode);
+			removedDiv.appendChild(removedLabelSpan);
+			const removedCountSpan = document.createElement('span');
+			const removedCount = response.Removed;
+			const removedCountString = removedCount.toString();
+			const removedCountTextNode = document.createTextNode(removedCountString);
+			removedCountSpan.appendChild(removedCountTextNode);
+			removedDiv.appendChild(removedCountSpan);
+			contentDiv.appendChild(removedDiv);
+			const successDiv = document.createElement('div');
+			const successLabelSpan = document.createElement('span');
+			const successLabelTextNode = document.createTextNode('Success: ');
+			successLabelSpan.appendChild(successLabelTextNode);
+			successDiv.appendChild(successLabelSpan);
+			const status = response.Status;
+			const success = status.Success;
+			let successValue = success.toString();
+
+			/*
+			 * If no success indicated, give reason.
+			 */
+			if (success !== true) {
+				const reason = status.Reason;
+				successValue += ' (' + reason + ')';
+			}
+
+			const successValueSpan = document.createElement('span');
+			const successValueTextNode = document.createTextNode(successValue);
+			successValueSpan.appendChild(successValueTextNode);
+			successDiv.appendChild(successValueSpan);
+			contentDiv.appendChild(successDiv);
+			const spacerDivB = document.createElement('div');
+			spacerDivB.className = 'vspace';
+			contentDiv.appendChild(spacerDivB);
+			const buttonDiv = document.createElement('div');
+			const buttonBack = document.createElement('button');
+			buttonBack.className = 'button';
+			const buttonBackCaption = document.createTextNode('Back');
+			buttonBack.appendChild(buttonBackCaption);
+
+			/*
+			 * This is called when the user clicks on the 'Back' button.
+			 */
+			buttonBack.onclick = function(e) {
+				div.style.display = 'none';
+				helper.clearElement(contentDiv);
+				handler.showGeoDB();
+			};
+
+			buttonDiv.appendChild(buttonBack);
+			contentDiv.appendChild(buttonDiv);
+			const div = document.getElementById('geodbdialog');
+			div.style.display = 'block';
+			buttonBack.focus();
 		}
 
-		contentDiv.appendChild(tableDiv);
-		const buttonDiv = document.createElement('div');
-		const buttonBack = document.createElement('button');
-		buttonBack.className = 'button';
-		const buttonBackCaption = document.createTextNode('Back');
-		buttonBack.appendChild(buttonBackCaption);
+	};
+
+	/*
+	 * Parse GeoDB import stats and display them.
+	 */
+	this.displayGeoDBImportStats = function(content) {
+		const response = helper.parseJSON(content);
 
 		/*
-		 * This is called when the user clicks on the 'Back' button.
+		 * Check that we have a response.
 		 */
-		buttonBack.onclick = function(e) {
-			div.style.display = 'none';
+		if (response != null) {
+			const contentDiv = document.getElementById('geodbdialog_content');
 			helper.clearElement(contentDiv);
-			handler.showGeoDB();
-		};
+			const tableDiv = document.createElement('div');
+			const status = response.Status;
+			const success = status.Success;
 
-		buttonDiv.appendChild(buttonBack);
-		contentDiv.appendChild(buttonDiv);
-		const div = document.getElementById('geodbdialog');
-		div.style.display = 'block';
-		buttonBack.focus();
+			/*
+			 * Only render table if import was successful.
+			 */
+			if (success === true) {
+				const table = document.createElement('table');
+				table.className = 'geodbtable';
+				const body = document.createElement('tbody');
+				const columnNames = ['Before', 'Source', 'Imported', 'After'];
+				const rowNames = ['LocationCount', 'Ordered', 'OrderedStrict', 'TimestampEarliest', 'TimestampLatest'];
+				const rowLabels = ['Location count', 'Ordered', 'Ordered strict', 'Timestamp earliest', 'Timestamp latest'];
+				const headerRow = document.createElement('tr');
+				headerRow.className = 'geodbtablerow';
+				const emptyHeaderCell = document.createElement('td');
+				emptyHeaderCell.className = 'geodbtablecell tablehead';
+				headerRow.appendChild(emptyHeaderCell);
+
+				/*
+				 * Fill header row.
+				 */
+				for (let i = 0; i < columnNames.length; i++) {
+					const headerCell = document.createElement('td');
+					headerCell.className = 'geodbtablecell tablehead';
+					const headerCellLabel = columnNames[i];
+					const headerCellNode = document.createTextNode(headerCellLabel);
+					headerCell.appendChild(headerCellNode);
+					headerRow.appendChild(headerCell);
+				}
+
+				body.appendChild(headerRow);
+
+				/*
+				 * Fill data rows.
+				 */
+				for (let i = 0; i < rowNames.length; i++) {
+					const dataRow = document.createElement('tr');
+					dataRow.className = 'geodbtablerow';
+					const rowName = rowNames[i];
+					const rowLabel = rowLabels[i];
+					const rowLabelCell = document.createElement('td');
+					rowLabelCell.className = 'geodbtablecell tablehead';
+					const rowLabelNode = document.createTextNode(rowLabel);
+					rowLabelCell.appendChild(rowLabelNode);
+					dataRow.appendChild(rowLabelCell)
+
+					/*
+					 * Fill data columns.
+					 */
+					for (let j = 0; j < columnNames.length; j++) {
+						const dataCell = document.createElement('td');
+						dataCell.className = 'geodbtablecell rightalign';
+						const columnName = columnNames[j];
+						const dataCellContent = response[columnName][rowName];
+						const dataCellContentString = dataCellContent.toString();
+						const dataCellNode = document.createTextNode(dataCellContentString);
+						dataCell.appendChild(dataCellNode);
+						dataRow.appendChild(dataCell);
+					}
+
+					body.appendChild(dataRow);
+				}
+
+				table.appendChild(body);
+				tableDiv.appendChild(table);
+			}
+
+			contentDiv.appendChild(tableDiv);
+			const buttonDiv = document.createElement('div');
+			const buttonBack = document.createElement('button');
+			buttonBack.className = 'button';
+			const buttonBackCaption = document.createTextNode('Back');
+			buttonBack.appendChild(buttonBackCaption);
+
+			/*
+			 * This is called when the user clicks on the 'Back' button.
+			 */
+			buttonBack.onclick = function(e) {
+				div.style.display = 'none';
+				helper.clearElement(contentDiv);
+				handler.showGeoDB();
+			};
+
+			buttonDiv.appendChild(buttonBack);
+			contentDiv.appendChild(buttonDiv);
+			const div = document.getElementById('geodbdialog');
+			div.style.display = 'block';
+			buttonBack.focus();
+		}
+
 	}
 
 	/*
@@ -2596,69 +2631,82 @@ function UI() {
 			 */
 			const callbackChallenge = function(content) {
 				const challenge = helper.parseJSON(content);
-				const challengeSuccess = challenge.Success;
 
 				/*
-				 * Check if challenge could be obtained.
+				 * Check that we have a response.
 				 */
-				if (challengeSuccess === true) {
-					const nonceEncoded = challenge.Nonce;
-					const nonce = atob(nonceEncoded);
+				if (challenge != null) {
+					const challengeSuccess = challenge.Success;
 
 					/*
-					 * Function to convert character to integer.
+					 * Check if challenge could be obtained.
 					 */
-					const charToInt = function(c) {
-						return c.charCodeAt(0);
-					};
-
-					const nonceArray = Uint8Array.from(nonce, charToInt);
-					const saltEncoded = challenge.Salt;
-					const salt = atob(saltEncoded);
-					const saltArray = Uint8Array.from(salt, charToInt);
-					const encoder = new TextEncoder('utf-8');
-					const passwordArray = encoder.encode(valuePassword);
-					const shaA = new jsSHA('SHA-512', 'UINT8ARRAY');
-					shaA.update(passwordArray);
-					const passwordHash = shaA.getHash('UINT8ARRAY');
-					const shaB = new jsSHA('SHA-512', 'UINT8ARRAY');
-					shaB.update(saltArray);
-					shaB.update(passwordHash);
-					const innerHash = shaB.getHash('UINT8ARRAY');
-					const shaC = new jsSHA('SHA-512', 'UINT8ARRAY');
-					shaC.update(nonceArray);
-					shaC.update(innerHash);
-					const outerHash = shaC.getHash('B64');
-					const rqResponse = new Request();
-					rqResponse.append('cgi', 'auth-response');
-					rqResponse.append('name', valueUser);
-					rqResponse.append('hash', outerHash);
-					const dataResponse = rqResponse.getData();
-
-					/*
-					 * This is called when the server sends a session token.
-					 */
-					const callbackToken = function(content) {
-						const token = helper.parseJSON(content);
-						const tokenSuccess = token.Success;
+					if (challengeSuccess === true) {
+						const nonceEncoded = challenge.Nonce;
+						const nonce = atob(nonceEncoded);
 
 						/*
-						 * Check if token could be obtained.
+						 * Function to convert character to integer.
 						 */
-						if (tokenSuccess === true) {
-							fieldPassword.value = '';
-							const tokenData = token.Token;
-							callback(tokenData);
+						const charToInt = function(c) {
+							return c.charCodeAt(0);
+						};
+
+						const nonceArray = Uint8Array.from(nonce, charToInt);
+						const saltEncoded = challenge.Salt;
+						const salt = atob(saltEncoded);
+						const saltArray = Uint8Array.from(salt, charToInt);
+						const encoder = new TextEncoder('utf-8');
+						const passwordArray = encoder.encode(valuePassword);
+						const shaA = new jsSHA('SHA-512', 'UINT8ARRAY');
+						shaA.update(passwordArray);
+						const passwordHash = shaA.getHash('UINT8ARRAY');
+						const shaB = new jsSHA('SHA-512', 'UINT8ARRAY');
+						shaB.update(saltArray);
+						shaB.update(passwordHash);
+						const innerHash = shaB.getHash('UINT8ARRAY');
+						const shaC = new jsSHA('SHA-512', 'UINT8ARRAY');
+						shaC.update(nonceArray);
+						shaC.update(innerHash);
+						const outerHash = shaC.getHash('B64');
+						const rqResponse = new Request();
+						rqResponse.append('cgi', 'auth-response');
+						rqResponse.append('name', valueUser);
+						rqResponse.append('hash', outerHash);
+						const dataResponse = rqResponse.getData();
+
+						/*
+						 * This is called when the server sends a session token.
+						 */
+						const callbackToken = function(content) {
+							const token = helper.parseJSON(content);
+
+							/*
+							 * Check that we have a token.
+							 */
+							if (token != null) {
+								const tokenSuccess = token.Success;
+
+								/*
+								 * Check if token could be obtained.
+								 */
+								if (tokenSuccess === true) {
+									fieldPassword.value = '';
+									const tokenData = token.Token;
+									callback(tokenData);
+								}
+
+							}
+
 						}
 
+						ajax.request('POST', cgi, dataResponse, mime, callbackToken, true);
 					}
-
-					ajax.request('POST', cgi, dataResponse, mime, callbackToken, false);
 				}
 
 			};
 
-			ajax.request('POST', cgi, dataChallenge, mime, callbackChallenge, false);
+			ajax.request('POST', cgi, dataChallenge, mime, callbackChallenge, true);
 		};
 
 		fieldUser.focus();
@@ -2920,7 +2968,7 @@ function UI() {
 		/*
 		 * Check if live positions are enabled and sensor data is available.
 		 */
-		if ((enabled === true) || (sensors != null)) {
+		if ((enabled === true) && (sensors != null)) {
 			const selectedId = storage.get(cvs, 'selectedSensorId');
 			const ctx = cvs.getContext('2d');
 			const xres = cvs.scrollWidth;
@@ -3920,11 +3968,18 @@ function Handler() {
 		 */
 		const callback = function(content) {
 			const response = helper.parseJSON(content);
-			const div = document.getElementById('activities');
-			ui.displayActivities(div, response);
+
+			/*
+			 * Check that we have a response.
+			 */
+			if (response != null) {
+				const div = document.getElementById('activities');
+				ui.displayActivities(div, response);
+			}
+
 		};
 
-		ajax.request('POST', cgi, data, mime, callback, false);
+		ajax.request('POST', cgi, data, mime, callback, true);
 	};
 
 	/*
@@ -3945,17 +4000,24 @@ function Handler() {
 		 */
 		const callback = function(content) {
 			const response = helper.parseJSON(content);
-			const mapDiv = document.getElementById('map_div');
-			mapDiv.style.display = 'none';
-			const mapAttribution = document.getElementById('map_attribution');
-			mapAttribution.style.display = 'none';
-			const right_sidebar = document.getElementById('right_sidebar');
-			right_sidebar.style.display = 'none';
-			const div = document.getElementById('geodb');
-			ui.displayGeoDBStats(div, response);
+
+			/*
+			 * Check that we have a response.
+			 */
+			if (response != null) {
+				const mapDiv = document.getElementById('map_div');
+				mapDiv.style.display = 'none';
+				const mapAttribution = document.getElementById('map_attribution');
+				mapAttribution.style.display = 'none';
+				const right_sidebar = document.getElementById('right_sidebar');
+				right_sidebar.style.display = 'none';
+				const div = document.getElementById('geodb');
+				ui.displayGeoDBStats(div, response);
+			}
+
 		};
 
-		ajax.request('POST', cgi, data, mime, callback, false);
+		ajax.request('POST', cgi, data, mime, callback, true);
 	};
 
 	/*
@@ -4010,21 +4072,28 @@ function Handler() {
 		 */
 		const callback = function(content) {
 			const response = helper.parseJSON(content);
-			const success = response.Success;
 
 			/*
-			 * Check if logout was successful.
+			 * Check that we have a response.
 			 */
-			if (success === true) {
-				storage.put(cvs, 'token', null);
-				ui.cleanupLiveSensors();
-				ui.showLogin();
-				self.refresh();
+			if (response != null) {
+				const success = response.Success;
+
+				/*
+				 * Check if logout was successful.
+				 */
+				if (success === true) {
+					storage.put(cvs, 'token', null);
+					ui.cleanupLiveSensors();
+					ui.showLogin();
+					self.refresh();
+				}
+
 			}
 
 		};
 
-		ajax.request('POST', cgi, data, mime, callback, false);
+		ajax.request('POST', cgi, data, mime, callback, true);
 	};
 
 	/*

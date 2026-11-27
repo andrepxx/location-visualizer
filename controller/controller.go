@@ -4631,14 +4631,18 @@ func (this *controllerStruct) interpret(args []string) {
 					msg := err.Error()
 					fmt.Printf("Failed to open file '%s': %s\n", path, msg)
 				} else {
-					data, err := io.ReadAll(fd)
+					data, errRead := io.ReadAll(fd)
+					errClose := fd.Close()
 
 					/*
-					 * Check if file content could be read.
+					 * Check if file content could be read and file could be closed.
 					 */
-					if err != nil {
-						msg := err.Error()
+					if errRead != nil {
+						msg := errRead.Error()
 						fmt.Printf("Failed to read public key from file '%s': %s\n", path, msg)
+					} else if errClose != nil {
+						msg := errClose.Error()
+						fmt.Printf("Failed to close file '%s': %s\n", path, msg)
 					} else {
 						err := umgr.AddPublicKey(name, creationTime, description, data)
 
@@ -5197,7 +5201,7 @@ func (this *controllerStruct) interpret(args []string) {
 			} else {
 				name := args[1]
 				idxString := args[2]
-				idx, err := strconv.ParseUint(idxString, 16, 64)
+				idx, err := strconv.ParseUint(idxString, 10, 64)
 
 				/*
 				 * Check if index could be parsed.
@@ -5306,7 +5310,7 @@ func (this *controllerStruct) interpret(args []string) {
 			} else {
 				name := args[1]
 				idxString := args[2]
-				idx, err := strconv.ParseUint(idxString, 16, 64)
+				idx, err := strconv.ParseUint(idxString, 10, 64)
 
 				/*
 				 * Check if index could be parsed.

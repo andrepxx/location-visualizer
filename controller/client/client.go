@@ -1187,6 +1187,26 @@ func (this *controllerStruct) exportActivityCsv(args []string, useKeyFile bool) 
 								fmt.Printf("Error reading from remote connection: %s\n", msg)
 							}
 
+							err = fdRemote.Close()
+
+							/*
+							 * Check if remote stream could be closed.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("Failed to close remote stream: %s\n", msg)
+							}
+
+							err = fd.Close()
+
+							/*
+							 * Check if file could be closed.
+							 */
+							if err != nil {
+								msg := err.Error()
+								fmt.Printf("Failed to close output file: %s\n", msg)
+							}
+
 						}
 
 					}
