@@ -5801,27 +5801,37 @@ func (this *controllerStruct) Operate(args []string) {
 				fmt.Printf("Error loading location data: %s\n", msg)
 			}
 
-			this.initializePositionManager()
-			this.initializeTileServer()
-			err = this.initializeTileDatabase()
+			err = this.initializePositionManager()
 
 			/*
-			 * Check if tile database could be initialized.
+			 * Check if position manager could be initialized.
 			 */
 			if err != nil {
 				msg := err.Error()
-				fmt.Printf("Error initializing tile database: %s\n", msg)
+				fmt.Printf("Error initializing position manager: %s\n", msg)
 			} else {
-				err = this.initializeActivities()
+				this.initializeTileServer()
+				err = this.initializeTileDatabase()
 
 				/*
-				 * Check if activity data could be loaded.
+				* Check if tile database could be initialized.
 				 */
 				if err != nil {
 					msg := err.Error()
-					fmt.Printf("Error loading activity data: %s\n", msg)
+					fmt.Printf("Error initializing tile database: %s\n", msg)
 				} else {
-					this.runServer()
+					err = this.initializeActivities()
+
+					/*
+					* Check if activity data could be loaded.
+					 */
+					if err != nil {
+						msg := err.Error()
+						fmt.Printf("Error loading activity data: %s\n", msg)
+					} else {
+						this.runServer()
+					}
+
 				}
 
 			}
