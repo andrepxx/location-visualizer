@@ -314,7 +314,7 @@
 
 .nextgap
 {
-	margin-left: 25px;
+	margin-left: 20px;
 }
 
 .opener
@@ -356,13 +356,14 @@
 {
 	background-color: #000000;
 	bottom: 0px;
+	box-sizing: border-box;
 	display: none;
 	overflow-y: auto;
 	padding: 5px;
 	position: fixed;
 	right: 0px;
 	top: 0px;
-	width: 400px;
+	width: min(400px, 100vw);
 }
 
 .tablehead
@@ -429,3 +430,21 @@
 	height: 10px;
 }
 
+@media (max-width: 400px)
+{
+
+	.sidebardiv.label
+	{
+		display: block;
+		margin-right: 0px;
+		width: auto !important;
+	}
+
+	.sidebardiv.textfield
+	{
+		box-sizing: border-box;
+		max-width: 100%;
+		width: 100%;
+	}
+
+}
