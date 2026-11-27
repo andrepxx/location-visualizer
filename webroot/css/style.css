@@ -17,13 +17,20 @@
 	border-radius: 15px;
 	border-style: solid;
 	border-width: 2px;
+	bottom: 0px;
+	box-sizing: border-box;
 	color: #ffffff;
 	cursor: default;
-	left: 50%;
+	height: fit-content;
+	left: 0px;
+	margin: auto;
+	max-height: 100vh;
+	max-width: 100vw;
 	padding: 15px;
 	position: absolute;
-	top: 50%;
-	transform: translate(-50%, -50%);
+	right: 0px;
+	top: 0px;
+	width: fit-content;
 }
 
 .activitiesdiv
@@ -382,11 +389,15 @@
 	border-radius: 0px;
 	border-style: solid;
 	border-width: 1px;
+	box-sizing: border-box;
 	color: #ffffff;
 	font-family: monospace;
 	margin: 0px;
+	max-height: calc(100vh - 70px);
+	max-width: calc(100vw - 40px);
 	position: relative;
 	height: 300px;
+	white-space: pre;
 	width: 400px;
 }
 

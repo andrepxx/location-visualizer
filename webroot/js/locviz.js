@@ -1089,6 +1089,21 @@ function UI() {
 			rightSidebar.style.display = 'block';
 			div.style.display = 'none';
 			helper.clearElement(div);
+			const cvs = document.getElementById('map_canvas');
+			const width = cvs.width;
+			const height = cvs. height;
+			const scrollWidth = cvs.scrollWidth;
+			const scrollHeight = cvs.scrollHeight;
+
+			/*
+			 * Refresh if dimensions changed, otherwise redraw.
+			 */
+			if ((width !== scrollWidth) || (height !== scrollHeight)) {
+				handler.refresh();
+			} else {
+				self.updateTiles();
+			}
+			
 		};
 
 		buttonDiv.appendChild(buttonBack);
@@ -1519,9 +1534,11 @@ function UI() {
 
 		buttonsDiv.appendChild(buttonImport);
 		const buttonCancel = document.createElement('button');
-		buttonCancel.className = 'button';
+		buttonCancel.className = 'button next';
 		const buttonCancelCaption = document.createTextNode('Cancel');
 		buttonCancel.appendChild(buttonCancelCaption);
+		const activitiesDiv = document.getElementById('activities');
+		activitiesDiv.inert = true;
 
 		/*
 		 * This is called when the user clicks on the 'Cancel' button.
@@ -2135,13 +2152,29 @@ function UI() {
 		 * This is called when the user clicks on the 'Back' button.
 		 */
 		buttonBack.onclick = function(e) {
-			div.style.display = 'none';
 			const mapDiv = document.getElementById('map_div');
 			mapDiv.style.display = '';
 			const mapAttribution = document.getElementById('map_attribution');
 			mapAttribution.style.display = '';
 			const rightSidebar = document.getElementById('right_sidebar');
 			rightSidebar.style.display = 'block';
+			div.style.display = 'none';
+			helper.clearElement(div);
+			const cvs = document.getElementById('map_canvas');
+			const width = cvs.width;
+			const height = cvs. height;
+			const scrollWidth = cvs.scrollWidth;
+			const scrollHeight = cvs.scrollHeight;
+
+			/*
+			 * Refresh if dimensions changed, otherwise redraw.
+			 */
+			if ((width !== scrollWidth) || (height !== scrollHeight)) {
+				handler.refresh();
+			} else {
+				self.updateTiles();
+			}
+
 		};
 
 		buttonDiv.appendChild(buttonBack);
@@ -3105,43 +3138,50 @@ function UI() {
 		const cvs = document.getElementById('map_canvas');
 		const width = cvs.scrollWidth;
 		const height = cvs.scrollHeight;
-		const ctx = cvs.getContext('2d');
-		ctx.clearRect(0, 0, width, height);
-		const tiles = storage.get(cvs, 'osmTiles');
 
 		/*
-		 * Check if map tiles have to be drawn.
+		 * Only update tiles when canvas is visible.
 		 */
-		if (tiles !== null) {
-			const numTiles = tiles.length;
+		if ((width !== 0) || (height !== 0)) {
+			const ctx = cvs.getContext('2d');
+			ctx.clearRect(0, 0, width, height);
+			const tiles = storage.get(cvs, 'osmTiles');
 
 			/*
-			 * Draw every single map tile.
+			 * Check if map tiles have to be drawn.
 			 */
-			for (let i = 0; i < numTiles; i++) {
-				const currentTile = tiles[i];
+			if (tiles !== null) {
+				const numTiles = tiles.length;
 
 				/*
-				 * Draw tile if map tile is available.
+				 * Draw every single map tile.
 				 */
-				if (currentTile !== null) {
-					this.drawTile(currentTile);
+				for (let i = 0; i < numTiles; i++) {
+					const currentTile = tiles[i];
+
+					/*
+					 * Draw tile if map tile is available.
+					 */
+					if (currentTile !== null) {
+						this.drawTile(currentTile);
+					}
+
 				}
 
 			}
 
+			const img = storage.get(cvs, 'lastOverlay');
+
+			/*
+			 * Check if image overlay has to be drawn.
+			 */
+			if (img !== null) {
+				ctx.drawImage(img, 0, 0);
+			}
+
+			this.drawLivePositions();
 		}
 
-		const img = storage.get(cvs, 'lastOverlay');
-
-		/*
-		 * Check if image overlay has to be drawn.
-		 */
-		if (img !== null) {
-			ctx.drawImage(img, 0, 0);
-		}
-
-		this.drawLivePositions();
 	};
 
 	/*
@@ -3406,18 +3446,25 @@ function Handler() {
 	 */
 	this.refresh = function() {
 		const cvs = document.getElementById('map_canvas');
-		const token = storage.get(cvs, 'token');
 		const width = cvs.scrollWidth;
 		const height = cvs.scrollHeight;
-		const posX = storage.get(cvs, 'posX');
-		const posY = storage.get(cvs, 'posY');
-		const zoom = storage.get(cvs, 'zoomLevel');
-		const timeMin = storage.get(cvs, 'minTime');
-		const timeMax = storage.get(cvs, 'maxTime');
-		const colorScale = storage.get(cvs, 'colorScale');
-		const spread = storage.get(cvs, 'spread');
-		const fgColor = storage.get(cvs, 'fgColor');
-		ui.updateMap(token, width, height, posX, posY, zoom, timeMin, timeMax, colorScale, spread, fgColor);
+
+		/*
+		 * Only refresh when map is visible.
+		 */
+		if ((width !== 0) || (height !== 0)) {
+			const token = storage.get(cvs, 'token');
+			const posX = storage.get(cvs, 'posX');
+			const posY = storage.get(cvs, 'posY');
+			const zoom = storage.get(cvs, 'zoomLevel');
+			const timeMin = storage.get(cvs, 'minTime');
+			const timeMax = storage.get(cvs, 'maxTime');
+			const colorScale = storage.get(cvs, 'colorScale');
+			const spread = storage.get(cvs, 'spread');
+			const fgColor = storage.get(cvs, 'fgColor');
+			ui.updateMap(token, width, height, posX, posY, zoom, timeMin, timeMax, colorScale, spread, fgColor);
+		}
+
 	};
 
 	/*
