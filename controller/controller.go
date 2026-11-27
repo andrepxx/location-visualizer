@@ -242,6 +242,7 @@ type controllerStruct struct {
 	imageDatabase       tiledb.ImageDatabase
 	indexDatabase       tiledb.IndexDatabase
 	locationDB          geodb.Database
+	locationDBLock      sync.RWMutex
 	positionManager     live.PositionManager
 	tileServer          tileserver.OSMTileServer
 	tileUtil            tileutil.TileUtil
@@ -2254,7 +2255,9 @@ func (this *controllerStruct) getGeoDBStatsHandler(request webserver.HttpRequest
 		datasetStats := webDatasetStatsStruct{}
 		gu := geoutil.Create()
 		db := this.locationDB
+		this.locationDBLock.RLock()
 		stats, err := gu.GeoDBStats(db)
+		this.locationDBLock.RUnlock()
 
 		/*
 		 * Make sure that no error occured.
@@ -2838,7 +2841,9 @@ func (this *controllerStruct) importGeoDataHandler(request webserver.HttpRequest
 							migrationReport.Status = status
 						} else {
 							gu := geoutil.Create()
+							this.locationDBLock.Lock()
 							report, errMigrate := gu.Migrate(target, source, importStrategy)
+							this.locationDBLock.Unlock()
 							reportBefore := report.Before()
 							reportBeforeLocationCount := reportBefore.LocationCount()
 							reportBeforeOrdered := reportBefore.Ordered()
@@ -3110,6 +3115,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 			gu := geoutil.Create()
 			datasetStatsBefore := webDatasetStatsStruct{}
 			datasetStatsAfter := webDatasetStatsStruct{}
+			this.locationDBLock.Lock()
 			statsBefore, err := gu.GeoDBStats(db)
 
 			/*
@@ -3274,6 +3280,7 @@ func (this *controllerStruct) modifyGeoDataHandler(request webserver.HttpRequest
 
 			}
 
+			this.locationDBLock.Unlock()
 		}
 
 	}
@@ -3938,8 +3945,6 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			}
 
 			mercator := projection.Mercator()
-			locationDB := this.locationDB
-			numDataPoints := locationDB.LocationCount()
 			offset := uint32(0)
 			dataRead := make([]geodb.Location, LOCATION_BLOCK_SIZE)
 			dataFiltered := make([]geodb.Location, LOCATION_BLOCK_SIZE)
@@ -3956,6 +3961,9 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 			maxY := ypos + halfHeight
 			scn := scene.Create(xres, yres, minX, maxX, minY, maxY)
 			gu := geoutil.Create()
+			locationDB := this.locationDB
+			this.locationDBLock.RLock()
+			numDataPoints := locationDB.LocationCount()
 
 			/*
 			 * Check if there is still data to read.
@@ -4002,6 +4010,7 @@ func (this *controllerStruct) renderHandler(request webserver.HttpRequest) webse
 				offset += numLocationsRead
 			}
 
+			this.locationDBLock.RUnlock()
 			scn.Spread(spread)
 			mapping := color.DefaultMapping()
 
@@ -4284,7 +4293,9 @@ func (this *controllerStruct) submitCoordinatesHandler(request webserver.HttpReq
 		}
 
 		locationDB := this.locationDB
+		this.locationDBLock.Lock()
 		err := locationDB.Append(&location)
+		this.locationDBLock.Unlock()
 
 		/*
 		 * Check if location could be appended.
