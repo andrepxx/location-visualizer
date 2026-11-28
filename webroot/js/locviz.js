@@ -1103,7 +1103,7 @@ function UI() {
 			} else {
 				self.updateTiles();
 			}
-			
+
 		};
 
 		buttonDiv.appendChild(buttonBack);
@@ -2207,7 +2207,16 @@ function UI() {
 		const callback = function(content) {
 			const response = helper.parseJSON(content);
 			storage.put(cvs, 'liveSensors', response);
-			self.updateTiles();
+			const dragging = storage.get(cvs, 'dragging');
+			const zooming = storage.get(cvs, 'zooming');
+
+			/*
+			 * Marker updates shall not interrupt mouse or touch gestures.
+			 */
+			if ((dragging !== true) && (zooming !== true)) {
+				self.updateTiles();
+			}
+
 		};
 
 		ajax.request('POST', cgi, data, mime, callback, false);
@@ -3569,6 +3578,7 @@ function Handler() {
 			const y = coords.y;
 			storage.put(cvs, 'mouseButton', true);
 			storage.put(cvs, 'dragging', false);
+			storage.put(cvs, 'zooming', false);
 			storage.put(cvs, 'dragInterrupted', false);
 			storage.put(cvs, 'touchStartX', x);
 			storage.put(cvs, 'touchStartY', y);
@@ -3578,8 +3588,9 @@ function Handler() {
 		} else if (multiTouch) {
 			const dist = self.touchEventToDistance(e);
 			storage.put(cvs, 'mouseButton', false);
-			storage.put(cvs, 'dragging', true);
-			storage.put(cvs, 'dragInterrupted', true);
+			storage.put(cvs, 'dragging', false);
+			storage.put(cvs, 'zooming', true);
+			storage.put(cvs, 'dragInterrupted', false);
 			storage.put(cvs, 'touchStartX', 0);
 			storage.put(cvs, 'touchStartY', 0);
 			storage.put(cvs, 'touchStartDistance', dist);
@@ -3713,13 +3724,14 @@ function Handler() {
 			if (noMoreTouches) {
 				e.preventDefault();
 				const dragging = storage.get(cvs, 'dragging');
+				const zooming = storage.get(cvs, 'zooming');
 				const x = storage.get(cvs, 'touchLastX');
 				const y = storage.get(cvs, 'touchLastY');
 
 				/*
 				 * Either select sensors or end drag.
 				 */
-				if (dragging !== true) {
+				if ((dragging !== true) && (zooming !== true)) {
 					ui.selectLiveSensorAt(x, y);
 				} else {
 					const startX = storage.get(cvs, 'touchStartX');
@@ -3739,6 +3751,8 @@ function Handler() {
 					posY += moveY;
 					storage.put(cvs, 'posX', posX);
 					storage.put(cvs, 'posY', posY);
+					storage.put(cvs, 'dragging', false);
+					storage.put(cvs, 'zooming', false);
 					self.refresh();
 				}
 
