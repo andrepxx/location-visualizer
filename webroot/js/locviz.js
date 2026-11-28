@@ -291,7 +291,7 @@ function Helper() {
 		};
 
 		return result;
-	}
+	};
 
 }
 
@@ -326,7 +326,6 @@ function Ajax() {
 		 * Event handler for ReadyStateChange event.
 		 */
 		xhr.onreadystatechange = function() {
-			helper.blockSite(block);
 
 			/*
 			 * If we got a response, pass the response text to
@@ -363,6 +362,7 @@ function Ajax() {
 			xhr.setRequestHeader('Content-type', mimeType);
 		}
 
+		helper.blockSite(block);
 		xhr.send(data);
 	};
 
@@ -551,12 +551,12 @@ function UI() {
 	 */
 	this.insertActivityHeader = function(body) {
 		const headRowA = document.createElement('tr');
-		const headElemEmptyA = document.createElement('td');
-		headElemEmptyA.className = 'activitiestablecell tablehead';
-		const headElemEmptyAColSpan = document.createAttribute('colspan');
-		headElemEmptyAColSpan.value = '2';
-		headElemEmptyA.setAttributeNode(headElemEmptyAColSpan);
-		headRowA.appendChild(headElemEmptyA);
+		const headElemEmptyLeading = document.createElement('td');
+		headElemEmptyLeading.className = 'activitiestablecell tablehead';
+		const headElemEmptyLeadingColSpan = document.createAttribute('colspan');
+		headElemEmptyLeadingColSpan.value = '2';
+		headElemEmptyLeading.setAttributeNode(headElemEmptyLeadingColSpan);
+		headRowA.appendChild(headElemEmptyLeading);
 		const headElemRunning = document.createElement('td');
 		headElemRunning.className = 'activitiestablecell tablehead';
 		const headElemRunningColSpan = document.createAttribute('colspan');
@@ -579,12 +579,12 @@ function UI() {
 		headElemOther.appendChild(labelOther);
 		headRowA.appendChild(headElemOther);
 		body.appendChild(headRowA);
-		const headElemEmptyB = document.createElement('td');
-		headElemEmptyB.className = 'activitiestablecell tablehead';
-		const headElemEmptyBColSpan = document.createAttribute('colspan');
-		headElemEmptyBColSpan.value = '2';
-		headElemEmptyB.setAttributeNode(headElemEmptyBColSpan);
-		headRowA.appendChild(headElemEmptyB);
+		const headElemEmptyTrailing = document.createElement('td');
+		headElemEmptyTrailing.className = 'activitiestablecell tablehead';
+		const headElemEmptyTrailingColSpan = document.createAttribute('colspan');
+		headElemEmptyTrailingColSpan.value = '2';
+		headElemEmptyTrailing.setAttributeNode(headElemEmptyTrailingColSpan);
+		headRowA.appendChild(headElemEmptyTrailing);
 		body.appendChild(headRowA);
 		const headRowB = document.createElement('tr');
 		const headElemBegin = document.createElement('td');
@@ -1081,7 +1081,7 @@ function UI() {
 			/*
 			 * Refresh if dimensions changed, otherwise redraw.
 			 */
-			if ((width !== scrollWidth) || (height !== scrollHeight)) {
+			if ((width !== scrollWidth) | (height !== scrollHeight)) {
 				handler.refresh();
 			} else {
 				self.updateTiles();
@@ -2152,7 +2152,7 @@ function UI() {
 			/*
 			 * Refresh if dimensions changed, otherwise redraw.
 			 */
-			if ((width !== scrollWidth) || (height !== scrollHeight)) {
+			if ((width !== scrollWidth) | (height !== scrollHeight)) {
 				handler.refresh();
 			} else {
 				self.updateTiles();
@@ -2162,11 +2162,6 @@ function UI() {
 
 		buttonDiv.appendChild(buttonBack);
 		div.appendChild(buttonDiv);
-		div.addEventListener('dragend', this.absorbEvent);
-		div.addEventListener('dragenter', this.absorbEvent);
-		div.addEventListener('dragleave', this.absorbEvent);
-		div.addEventListener('dragover', this.absorbEvent);
-		div.addEventListener('drop', this.uploadGeoData);
 		div.style.display = 'block';
 		fieldImportFormat.focus();
 	};
@@ -2196,7 +2191,7 @@ function UI() {
 			/*
 			 * Marker updates shall not interrupt mouse or touch gestures.
 			 */
-			if ((dragging !== true) && (zooming !== true)) {
+			if ((dragging !== true) & (zooming !== true)) {
 				self.updateTiles();
 			}
 
@@ -2216,7 +2211,7 @@ function UI() {
 		/*
 		 * Check if sensors are available.
 		 */
-		if ((enabled !== true) || (sensors == null)) {
+		if ((enabled !== true) | (sensors == null)) {
 			return false;
 		} else {
 			const xres = cvs.scrollWidth;
@@ -2585,6 +2580,18 @@ function UI() {
 	};
 
 	/*
+	 * Initialize the GeoDB view.
+	 */
+	this.initializeGeoDB = function() {
+		const geodbDiv = document.getElementById('geodb');
+		geodbDiv.addEventListener('dragend', this.absorbEvent);
+		geodbDiv.addEventListener('dragenter', this.absorbEvent);
+		geodbDiv.addEventListener('dragleave', this.absorbEvent);
+		geodbDiv.addEventListener('dragover', this.absorbEvent);
+		geodbDiv.addEventListener('drop', this.uploadGeoData);
+	};
+
+	/*
 	 * This initializes the login dialog.
 	 */
 	this.initializeLogin = function(callback) {
@@ -2723,10 +2730,11 @@ function UI() {
 
 							}
 
-						}
+						};
 
 						ajax.request('POST', cgi, dataResponse, mime, callbackToken, true);
 					}
+
 				}
 
 			};
@@ -2993,7 +3001,7 @@ function UI() {
 		/*
 		 * Check if live positions are enabled and sensor data is available.
 		 */
-		if ((enabled === true) && (sensors != null)) {
+		if ((enabled === true) & (sensors != null)) {
 			const selectedId = storage.get(cvs, 'selectedSensorId');
 			const ctx = cvs.getContext('2d');
 			const xres = cvs.scrollWidth;
@@ -3052,7 +3060,7 @@ function UI() {
 			/*
 			 * Draw popup with sensor info for selected sensor.
 			 */
-			if ((selectedSensor != null) && (selectedCoordinates != null)) {
+			if ((selectedSensor != null) & (selectedCoordinates != null)) {
 				const sensorId = selectedSensor.Id;
 				const description = selectedSensor.Description;
 				const position = selectedSensor.Position;
@@ -3121,7 +3129,7 @@ function UI() {
 			ctx.restore();
 		}
 
-	}
+	};
 
 	/*
 	 * This is called when a new map tile has been fetched.
@@ -3134,7 +3142,7 @@ function UI() {
 		/*
 		 * Only update tiles when canvas is visible.
 		 */
-		if ((width !== 0) || (height !== 0)) {
+		if ((width !== 0) | (height !== 0)) {
 			const ctx = cvs.getContext('2d');
 			ctx.clearRect(0, 0, width, height);
 			const tiles = storage.get(cvs, 'osmTiles');
@@ -3419,7 +3427,7 @@ function UI() {
 		storage.put(cvs, 'selectedSensorId', null);
 		const buttonSensors = document.getElementById('button_sensors');
 		buttonSensors.classList.remove('buttonactive');
-	}
+	};
 
 }
 
@@ -3444,7 +3452,7 @@ function Handler() {
 		/*
 		 * Only refresh when map is visible.
 		 */
-		if ((width !== 0) || (height !== 0)) {
+		if ((width !== 0) | (height !== 0)) {
 			const token = storage.get(cvs, 'token');
 			const posX = storage.get(cvs, 'posX');
 			const posY = storage.get(cvs, 'posY');
@@ -3536,8 +3544,8 @@ function Handler() {
 	this.touchStart = function(e) {
 		e.preventDefault();
 		const cvs = e.target;
-		const height = cvs.height;
 		const width = cvs.width;
+		const height = cvs.height;
 		const snapshot = new OffscreenCanvas(width, height);
 		const ctx = snapshot.getContext('2d');
 		ctx.drawImage(cvs, 0, 0);
@@ -3709,7 +3717,7 @@ function Handler() {
 				/*
 				 * Either select sensors or end drag.
 				 */
-				if ((dragging !== true) && (zooming !== true)) {
+				if ((dragging !== true) & (zooming !== true)) {
 					ui.selectLiveSensorAt(x, y);
 				} else {
 					const startX = storage.get(cvs, 'touchStartX');
@@ -3771,8 +3779,8 @@ function Handler() {
 			const x = e.offsetX;
 			const y = e.offsetY;
 			const cvs = e.target;
-			const height = cvs.height;
 			const width = cvs.width;
+			const height = cvs.height;
 			const snapshot = new OffscreenCanvas(width, height);
 			const ctx = snapshot.getContext('2d');
 			ctx.drawImage(cvs, 0, 0);
@@ -3893,8 +3901,8 @@ function Handler() {
 		 * If we're not already zooming, store some state.
 		 */
 		if (zooming !== true) {
-			const height = cvs.height;
 			const width = cvs.width;
+			const height = cvs.height;
 			const snapshot = new OffscreenCanvas(width, height);
 			const ctx = snapshot.getContext('2d');
 			ctx.drawImage(cvs, 0, 0);
@@ -4076,7 +4084,7 @@ function Handler() {
 			ui.updateTiles();
 		}
 
-	}
+	};
 
 	/*
 	 * This is called when the user clicks on the 'Logout' button.
@@ -4107,10 +4115,17 @@ function Handler() {
 				 * Check if logout was successful.
 				 */
 				if (success === true) {
+					const cvs = document.getElementById('map_canvas');
+					const height = cvs. height;
+					const width = cvs.width;
 					storage.put(cvs, 'token', null);
+					storage.put(cvs, 'osmTiles', []);
+					storage.put(cvs, 'overlays', []);
+					storage.put(cvs, 'liveSensors', null);
+					const ctx = cvs.getContext('2d');
+					ctx.clearRect(0, 0, width, height);
 					ui.cleanupLiveSensors();
 					ui.showLogin();
-					self.refresh();
 				}
 
 			}
@@ -4170,6 +4185,7 @@ function Handler() {
 		window.addEventListener('resize', self.resize);
 		div.appendChild(cvs);
 		ui.initializeSidebar();
+		ui.initializeGeoDB();
 		ui.initializeLogin(self.loginSuccessful);
 		ui.showLogin();
 		helper.blockSite(false);
@@ -4182,4 +4198,3 @@ function Handler() {
  */
 const handler = new Handler();
 document.addEventListener('DOMContentLoaded', handler.initialize);
-

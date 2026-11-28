@@ -444,14 +444,14 @@
 @media (max-width: 400px)
 {
 
-	.sidebardiv.label
+	.sidebardiv .label
 	{
 		display: block;
 		margin-right: 0px;
 		width: auto !important;
 	}
 
-	.sidebardiv.textfield
+	.sidebardiv .textfield
 	{
 		box-sizing: border-box;
 		max-width: 100%;
