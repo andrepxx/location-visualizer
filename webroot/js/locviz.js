@@ -293,23 +293,6 @@ function Helper() {
 		return result;
 	}
 
-	/*
-	 * Decode an image from a data URL.
-	 */
-	this.loadImageAsync = function(data, callback) {
-		const img = new Image();
-
-		/*
-		 * Internal callback invoked when image is decoded.
-		 */
-		const callbackInternal = function(e) {
-			callback(img);
-		};
-
-		img.addEventListener('load', callbackInternal);
-		img.src = data;
-	};
-
 }
 
 /*
@@ -3553,17 +3536,12 @@ function Handler() {
 	this.touchStart = function(e) {
 		e.preventDefault();
 		const cvs = e.target;
-		storage.put(cvs, 'mapBeforeMove', null);
-		const mapBeforeMove = cvs.toDataURL();
-
-		/*
-		 * Bind image to canvas after it got decoded.
-		 */
-		const callback = function(img) {
-			storage.put(cvs, 'mapBeforeMove', img);
-		};
-
-		helper.loadImageAsync(mapBeforeMove, callback);
+		const height = cvs.height;
+		const width = cvs.width;
+		const snapshot = new OffscreenCanvas(width, height);
+		const ctx = snapshot.getContext('2d');
+		ctx.drawImage(cvs, 0, 0);
+		storage.put(cvs, 'mapBeforeMove', snapshot);
 		const touches = e.targetTouches;
 		const numTouches = touches.length;
 		const singleTouch = (numTouches === 1);
@@ -3790,20 +3768,15 @@ function Handler() {
 		 * Check if left mouse button was depressed.
 		 */
 		if (btn === 0) {
-			const cvs = e.target;
-			storage.put(cvs, 'mapBeforeMove', null);
-			const mapBeforeMove = cvs.toDataURL();
-
-			/*
-			 * Bind image to canvas after it got decoded.
-			 */
-			const callback = function(img) {
-				storage.put(cvs, 'mapBeforeMove', img);
-			};
-
-			helper.loadImageAsync(mapBeforeMove, callback);
 			const x = e.offsetX;
 			const y = e.offsetY;
+			const cvs = e.target;
+			const height = cvs.height;
+			const width = cvs.width;
+			const snapshot = new OffscreenCanvas(width, height);
+			const ctx = snapshot.getContext('2d');
+			ctx.drawImage(cvs, 0, 0);
+			storage.put(cvs, 'mapBeforeMove', snapshot);
 			storage.put(cvs, 'mouseButton', true);
 			storage.put(cvs, 'mouseStartX', x);
 			storage.put(cvs, 'mouseStartY', y);
@@ -3920,22 +3893,12 @@ function Handler() {
 		 * If we're not already zooming, store some state.
 		 */
 		if (zooming !== true) {
-			storage.put(cvs, 'mapBeforeMove', null);
-			const mapBeforeMove = cvs.toDataURL();
-
-			/*
-			 * Bind image to canvas after it got decoded.
-			 *
-			 * This is ugly since it produces a race condition, but
-			 * I don't know how to block the main thread until the
-			 * image gets decoded to make this synchronous.
-			 */
-			const callback = function(img) {
-				storage.put(cvs, 'mapBeforeMove', img);
-				ui.moveMap(null, null);
-			};
-
-			helper.loadImageAsync(mapBeforeMove, callback);
+			const height = cvs.height;
+			const width = cvs.width;
+			const snapshot = new OffscreenCanvas(width, height);
+			const ctx = snapshot.getContext('2d');
+			ctx.drawImage(cvs, 0, 0);
+			storage.put(cvs, 'mapBeforeMove', snapshot);
 			storage.put(cvs, 'zooming', true);
 		}
 
